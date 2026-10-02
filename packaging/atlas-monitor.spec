@@ -82,6 +82,7 @@ appstream-util validate-relax --nonet \
 %{_datadir}/applications/net.eterneon.atlas.monitor.desktop
 %{_datadir}/metainfo/net.eterneon.atlas.monitor.metainfo.xml
 %{_datadir}/icons/hicolor/scalable/apps/net.eterneon.atlas.monitor.svg
+%{_datadir}/icons/hicolor/16x16/apps/net.eterneon.atlas.monitor.svg
 
 %changelog
 * Fri Oct 02 2026 Atlas <atlas@eterneon.net> - 0.1.0-1

@@ -76,3 +76,7 @@ install(FILES data/net.eterneon.atlas.monitor.metainfo.xml
         DESTINATION ${CMAKE_INSTALL_DATADIR}/metainfo)
 install(FILES data/net.eterneon.atlas.monitor.svg
         DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
+# Drawn again for 16 px, where the screen's grid would blur.
+install(FILES data/net.eterneon.atlas.monitor-16.svg
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/16x16/apps
+        RENAME net.eterneon.atlas.monitor.svg)
