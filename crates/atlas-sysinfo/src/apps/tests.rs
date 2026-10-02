@@ -179,6 +179,44 @@ fn resolves_names_terminals_and_misses() {
 }
 
 #[test]
+fn knows_a_flatpak_by_its_unit() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut r = resolver(dir.path());
+    let a = r.of(Some(&unit(DISCORD_A))).unwrap();
+    assert!(a.flatpak);
+    // Named and iconed from its exported desktop file like any other.
+    assert_eq!(a.name.as_ref(), "Discord");
+    assert_eq!(a.icon, Some(Icon::Name("com.discordapp.Discord".into())));
+    assert!(!r.of(Some(&unit(DISCORD_B))).unwrap().flatpak);
+    assert!(!r.of(Some(&unit(FIREFOX))).unwrap().flatpak);
+}
+
+#[test]
+fn open_file_location_of_a_row() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut r = resolver(dir.path());
+    let me = proc(std::process::id(), "me", FIREFOX, 0.0, 0);
+    // Pids no process can have: nothing to read.
+    let gone = proc(u32::MAX - 1, "gone", FIREFOX, 0.0, 0);
+    let exe = Location::File(std::env::current_exe().unwrap());
+
+    let firefox = r.of(Some(&unit(FIREFOX))).unwrap().clone();
+    assert_eq!(location(Some(&firefox), [&gone, &me]), Some(exe.clone()));
+    assert_eq!(location(None, [&me]), Some(exe.clone()));
+    assert_eq!(location(Some(&firefox), [&gone]), None);
+    assert_eq!(location(None, []), None);
+
+    // A Flatpak that is neither running in a sandbox here nor installed
+    // falls back to its first member's program.
+    let missing = r
+        .of(Some(&unit("app-flatpak-com.example.NotInstalled-1.scope")))
+        .unwrap()
+        .clone();
+    assert!(missing.flatpak);
+    assert_eq!(location(Some(&missing), [&me]), Some(exe));
+}
+
+#[test]
 fn picks_the_first_icon_that_draws() {
     let dir = tempfile::tempdir().unwrap();
     let icons = dir.path().join("icons/hicolor/48x48/apps");

@@ -114,10 +114,24 @@ pub fn details(pid: u32) -> Option<Info> {
     (start_time(pid) == Some(st.start_time)).then_some(info)
 }
 
-/// The full path of a process's program, for Open File Location. `None` if
-/// it can't be read (another user's process, a kernel thread).
+/// The full path of a process's program as the host sees it, for Open File
+/// Location. `None` if it can't be read (another user's process, a kernel
+/// thread).
+///
+/// A process in a Flatpak sandbox reads its program from inside it
+/// (`/app/discord/Discord`), so that path is turned into the host's, in the
+/// app's or runtime's deployed files. Where that file isn't there, the path
+/// is kept only if the host has it (the sandbox's own `bwrap` is the
+/// host's): a sandbox path the host lacks is `None`, not a file to show.
 pub fn executable(pid: u32) -> Option<PathBuf> {
-    fs::read_link(format!("/proc/{pid}/exe")).ok()
+    let exe = fs::read_link(format!("/proc/{pid}/exe")).ok()?;
+    let Some(instance) = crate::apps::flatpak::Instance::of(pid) else {
+        return Some(exe);
+    };
+    instance
+        .host_path(&exe)
+        .filter(|p| p.exists())
+        .or_else(|| exe.exists().then_some(exe))
 }
 
 /// A process's start time in clock ticks since boot, `None` if it has gone.
@@ -242,6 +256,7 @@ mod tests {
         assert!(info.threads.is_some_and(|n| n >= 1));
         assert!(!info.command_line.is_empty());
         assert_eq!(info.executable, std::env::current_exe().ok());
+        assert_eq!(executable(me), std::env::current_exe().ok());
         assert_eq!(info.uid, Some(rustix::process::getuid().as_raw()));
         assert!(info.user.as_deref().is_some_and(|u| !u.is_empty()));
         assert!(

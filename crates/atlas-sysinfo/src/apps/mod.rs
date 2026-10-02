@@ -13,13 +13,16 @@
 //! [`Resolver`] answers that per unit and remembers it. [`Grouper`] folds a
 //! tick's processes into one row per application, and per name for the
 //! processes that are no application's. [`Search`] is the table's filter and
-//! [`Column`] its sort orders.
+//! [`Column`] its sort orders, and [`location`] where Open File Location
+//! goes for a row ([`flatpak`] for a Flatpak's).
 
 pub mod desktop;
+pub mod flatpak;
 pub mod icons;
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::process::Proc;
@@ -40,6 +43,8 @@ pub struct App {
     pub icon: Option<Icon>,
     /// A terminal emulator; see [`desktop::Entry::terminal`].
     pub terminal: bool,
+    /// Started as a Flatpak: its unit is `app-flatpak-<ID>-…`.
+    pub flatpak: bool,
     /// `name` lower-cased, for the search.
     folded: Box<str>,
 }
@@ -136,6 +141,7 @@ impl Resolver {
             name: name.into(),
             icon,
             terminal,
+            flatpak: unit.starts_with(flatpak::UNIT_PREFIX),
         })
     }
 
@@ -287,6 +293,51 @@ fn add(total: &mut Proc, p: &Proc) {
     sum(&mut total.net_out, p.net_out);
     sum(&mut total.disk_read, p.disk_read);
     sum(&mut total.disk_write, p.disk_write);
+}
+
+/// Where Open File Location goes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Location {
+    /// A folder to open: a Flatpak's install folder.
+    Folder(PathBuf),
+    /// A file to show selected in its folder: a program.
+    File(PathBuf),
+}
+
+/// Open File Location for a grouped row of `members`, belonging to `app`.
+/// A Flatpak opens its install folder: the one a member's sandbox was made
+/// from, or else the first installation that has the app. Any other row
+/// shows the first member's program that can be read
+/// ([`crate::process::executable`]). `None` when nothing can be found.
+///
+/// The row is a Flatpak's if any member runs in that app's sandbox, so a
+/// row that holds both a Flatpak and a native launch of one ID opens the
+/// Flatpak's folder whichever launch [`App::flatpak`] came from.
+///
+/// Reads `/proc` and the installations: run it off the GUI thread.
+pub fn location<'a>(
+    app: Option<&App>,
+    members: impl IntoIterator<Item = &'a Proc>,
+) -> Option<Location> {
+    let pids: Vec<u32> = members.into_iter().map(|p| p.pid).collect();
+    if let Some(app) = app {
+        // The bwrap that sets the sandbox up runs outside it: ask them all.
+        let folder = pids
+            .iter()
+            .filter_map(|&pid| flatpak::Instance::of(pid))
+            .find(|i| *i.id == *app.id)
+            .map(|i| i.install_folder())
+            .or_else(|| {
+                let installs = app.flatpak.then(flatpak::installations)?;
+                flatpak::install_folder(&app.id, &installs)
+            });
+        if let Some(folder) = folder {
+            return Some(Location::Folder(folder));
+        }
+    }
+    pids.iter()
+        .find_map(|&pid| crate::process::executable(pid))
+        .map(Location::File)
 }
 
 /// The table's search filter.

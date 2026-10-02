@@ -147,7 +147,7 @@ the rest is the plan the later phases build to:
 | `CpuStats`, `MemoryStats`, `GpuStats`, ... | Plain properties for the current values (`usage`, `frequency`, ...), plus one `Series` per chart. Updated in one queued closure per tick. |
 | `Series` | A 60-sample ring buffer (Rust). Publishes `values` (`QList<f64>`, oldest first) for `LiveChart` once per tick; see Charts. |
 | `DeviceModel` | Disks, network interfaces and batteries, for the expanding sidebar entries (`SidebarGroup`), with a live value per row. |
-| `ProcessModel` | The Apps table: a Rust `QAbstractItemModel` with row diffs (`beginInsertRows`/`dataChanged`/`beginRemoveRows`), never `beginResetModel` on a refresh, so rows hold still under the pointer. Group by App, sorting and search are done in Rust. Invokables `endTask`, `kill`, `stop`, `resume`, `details`, `openFileLocation` take a row key (pid, or the group's `apps::GroupKey`: an application ID, or a process name for processes that are no application's). |
+| `ProcessModel` | The Apps table: a Rust `QAbstractItemModel` with row diffs (`beginInsertRows`/`dataChanged`/`beginRemoveRows`), never `beginResetModel` on a refresh, so rows hold still under the pointer. Group by App, sorting and search are done in Rust. Invokables `endTask`, `kill`, `stop`, `resume`, `details`, `openFileLocation` (`apps::location` for a group) take a row key (pid, or the group's `apps::GroupKey`: an application ID, or a process name for processes that are no application's). |
 | `ServiceModel`, `StartupModel`, `SensorModel` | The Services, Startup and Sensors lists, same row-diff rule. |
 
 Names in QML are camelCase (`cxx_name`); Rust stays snake_case. Errors reach
@@ -235,6 +235,17 @@ The readers the loop drives (`atlas-sysinfo`):
   (235 processes, 113 rows): the first grouping 10 ms (desktop files and
   icon themes listed), then 15 µs a tick
   (`cargo run --release -p atlas-sysinfo --example apps -- --bench`).
+- `apps::flatpak`: a Flatpak groups like any app (its launches'
+  `app-flatpak-<ID>-*.scope` units, its exported desktop file), and `App`
+  says it is one. Its processes see the app at `/app` and the runtime at
+  `/usr`, so `process::executable` reads the sandbox's `/.flatpak-info`
+  (through `/proc/<pid>/root`) and returns the host path of the app's or
+  runtime's deployed file. `apps::location` is Open File Location for a
+  grouped row: a Flatpak's install folder (`<installation>/app/<ID>/<arch>/
+  <branch>/active/files`, from a running member's sandbox, else the first
+  installation that has it), otherwise the first member's program. Both
+  read files on request: call them off the GUI thread. To see them live:
+  `--example apps -- --locations`.
 - History is not kept here: the app's `Series` holds it.
 
 ## Privilege

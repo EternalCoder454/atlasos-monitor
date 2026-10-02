@@ -1,11 +1,13 @@
 //! Groups the live process table by application and prints each row with
 //! its name, icon and members: `cargo run -p atlas-sysinfo --example apps
-//! [theme] [--bench]`. The theme defaults to `breeze`. `--bench` times the
-//! first grouping (desktop files read, icon themes walked) and a later one.
+//! [theme] [--bench] [--locations]`. The theme defaults to `breeze`.
+//! `--bench` times the first grouping (desktop files read, icon themes
+//! walked) and a later one. `--locations` prints where Open File Location
+//! goes for each application's row and for each of its processes.
 
 use std::time::{Duration, Instant};
 
-use atlas_sysinfo::apps::{Column, Grouper, Resolver, sort};
+use atlas_sysinfo::apps::{Column, Grouper, Resolver, location, sort};
 use atlas_sysinfo::process::ProcessSampler;
 
 fn main() {
@@ -14,6 +16,7 @@ fn main() {
         .find(|a| !a.starts_with("--"))
         .unwrap_or_else(|| "breeze".into());
     let bench = std::env::args().any(|a| a == "--bench");
+    let locations = std::env::args().any(|a| a == "--locations");
     let mut sampler = ProcessSampler::default();
     let mut apps = Resolver::for_session(&theme);
     let mut grouper = Grouper::default();
@@ -35,6 +38,26 @@ fn main() {
             first.as_secs_f64() * 1e3,
             start.elapsed().as_secs_f64() * 1e6 / 100.0,
         );
+        return;
+    }
+    if locations {
+        for g in groups.iter().filter(|g| g.app.is_some()) {
+            let members: Vec<_> = apps.members(&g.key, &procs).collect();
+            println!(
+                "{} (flatpak: {}): {:?}",
+                g.total.name,
+                g.app.as_ref().is_some_and(|a| a.flatpak),
+                location(g.app.as_deref(), members.iter().copied())
+            );
+            for p in members {
+                println!(
+                    "    {:>7} {:<16} {:?}",
+                    p.pid,
+                    p.name,
+                    atlas_sysinfo::process::executable(p.pid)
+                );
+            }
+        }
         return;
     }
 
