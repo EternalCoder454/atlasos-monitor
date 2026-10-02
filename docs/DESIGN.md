@@ -147,7 +147,7 @@ the rest is the plan the later phases build to:
 | `CpuStats`, `MemoryStats`, `GpuStats`, ... | Plain properties for the current values (`usage`, `frequency`, ...), plus one `Series` per chart. Updated in one queued closure per tick. |
 | `Series` | A 60-sample ring buffer (Rust). Publishes `values` (`QList<f64>`, oldest first) for `LiveChart` once per tick; see Charts. |
 | `DeviceModel` | Disks, network interfaces and batteries, for the expanding sidebar entries (`SidebarGroup`), with a live value per row. |
-| `ProcessModel` | The Apps table: a Rust `QAbstractItemModel` with row diffs (`beginInsertRows`/`dataChanged`/`beginRemoveRows`), never `beginResetModel` on a refresh, so rows hold still under the pointer. Group by App, sorting and search are done in Rust. Invokables `endTask`, `kill`, `stop`, `resume`, `details`, `openFileLocation` take a row key (pid, or the group's unit). |
+| `ProcessModel` | The Apps table: a Rust `QAbstractItemModel` with row diffs (`beginInsertRows`/`dataChanged`/`beginRemoveRows`), never `beginResetModel` on a refresh, so rows hold still under the pointer. Group by App, sorting and search are done in Rust. Invokables `endTask`, `kill`, `stop`, `resume`, `details`, `openFileLocation` take a row key (pid, or the group's `apps::GroupKey`: an application ID, or a process name for processes that are no application's). |
 | `ServiceModel`, `StartupModel`, `SensorModel` | The Services, Startup and Sensors lists, same row-diff rule. |
 
 Names in QML are camelCase (`cxx_name`); Rust stays snake_case. Errors reach
@@ -212,6 +212,29 @@ The readers the loop drives (`atlas-sysinfo`):
 - `process::{details, act}`: the Details panel's one-off read, and End Task,
   Kill, Stop, Continue through a pidfd, after checking the start time so a
   reused pid is never signalled.
+- `apps` groups the table by application. `Resolver` maps a process's unit
+  to its application: the ID from systemd's `app[-launcher]-<ID>…` unit
+  names, the name from that ID's `.desktop` file (folders listed once,
+  re-listed at most every 30 s on a miss), and the first icon that draws
+  (the file's, the ID, the lower-case name), cached per unit and forgotten
+  after 120 ticks unseen. Icons are checked without Qt, which the sampling
+  thread can't call, the way Qt looks: the theme chain (`QIcon::themeName()`,
+  what it inherits, hicolor), the folders each `index.theme` lists, and the
+  dash fallback (`foo-bar` → `foo`). The themes are listed once (again on a
+  miss 30 s later) and only name hashes are kept; a name found only as a
+  link (most of Breeze) is confirmed with a `stat` when asked about. An
+  icon found only in `pixmaps/` comes back as a path. The app must hand
+  `Resolver::icon_search_paths()` to `QIcon::setThemeSearchPaths`, so a
+  Flatpak icon found here also draws when the session's `XDG_DATA_DIRS`
+  lacks Flatpak's exports, and call `Resolver::set_icon_theme` when Qt's
+  theme changes. `Grouper` folds a tick into one row per application (per
+  name for the rest), its figures the members' sums as a `Proc`, known if
+  any member's is. `Search` matches name, application name or pid (a group
+  by pid only when it is one process); `sort` is stable and the columns
+  never break ties, so equal rows hold still. On the development machine
+  (235 processes, 113 rows): the first grouping 10 ms (desktop files and
+  icon themes listed), then 15 µs a tick
+  (`cargo run --release -p atlas-sysinfo --example apps -- --bench`).
 - History is not kept here: the app's `Series` holds it.
 
 ## Privilege
