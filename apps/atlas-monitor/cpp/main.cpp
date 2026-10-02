@@ -41,6 +41,13 @@ static void messageHandler(QtMsgType type, const QMessageLogContext &context, co
 
 int main(int argc, char *argv[])
 {
+    // First, before anything can start a thread: Qt's raster engine hands
+    // every fill of 96+ spans to a thread pool and waits, and for chart-sized
+    // shapes the hand-off costs more than the fill (bench/chart, measured on
+    // the software backend).
+    if (qEnvironmentVariableIsEmpty("QT_NO_GUI_THREADPOOL")) {
+        qputenv("QT_NO_GUI_THREADPOOL", "1");
+    }
     atlas_log_init();
     atlas_crash_install(); // Rust panic hook, before anything can panic.
     // Before QApplication: its constructor raises the most common fatal

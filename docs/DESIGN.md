@@ -81,7 +81,42 @@ Consequences:
   backends. Custom `QSGGeometryNode`s and Qt Graphs don't render on the
   software backend.
 - On the software backend, Qt repaints only dirty regions: a chart updates
-  only its own rectangle, and nothing animates while idle.
+  only its own rectangle, and nothing animates while idle. At fractional
+  scales (1.25x, 1.5x) Qt repaints the whole window instead. Forcing partial
+  updates there (`QSG_SOFTWARE_RENDERER_FORCE_PARTIAL_UPDATES`) was measured
+  and saved nothing in Atlas Monitor or KWin, so it stays off.
+- `main.cpp` sets `QT_NO_GUI_THREADPOOL=1` on both backends. Otherwise Qt's
+  raster engine hands every fill of 96 or more spans to a thread pool and
+  waits, which costs more than the fill for chart-sized shapes.
+
+### Charts
+
+Settled by measurement (`bench/chart/README.md`, 2026-10-02). `LiveChart` is a
+C++ `QQuickPaintedItem` in Atlas.Ui; `bench/chart/livechart.cpp` is its
+reference (its `series` pointer property is a benchmark shortcut, not part of
+the API). It repaints its whole rectangle once per tick, and otherwise only
+when it is resized or one of its properties changes.
+
+- **Data:** `values: list<real>`, oldest sample first, at most 60, plus
+  `values2` for a second series (upload beside download, write beside read).
+  The Rust `Series` holds the ring buffer and publishes the list in the tick's
+  queued closure. A generic list keeps Atlas.Ui free of Atlas Monitor's types,
+  and it costs the same as reading the ring buffer from C++. `values2` is not
+  in the benchmark; a second series adds roughly another fill and line, so
+  measure it when it lands.
+- **Drawing:** the line is one small anti-aliased quad per segment (extended
+  half a width at both ends), not a stroked polyline. Qt's anti-aliasing
+  rasterizer is slow on long, thin, nearly flat shapes, and per-segment quads
+  are pixel-equivalent to a round-joined 1.5 px stroke. The quads overlap at
+  the joins, so the line colour must be opaque. The fill under the
+  line is drawn without anti-aliasing, since the line covers its sloped edge.
+  The grid and border are 1-device-pixel rectangles snapped to device pixels
+  and filled, not drawn as lines: translucent lines take Qt's per-pixel path.
+  Captions are `QStaticText`, re-laid out only when their text changes.
+- **Cost** (virtual KWin, 1 Hz, process CPU, measured before the grid became
+  rectangles, which took a further 20% off large charts): 12 charts take
+  3.8 ms/s at 1x and 10.0 ms/s at 1.5x, against 11.6 and 28.6 for a plain
+  painted item. Pages show one to four charts.
 
 ## Threading rule
 
@@ -110,7 +145,7 @@ the rest is the plan the later phases build to:
 | `Backend` | Settings (`refreshInterval`, `gpuRendering`), Atlas Monitor's own memory (`ownPss`, `ownRss`). Invokables `changeRefreshInterval(ms)`, `changeGpuRendering(on)`, `refreshOwnMemory()`. |
 | `Sampler` | The sampling thread. QML sets `activePage` ("overview", "cpu", "memory", "disk:nvme0n1", "network:wlp4s0", "gpu", "battery:BAT0", "sensors", "apps", ...); only that page's readers run. |
 | `CpuStats`, `MemoryStats`, `GpuStats`, ... | Plain properties for the current values (`usage`, `frequency`, ...), plus one `Series` per chart. Updated in one queued closure per tick. |
-| `Series` | A fixed-size ring buffer of samples (Rust), read by the C++ `LiveChart`. The exact interface is settled by the chart decision in the roadmap (measured with 10+ live charts). |
+| `Series` | A 60-sample ring buffer (Rust). Publishes `values` (`QList<f64>`, oldest first) for `LiveChart` once per tick; see Charts. |
 | `DeviceModel` | Disks, network interfaces and batteries, for the expanding sidebar entries (`SidebarGroup`), with a live value per row. |
 | `ProcessModel` | The Apps table: a Rust `QAbstractItemModel` with row diffs (`beginInsertRows`/`dataChanged`/`beginRemoveRows`), never `beginResetModel` on a refresh, so rows hold still under the pointer. Group by App, sorting and search are done in Rust. Invokables `endTask`, `kill`, `stop`, `resume`, `details`, `openFileLocation` take a row key (pid, or the group's unit). |
 | `ServiceModel`, `StartupModel`, `SensorModel` | The Services, Startup and Sensors lists, same row-diff rule. |
