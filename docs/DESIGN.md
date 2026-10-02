@@ -171,6 +171,22 @@ Planned (Backend port phase):
   2.4 ms/s CPU and 47 read syscalls/s; Apps page 14.8 ms/s and 862 reads/s.
   The Rust version must beat all of them; measure, don't guess.
 
+The readers the loop drives (`atlas-sysinfo`):
+
+- `sysfs::HeldFile` holds a kernel file open and re-reads it with one `pread`
+  at offset zero; an attribute missing on this machine is `None`.
+- `stats::{cpu, memory, disk, net}`: static facts come from plain functions
+  (`cpu::info`, `disk::disks`, `net::interfaces`), read once. Changing
+  figures come from a `*Sampler` that owns its held files and the previous
+  counters. A sampler takes its baseline when it is made, so its first
+  `sample()` is a real reading; making one when a page opens is what gives
+  that page empty charts and no stale history. One tick of all four
+  samplers on the development machine (32 threads) is 38 `pread`s and no
+  `open`.
+- `disk::space` (statvfs) and `net::addresses` (one netlink dump) are
+  separate calls, for the loop to run every 5th tick.
+- History is not kept here: the app's `Series` holds it.
+
 ## Privilege
 
 Atlas Monitor runs as the user and adds **no new privilege**: no setuid, no

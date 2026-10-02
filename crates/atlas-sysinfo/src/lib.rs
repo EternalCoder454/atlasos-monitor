@@ -7,6 +7,10 @@
 //! least its parts, a percentage is within 0..=100), never what one machine
 //! happens to have: CI runs in a container with no GPU, battery or system bus.
 //!
+//! - [`sysfs`]: kernel files held open and re-read with one `pread`.
+//! - [`stats`]: processor, memory, disks and network for the Hardware pages.
 //! - [`sysmem`]: Atlas Monitor's own memory use, for Settings.
 
+pub mod stats;
+pub mod sysfs;
 pub mod sysmem;

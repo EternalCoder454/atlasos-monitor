@@ -1,0 +1,10 @@
+/dev/mapper/luks-5b9e7c0a-3f1d-4c2e-9a8b-1d2e3f4a5b6c /sysroot btrfs ro,seclabel,relatime,compress=zstd:1,space_cache=v2,subvolid=256,subvol=/root 0 0
+composefs / overlay ro,seclabel,relatime,lowerdir+=/run/ostree/.private/cfsroot-lower,datadir+=/sysroot/ostree/repo/objects,redirect_dir=on,metacopy=on 0 0
+devtmpfs /dev devtmpfs rw,seclabel,nosuid,size=4096k,nr_inodes=1048576,mode=755,inode64 0 0
+/dev/mapper/luks-5b9e7c0a-3f1d-4c2e-9a8b-1d2e3f4a5b6c /etc btrfs rw,seclabel,relatime,compress=zstd:1,space_cache=v2,subvolid=256,subvol=/root 0 0
+/dev/mapper/luks-5b9e7c0a-3f1d-4c2e-9a8b-1d2e3f4a5b6c /sysroot/ostree/deploy/default/var btrfs rw,seclabel,relatime,compress=zstd:1,space_cache=v2,subvolid=256,subvol=/root 0 0
+/dev/mapper/luks-5b9e7c0a-3f1d-4c2e-9a8b-1d2e3f4a5b6c /var btrfs rw,seclabel,relatime,compress=zstd:1,space_cache=v2,subvolid=257,subvol=/var 0 0
+/dev/vda2 /boot ext4 rw,seclabel,relatime 0 0
+/dev/vda1 /boot/efi vfat rw,relatime,fmask=0077,dmask=0077,codepage=437,iocharset=ascii,shortname=winnt,errors=remount-ro 0 0
+tmpfs /tmp tmpfs rw,seclabel,nosuid,nodev,size=8131496k,nr_inodes=1048576,inode64 0 0
+/dev/mapper/luks-5b9e7c0a-3f1d-4c2e-9a8b-1d2e3f4a5b6c /var/home btrfs rw,seclabel,relatime,compress=zstd:1,space_cache=v2,subvolid=258,subvol=/home 0 0

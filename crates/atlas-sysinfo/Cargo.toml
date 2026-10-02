@@ -8,5 +8,8 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+# statvfs for disk space, a netlink socket for interface addresses.
+rustix = { version = "1.1", features = ["fs", "net"] }
 
 [dev-dependencies]
+tempfile = "3"

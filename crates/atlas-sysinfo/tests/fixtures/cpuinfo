@@ -1,0 +1,768 @@
+processor	: 0
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 2352.631
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 0
+cpu cores	: 24
+apicid		: 0
+initial apicid	: 0
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 1
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 5194.650
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 0
+cpu cores	: 24
+apicid		: 1
+initial apicid	: 1
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 2
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 5414.565
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 4
+cpu cores	: 24
+apicid		: 8
+initial apicid	: 8
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 3
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 5700.000
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 4
+cpu cores	: 24
+apicid		: 9
+initial apicid	: 9
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 4
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 3093.478
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 8
+cpu cores	: 24
+apicid		: 16
+initial apicid	: 16
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 5
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 800.000
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 8
+cpu cores	: 24
+apicid		: 17
+initial apicid	: 17
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 6
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 3000.032
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 12
+cpu cores	: 24
+apicid		: 24
+initial apicid	: 24
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 7
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 800.000
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 12
+cpu cores	: 24
+apicid		: 25
+initial apicid	: 25
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 8
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 2472.611
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 16
+cpu cores	: 24
+apicid		: 32
+initial apicid	: 32
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 9
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 800.961
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 16
+cpu cores	: 24
+apicid		: 33
+initial apicid	: 33
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 10
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 2193.729
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 20
+cpu cores	: 24
+apicid		: 40
+initial apicid	: 40
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 11
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 800.000
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 20
+cpu cores	: 24
+apicid		: 41
+initial apicid	: 41
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 12
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 5692.645
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 24
+cpu cores	: 24
+apicid		: 48
+initial apicid	: 48
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 13
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 5700.057
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 24
+cpu cores	: 24
+apicid		: 49
+initial apicid	: 49
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 14
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 1387.519
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 28
+cpu cores	: 24
+apicid		: 56
+initial apicid	: 56
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 15
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 800.000
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 28
+cpu cores	: 24
+apicid		: 57
+initial apicid	: 57
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 16
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 1982.500
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 32
+cpu cores	: 24
+apicid		: 64
+initial apicid	: 64
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 17
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 1995.370
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 33
+cpu cores	: 24
+apicid		: 66
+initial apicid	: 66
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 18
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 1981.730
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 34
+cpu cores	: 24
+apicid		: 68
+initial apicid	: 68
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 19
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 2048.972
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 35
+cpu cores	: 24
+apicid		: 70
+initial apicid	: 70
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 20
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 4400.048
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 36
+cpu cores	: 24
+apicid		: 72
+initial apicid	: 72
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 21
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 4470.098
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 37
+cpu cores	: 24
+apicid		: 74
+initial apicid	: 74
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 22
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 4324.019
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 38
+cpu cores	: 24
+apicid		: 76
+initial apicid	: 76
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 23
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 4464.953
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 39
+cpu cores	: 24
+apicid		: 78
+initial apicid	: 78
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 24
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 800.253
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 40
+cpu cores	: 24
+apicid		: 80
+initial apicid	: 80
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 25
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 798.246
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 41
+cpu cores	: 24
+apicid		: 82
+initial apicid	: 82
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 26
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 802.606
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 42
+cpu cores	: 24
+apicid		: 84
+initial apicid	: 84
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 27
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 801.754
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 43
+cpu cores	: 24
+apicid		: 86
+initial apicid	: 86
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 28
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 2189.930
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 44
+cpu cores	: 24
+apicid		: 88
+initial apicid	: 88
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 29
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 2631.985
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 45
+cpu cores	: 24
+apicid		: 90
+initial apicid	: 90
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 30
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 1542.477
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 46
+cpu cores	: 24
+apicid		: 92
+initial apicid	: 92
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+
+processor	: 31
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 183
+model name	: Intel(R) Core(TM) i9-14900KF
+stepping	: 1
+microcode	: 0x133
+cpu MHz		: 1943.150
+cache size	: 36864 KB
+physical id	: 0
+siblings	: 32
+core id		: 47
+cpu cores	: 24
+apicid		: 94
+initial apicid	: 94
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 32
+wp		: yes
+bogomips	: 6374.40
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 39 bits physical, 48 bits virtual
+

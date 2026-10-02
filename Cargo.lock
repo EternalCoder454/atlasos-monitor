@@ -79,6 +79,10 @@ dependencies = [
 [[package]]
 name = "atlas-sysinfo"
 version = "0.1.0"
+dependencies = [
+ "rustix",
+ "tempfile",
+]
 
 [[package]]
 name = "autocfg"
