@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main, beta]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: fmt, clippy, tests
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Tools for checkout and cache
+        run: dnf -y install git-core tar zstd
+      - uses: actions/checkout@v5
+      - name: Build dependencies
+        run: |
+          dnf -y install dnf5-plugins clippy rustfmt
+          dnf -y builddep packaging/atlas-monitor.spec
+      - uses: actions/cache@v4
+        with:
+          # Only the downloads: an old target dir would grow without bound.
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-f44-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-f44-
+      - name: Format
+        run: cargo fmt --all --check
+      # --locked: also fails when Cargo.lock and the atlas-core rev disagree.
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Tests
+        run: cargo test --workspace --locked
+
+  rpm:
+    name: RPM
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Tools for checkout
+        run: dnf -y install git-core tar
+      - uses: actions/checkout@v5
+      - name: Build the RPM
+        run: packaging/build-rpm.sh "$GITHUB_WORKSPACE/out"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: atlas-monitor-rpm
+          path: out/*.rpm
+          if-no-files-found: error

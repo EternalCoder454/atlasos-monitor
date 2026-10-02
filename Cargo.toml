@@ -1,0 +1,21 @@
+[workspace]
+resolver = "3"
+members = ["crates/atlas-sysinfo", "apps/atlas-monitor"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/EternalCoder454/atlasos-monitor"
+rust-version = "1.89"
+
+[workspace.dependencies]
+# atlas-core and the Atlas.Ui QML module come from the same atlasos-updater
+# commit. apps/atlas-monitor/CMakeLists.txt reads this `rev` to fetch Atlas.Ui,
+# so this line is the only place the pin lives. To move it, see CLAUDE.md.
+atlas-core = { git = "https://github.com/EternalCoder454/atlasos-updater", rev = "1d55f9f2d61c626ac07b1cfdb55584380101999c" }
+
+[profile.release]
+lto = "thin"
+codegen-units = 4
+strip = true

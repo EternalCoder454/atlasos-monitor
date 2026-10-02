@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Atlas Monitor
+GenericName=System Monitor
+Comment=See what your computer is doing: apps, processor, memory, disks, network and more
+Exec=atlas-monitor
+Icon=net.eterneon.atlas.monitor
+Terminal=false
+Categories=Qt;KDE;System;Monitor;
+Keywords=task;manager;process;cpu;memory;disk;network;gpu;sensors;services;startup;
+StartupNotify=true
+SingleMainWindow=true
+X-KDE-StartupNotify=true
