@@ -185,6 +185,33 @@ The readers the loop drives (`atlas-sysinfo`):
   `open`.
 - `disk::space` (statvfs) and `net::addresses` (one netlink dump) are
   separate calls, for the loop to run every 5th tick.
+- `process::ProcessSampler` is the Apps table, made while the Apps page is
+  open. Each `/proc/<pid>` file is opened with `openat` against a held
+  `/proc` fd and read once into a reused buffer. The stat line is the one
+  file read for every process every tick. Everything else is skipped when it
+  says nothing changed:
+  - Kernel threads are dropped at their stat line (`PF_KTHREAD`), then known
+    by pid and inode from the listing alone.
+  - A process whose CPU time, page faults and rss haven't moved keeps its
+    memory and shows no disk traffic, without reading `statm` or `io`. It is
+    re-read every 5th tick, staggered by pid, and a disk rate after carried
+    ticks covers all of them.
+  - Sockets are counted (the network estimate) every 3rd tick per process
+    while there is traffic, staggered by pid. The count is skipped while the
+    descriptor count (`stat` size of `fd/`, Linux 6.2+) is unchanged; that
+    skips about nine in ten links.
+  - A known GPU client has only its DRM fdinfo re-read.
+
+  On the development machine (~220 user processes, ~530 kernel threads,
+  1 Hz), a tick costs ~1,250 syscalls (~360 `read`), down from ~6,070 in
+  the first straight port. A scan costs 4.0 ms of CPU (mean, caches as cold
+  as at 1 Hz), of which 3.8 ms is the floor: the listing and stat lines. To
+  measure: `cargo run --release -p atlas-sysinfo --example processes 30 --bench`
+  (per-scan CPU from schedstat), or the same without `--bench` under
+  `strace -c`.
+- `process::{details, act}`: the Details panel's one-off read, and End Task,
+  Kill, Stop, Continue through a pidfd, after checking the start time so a
+  reused pid is never signalled.
 - History is not kept here: the app's `Series` holds it.
 
 ## Privilege

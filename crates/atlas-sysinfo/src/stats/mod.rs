@@ -26,7 +26,7 @@ fn lines(data: &[u8]) -> impl Iterator<Item = &[u8]> {
 /// Bytes per second from two readings of a counter that only goes up. A
 /// counter that went backwards (a device reset, a wrap) gives 0, not a
 /// huge figure.
-fn rate(current: u64, previous: u64, seconds: f64) -> f64 {
+pub(crate) fn rate(current: u64, previous: u64, seconds: f64) -> f64 {
     if current < previous || seconds <= 0.0 {
         return 0.0;
     }
@@ -34,7 +34,7 @@ fn rate(current: u64, previous: u64, seconds: f64) -> f64 {
 }
 
 /// The time since `last` in seconds, and moves `last` to now.
-fn elapsed(last: &mut Instant) -> f64 {
+pub(crate) fn elapsed(last: &mut Instant) -> f64 {
     let now = Instant::now();
     let seconds = now.duration_since(*last).as_secs_f64();
     *last = now;
