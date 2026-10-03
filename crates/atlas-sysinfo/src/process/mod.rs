@@ -10,6 +10,10 @@
 //! tick's unless they changed. The costly extras are throttled and carried
 //! forward:
 //!
+//! - each process's `stat`, `statm` and `io` stay open from one tick to the next
+//!   and are read again with one `pread`, rather than opened, read and
+//!   closed each time: two thirds of the scan's system calls. Up to a
+//!   quarter of the descriptor limit is held this way ([`max_held`]);
 //! - kernel threads (two thirds of `/proc` on a desktop) are dropped as soon
 //!   as their stat line says what they are, unless asked for, and after that
 //!   are recognised from the `/proc` listing alone (pid and inode), so they
@@ -54,6 +58,7 @@ pub use impact::Impact;
 pub use parse::{Stat, container_from_cgroup, parse_io, parse_stat, unit_from_cgroup};
 pub use signal::{Action, ActionError, act};
 
+use std::os::fd::OwnedFd;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -193,6 +198,19 @@ struct Prev {
     sockets: u32,
     /// How many descriptors it had then.
     fd_count: Option<u64>,
+    /// Its `stat`, `statm` and `io`, held open for the next read.
+    stat_fd: Option<OwnedFd>,
+    statm_fd: Option<OwnedFd>,
+    io_fd: Option<OwnedFd>,
+}
+
+/// How many `/proc` files the scan may hold open: a quarter of the soft
+/// descriptor limit, so the files a scan opens before it closes last
+/// tick's still stay within half of it, and no more than 4096.
+fn max_held() -> usize {
+    let limit = rustix::process::getrlimit(rustix::process::Resource::Nofile);
+    let soft = limit.current.unwrap_or(u64::MAX);
+    usize::try_from(soft / 4).unwrap_or(usize::MAX).min(4096)
 }
 
 /// Samples every process. Owned by the sampling thread; see the module
@@ -218,6 +236,8 @@ pub struct ProcessSampler {
     last: Instant,
     ticks_per_second: f64,
     page_size: u64,
+    /// See [`max_held`].
+    max_held: usize,
 }
 
 impl ProcessSampler {
@@ -240,6 +260,7 @@ impl ProcessSampler {
             last: Instant::now(),
             ticks_per_second: rustix::param::clock_ticks_per_second() as f64,
             page_size: rustix::param::page_size() as u64,
+            max_held: max_held(),
         };
         s.scan(1.0);
         s
@@ -273,6 +294,9 @@ impl ProcessSampler {
         }
 
         let wanted = self.wanted;
+        let max_held = self.max_held;
+        // Descriptors kept into `next` so far.
+        let mut held = 0;
         let tick = self.tick;
         self.tick += 1;
         let traffic = rx_rate + tx_rate > NET_SCAN_THRESHOLD;
@@ -285,7 +309,12 @@ impl ProcessSampler {
         for &entry in &self.entries {
             let pid = entry.pid;
             while old.next_if(|p| p.pid < pid).is_some() {}
-            let prev = old.next_if(|p| p.pid == pid);
+            let mut prev = old.next_if(|p| p.pid == pid);
+            let mut stat_fd = prev.as_mut().and_then(|p| p.stat_fd.take());
+            let mut statm_fd = prev.as_mut().and_then(|p| p.statm_fd.take());
+            let mut io_fd = prev.as_mut().and_then(|p| p.io_fd.take());
+            // Room for all three files of this process, or none are kept.
+            let keep = held + 3 <= max_held;
             while old_kernel.next_if(|k| k.pid < pid).is_some() {}
             let known_kernel = old_kernel.next_if(|k| k.pid == pid) == Some(entry);
             if known_kernel && !wanted.kernel_threads {
@@ -293,7 +322,7 @@ impl ProcessSampler {
                 continue;
             }
 
-            let Ok(line) = dir.read(pid, b"/stat", b"") else {
+            let Ok(line) = dir.read_held(&mut stat_fd, keep, pid, b"/stat") else {
                 continue; // exited since the listing
             };
             let Some(stat) = parse::parse_stat(line) else {
@@ -304,6 +333,10 @@ impl ProcessSampler {
                 continue;
             }
             let mut prev = prev.filter(|p| p.start_time == stat.start_time);
+            if prev.is_none() {
+                // Another process's, given the same pid.
+                (statm_fd, io_fd) = (None, None);
+            }
             // The name is copied out of the read buffer only when it changed:
             // a process's name almost never does.
             let name = reuse(prev.as_ref().map(|p| &p.name), stat.name);
@@ -345,7 +378,7 @@ impl ProcessSampler {
             let memory = match idle {
                 Some(p) => p.memory,
                 None => dir
-                    .read(pid, b"/statm", b"")
+                    .read_held(&mut statm_fd, keep, pid, b"/statm")
                     .ok()
                     .and_then(parse::parse_statm_resident)
                     .map(|pages| pages.saturating_mul(self.page_size))
@@ -366,7 +399,7 @@ impl ProcessSampler {
                 _ if !wanted.disk => (None, 0.0, false),
                 Some((io, age)) => (Some(io), age, false),
                 None if io_closed => (None, 0.0, true),
-                None => match dir.read(pid, b"/io", b"") {
+                None => match dir.read_held(&mut io_fd, keep, pid, b"/io") {
                     Ok(b) => (parse::parse_io(b), 0.0, false),
                     Err(e) => (None, 0.0, matches!(e, Errno::ACCESS | Errno::PERM)),
                 },
@@ -450,6 +483,13 @@ impl ProcessSampler {
                 None => 0.0, // a GPU client, but no interval to measure yet
             });
 
+            if !wanted.disk {
+                io_fd = None;
+            }
+            held += [&stat_fd, &statm_fd, &io_fd]
+                .iter()
+                .filter(|f| f.is_some())
+                .count();
             next.push(Prev {
                 pid,
                 start_time,
@@ -468,6 +508,9 @@ impl ProcessSampler {
                 fd_denied,
                 sockets,
                 fd_count,
+                stat_fd,
+                statm_fd,
+                io_fd,
             });
             self.procs.push(Proc {
                 pid,

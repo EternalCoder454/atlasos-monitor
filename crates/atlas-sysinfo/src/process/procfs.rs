@@ -10,6 +10,9 @@
 //! - one `read` per file. procfs builds these files whole and hands back all
 //!   of it at once, so a read that doesn't fill the buffer is the end of the
 //!   file; reading again until EOF doubled the reads;
+//! - the files read every tick kept open and read again from the start
+//!   ([`ProcDir::read_held`]): one `pread` where opening anew is an
+//!   `openat`, a `read` and a `close`;
 //! - directories listed with `getdents64` into a reused buffer and the names
 //!   used as they are, never turned into strings;
 //! - a descriptor walk reads each link relative to the opened `fd/`
@@ -85,6 +88,40 @@ impl ProcDir {
             Mode::empty(),
         )?;
         read_whole(&fd, &mut self.buf)
+    }
+
+    /// Reads `/proc/<pid><name>` like [`Self::read`], through `held`: a
+    /// descriptor kept from an earlier read of the same file is read again
+    /// from the start, since procfs builds the file afresh for every read
+    /// at offset 0. A descriptor stays with the process it was opened on:
+    /// once that exits, reading fails (`ESRCH`) instead of reading a new
+    /// process given the same pid, and the file is opened again. A newly
+    /// opened descriptor is kept only if `keep`.
+    pub fn read_held(
+        &mut self,
+        held: &mut Option<OwnedFd>,
+        keep: bool,
+        pid: u32,
+        name: &[u8],
+    ) -> Result<&[u8], Errno> {
+        if let Some(fd) = held.as_ref() {
+            match pread_whole(fd, &mut self.buf) {
+                Ok(n) => return Ok(&self.buf[..n]),
+                Err(_) => *held = None,
+            }
+        }
+        let path = pid_path(&mut self.path, pid, name, b"")?;
+        let fd = rfs::openat(
+            &self.fd,
+            path,
+            OFlags::RDONLY | OFlags::CLOEXEC,
+            Mode::empty(),
+        )?;
+        let n = pread_whole(&fd, &mut self.buf)?;
+        if keep {
+            *held = Some(fd);
+        }
+        Ok(&self.buf[..n])
     }
 
     /// Reads `/proc/<pid>/fdinfo/<fd>`, like [`Self::read`].
@@ -291,6 +328,23 @@ fn read_whole<'a>(fd: &OwnedFd, buf: &'a mut Vec<u8>) -> Result<&'a [u8], Errno>
     }
 }
 
+/// Like [`read_whole`], but from the start of the file whatever its
+/// offset, with `pread`; the length read.
+fn pread_whole(fd: &OwnedFd, buf: &mut Vec<u8>) -> Result<usize, Errno> {
+    let mut n = 0;
+    loop {
+        match rio::pread(fd, &mut buf[n..], n as u64) {
+            Ok(got) => n += got,
+            Err(Errno::INTR) => continue,
+            Err(e) => return Err(e),
+        }
+        if n < buf.len() {
+            return Ok(n);
+        }
+        buf.resize(buf.len() * 2, 0);
+    }
+}
+
 /// A `/proc` entry name that is all digits, as a pid.
 fn parse_pid(name: &[u8]) -> Option<u32> {
     if name.is_empty() || !name.iter().all(u8::is_ascii_digit) {
@@ -429,6 +483,36 @@ mod tests {
 
     /// The count from `stat` is what a walk lists: the scan skips a walk
     /// when it hasn't moved.
+    /// A held file is read again from the start; once its process has
+    /// gone, reading fails rather than read whoever has the pid next.
+    #[test]
+    fn held_files_are_read_again_and_let_go() {
+        let mut dir = ProcDir::open().unwrap();
+        let me = std::process::id();
+        let mine = format!("{me} (");
+        let mut held = None;
+        let first = dir.read_held(&mut held, true, me, b"/stat").unwrap();
+        assert!(first.starts_with(mine.as_bytes()));
+        assert!(held.is_some());
+        let again = dir.read_held(&mut held, true, me, b"/stat").unwrap();
+        assert!(again.starts_with(mine.as_bytes()));
+        let mut not_kept = None;
+        dir.read_held(&mut not_kept, false, me, b"/stat").unwrap();
+        assert!(not_kept.is_none());
+
+        let mut child = std::process::Command::new("sleep")
+            .arg("30")
+            .spawn()
+            .unwrap();
+        let pid = child.id();
+        let mut held = None;
+        dir.read_held(&mut held, true, pid, b"/stat").unwrap();
+        child.kill().unwrap();
+        child.wait().unwrap();
+        assert!(dir.read_held(&mut held, true, pid, b"/stat").is_err());
+        assert!(held.is_none());
+    }
+
     #[test]
     fn the_descriptor_count_matches_a_walk() {
         // A child, so that no other test's descriptors come and go meanwhile.

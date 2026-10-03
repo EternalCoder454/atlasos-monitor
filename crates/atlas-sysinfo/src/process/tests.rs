@@ -280,6 +280,9 @@ fn network_is_shared_by_socket_count() {
         fd_denied,
         sockets,
         fd_count: None,
+        stat_fd: None,
+        statm_fd: None,
+        io_fd: None,
     };
     let proc = |pid| Proc {
         pid,
@@ -333,4 +336,46 @@ fn disk_rates_cover_the_time_since_the_last_reading() {
     );
     assert_eq!(disk_rates(Some((1, 1)), None, 1.0), (Some(0.0), Some(0.0)));
     assert_eq!(disk_rates(None, before, 1.0), (None, None));
+}
+
+/// The scan keeps its processes' files open, within its budget, and lets a
+/// process that has gone go with them.
+#[test]
+fn held_files_stay_within_the_budget_and_go_with_their_process() {
+    let child = Command::new("sleep").arg("30").spawn().unwrap();
+    let pid = child.id();
+    let mut s = ProcessSampler::default();
+    s.sample();
+    let held = |s: &ProcessSampler| -> usize {
+        s.prev
+            .iter()
+            .map(|p| {
+                [&p.stat_fd, &p.statm_fd, &p.io_fd]
+                    .iter()
+                    .filter(|f| f.is_some())
+                    .count()
+            })
+            .sum()
+    };
+    assert!(held(&s) > 0);
+    assert!(held(&s) <= s.max_held);
+    let p = s
+        .prev
+        .iter()
+        .find(|p| p.pid == pid)
+        .expect("the child is listed");
+    assert!(p.stat_fd.is_some());
+    kill(child);
+    assert!(find(s.sample(), pid).is_none());
+    assert!(s.prev.iter().all(|p| p.pid != pid));
+
+    // A budget of none holds nothing new.
+    let mut s = ProcessSampler::new(Wanted::default());
+    s.max_held = 0;
+    for p in &mut s.prev {
+        (p.stat_fd, p.statm_fd, p.io_fd) = (None, None, None);
+    }
+    s.sample();
+    assert_eq!(held(&s), 0);
+    assert!(find(&s.procs, std::process::id()).is_some());
 }
