@@ -355,6 +355,15 @@ mod tests {
         let mut child = child.expect("the copy stayed busy");
         let pid = child.id();
         let path = fs::canonicalize(&copy).unwrap();
+        // spawn can return before the kernel shows the new program: for a
+        // moment the child is still this test (seen on CI's runners).
+        let link = format!("/proc/{pid}/exe");
+        for _ in 0..200 {
+            if fs::read_link(&link).is_ok_and(|l| l == path) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
         assert_eq!(executable(pid), Some(path));
 
         fs::remove_file(&copy).unwrap();
