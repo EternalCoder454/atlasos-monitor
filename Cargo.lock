@@ -80,6 +80,7 @@ dependencies = [
 name = "atlas-sysinfo"
 version = "0.1.0"
 dependencies = [
+ "futures-core",
  "libc",
  "rustix",
  "serde",

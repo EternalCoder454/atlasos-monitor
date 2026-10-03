@@ -1,0 +1,43 @@
+{
+  "type": "a{sv}",
+  "data": [
+    {
+      "Type": {
+        "type": "s",
+        "data": "notify"
+      },
+      "MainPID": {
+        "type": "u",
+        "data": 1173
+      },
+      "Result": {
+        "type": "s",
+        "data": "success"
+      },
+      "NRestarts": {
+        "type": "u",
+        "data": 0
+      },
+      "ExecMainCode": {
+        "type": "i",
+        "data": 0
+      },
+      "ExecMainStatus": {
+        "type": "i",
+        "data": 0
+      },
+      "MemoryCurrent": {
+        "type": "t",
+        "data": 1687552
+      },
+      "CPUUsageNSec": {
+        "type": "t",
+        "data": 253974000
+      },
+      "TasksCurrent": {
+        "type": "t",
+        "data": 1
+      }
+    }
+  ]
+}

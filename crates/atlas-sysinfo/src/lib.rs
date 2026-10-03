@@ -15,6 +15,7 @@
 //! - [`sensors`]: every hwmon temperature, fan, voltage and power reading.
 //! - [`power`]: batteries and power adapters.
 //! - [`smart`]: drive health from udisks2.
+//! - [`services`]: systemd's services, their details and actions.
 //! - [`sysmem`]: Atlas Monitor's own memory use, for Settings.
 
 pub mod apps;
@@ -22,6 +23,7 @@ pub mod gpu;
 pub mod power;
 pub mod process;
 pub mod sensors;
+pub mod services;
 pub mod smart;
 pub mod stats;
 pub mod sysfs;

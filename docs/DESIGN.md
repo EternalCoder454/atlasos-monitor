@@ -389,6 +389,48 @@ The readers the loop drives (`atlas-sysinfo`):
   attribute only when smartmontools' drive database vouches for its ID
   on that model, so the name is matched, never the ID. udisks2's 0 K,
   0 s and -1 are "unknown", and so is a temperature outside -40..150 °C. To see it: `--example smart`.
+- `services`: `ServiceReader` reads systemd over the system bus, on a
+  current-thread runtime of its own with SMART's deadline and back-off
+  (3 s a call, 4 s a read; 30 s quiet after a failure, doubling to 5
+  minutes). `list` gives the loaded services and the installed ones that
+  could be enabled or disabled, failed first, then by name without case;
+  left out are names with no unit file that nothing runs under
+  (`not-found`), templates, aliases, and unloaded units that can't be
+  enabled. `failed` gives the failed ones' names for `health`; `details`
+  one unit's state, unit file, preset, docs, main PID, tasks, memory, CPU
+  time, last result and restarts. Reading costs PID 1, not us: listing
+  unit files takes it about 240 ms (it walks every unit directory per
+  file) and listing units by pattern about 20 ms whatever matches (it goes
+  through all 576 loaded units here), while listing 231 services by name
+  takes under 1 ms. So the reader subscribes and keeps state: unit files
+  are listed once, again after `UnitFilesChanged` or `Reloading`, and
+  every 10 minutes in case a signal was lost; every unit is listed once a
+  minute and after a reload, and in between the loaded services by name,
+  the names kept by `UnitNew` and `UnitRemoved` (only loaded names: asking
+  by name loads a unit). Signals that arrive during a full list are
+  applied again over its answer, since some are newer. A `Peer.Ping`
+  first takes in the signals sent before it; systemd sends `UnitNew` and
+  `UnitRemoved` a little after the change, so the list is eventually
+  right, a read later at most. An error reply to a list call is a failed
+  read, not an empty list. The signal queues are emptied while each call
+  waits, since zbus stops reading the socket when one is full. A
+  connection that breaks (the bus drops a client whose signals pile up,
+  as an unread reader's do) is made again at once, once, before the
+  back-off. After the first, a list costs PID 1 about
+  0.3 ms and takes 2 ms. An instance's state (`getty@tty1`) is asked for
+  once per file listing; an unloaded unit's description comes from its
+  file. `act` does Start, Stop, Restart, Enable or Disable with the
+  call flagged to allow interactive authorization, so systemd asks polkit
+  and polkit's agent shows the password dialog (without the flag systemd
+  refuses at once). It blocks for the dialog (up to 5 minutes) and then
+  for a start, stop or restart's job (`JobRemoved`, up to 60 s, then
+  "still running"), so it runs on a thread of its own, with its own
+  connection. Names are checked first: `EnableUnitFiles` would link a
+  path from anywhere. Enable doesn't daemon-reload after (a second
+  password, and it only matters for dependencies before the next boot).
+  A simple service that fails after starting reports Done; the list shows
+  the failure. To see it: `--example services` (`--details`, `--bench`,
+  `--watch`, and `--act` for the test VM).
 - History is not kept here: the app's `Series` holds it.
 
 ## Privilege
@@ -402,7 +444,7 @@ it.
 |---|---|---|
 | Read /proc, /sys, hwmon | Plain files | File permissions. Another user's `/proc/<pid>/io`, `fd/` and `environ` are unreadable; shown as unknown, never as zero. |
 | End Task, Kill, Stop, Continue | `kill(2)` / `pidfd_send_signal` on the user's own processes | The kernel. Other users' processes get "Not allowed", with no escalation. |
-| Services: start, stop, restart, enable, disable | systemd's `org.freedesktop.systemd1` over the system bus (zbus) | systemd's own polkit actions (`manage-units`, `manage-unit-files`); polkit asks. |
+| Services: start, stop, restart, enable, disable | systemd's `org.freedesktop.systemd1` over the system bus (zbus), the call flagged to allow interactive authorization | systemd's own polkit actions (`manage-units`, `manage-unit-files`); polkit's agent asks for the password. Listing and details need nothing. |
 | Drive health (SMART) | udisks2 over the system bus (`NVMe.Controller` and `Drive.Ata` properties and `SmartGetAttributes`, its cached values) | udisks2, which asks polkit for none of these. No section when udisks2 is missing. |
 | Energy Saver | `CPUWeight` on the app's unit through the **user's** systemd manager | None needed: the user's own units. Reversible; restored on exit and after a crash. |
 | Startup items | XDG autostart files in `~/.config/autostart` and the user's systemd units | The user's own files. Atlas Updater's tray entry is shown but can't be switched off. |
