@@ -293,9 +293,9 @@ impl DiskSampler {
     }
 
     /// Samples `disks` from now on, in that order. The same drive (see
-    /// [`Disk::same_drive`]) keeps its counters, so its next rate is a whole interval's; a new one
-    /// shows no rate until its second sample, rather than everything it has
-    /// moved since boot.
+    /// [`Disk::same_drive`]) keeps its counters, so its next rate is a whole
+    /// interval's; a new one shows no rate until its second sample, rather
+    /// than everything it has moved since boot.
     pub fn set_disks(&mut self, disks: &[Disk]) {
         let (io, primed) = disks
             .iter()

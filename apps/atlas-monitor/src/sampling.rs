@@ -223,6 +223,9 @@ pub struct Worker {
     drives: HashMap<String, Option<smart::Health>>,
     /// Questions sent and not answered yet: none is asked twice at once.
     waiting_drives: HashSet<String>,
+    /// Questions in flight about a drive that has since left or been
+    /// swapped for another under its name: their answers are dropped.
+    stale_drives: HashSet<String>,
     waiting_failed: bool,
     failed: Vec<String>,
     waiting_services: bool,
@@ -275,6 +278,7 @@ impl Worker {
             asked: HashMap::new(),
             drives: HashMap::new(),
             waiting_drives: HashSet::new(),
+            stale_drives: HashSet::new(),
             waiting_failed: false,
             failed: Vec::new(),
             waiting_services: false,
@@ -527,6 +531,9 @@ impl Worker {
             if !now.iter().any(|d| d.same_drive(old)) {
                 self.drives.remove(&old.name);
                 self.asked.remove(&old.name);
+                if self.waiting_drives.contains(&old.name) {
+                    self.stale_drives.insert(old.name.clone());
+                }
             }
         }
         self.disks = now;
@@ -576,6 +583,7 @@ impl Worker {
     fn lost_questions(&mut self) {
         self.questions = None;
         self.waiting_drives.clear();
+        self.stale_drives.clear();
         self.waiting_failed = false;
         self.waiting_services = false;
         // The reader forgets its unit files only when the question reaches
@@ -596,6 +604,11 @@ impl Worker {
                         self.disk_news = true;
                     }
                     self.waiting_drives.remove(&name);
+                    if self.stale_drives.remove(&name) {
+                        // About the drive that was there before: the next
+                        // tick asks about this one.
+                        continue;
+                    }
                     // A read that fails keeps the last answer, as below.
                     match health {
                         Some(h) => {
