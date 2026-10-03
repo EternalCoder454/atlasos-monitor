@@ -157,6 +157,17 @@ fn listed(interfaces: &[NetInterface]) -> Vec<(String, String)> {
         .collect()
 }
 
+/// `list` with the interface the default route leaves by first, as the Go
+/// version orders them: the one in use leads the sidebar and Overview, and
+/// the rest keep their order.
+fn active_first(list: &[(String, String)], active: Option<&str>) -> Vec<(String, String)> {
+    let (first, rest): (Vec<_>, Vec<_>) = list
+        .iter()
+        .cloned()
+        .partition(|(name, _)| Some(name.as_str()) == active);
+    first.into_iter().chain(rest).collect()
+}
+
 #[derive(Default)]
 pub struct DeviceListRust {
     disk_names: QStringList,
@@ -167,6 +178,10 @@ pub struct DeviceListRust {
     net_rates: QList<f64>,
     /// The listed interfaces' kernel names, in order, to match rates to.
     interfaces: Vec<String>,
+    /// The interfaces to list, in the system's order, and the default
+    /// route's interface, which goes first.
+    net_listed: Vec<(String, String)>,
+    route: Option<String>,
 }
 
 impl qobject::DeviceList {
@@ -180,8 +195,17 @@ impl qobject::DeviceList {
                 self.as_mut().set_disk_names(names);
             }
         }
+        let mut reorder = false;
         if let Some(interfaces) = &d.interfaces {
-            let listed = listed(interfaces);
+            self.as_mut().rust_mut().net_listed = listed(interfaces);
+            reorder = true;
+        }
+        if d.default_route != self.rust().route {
+            self.as_mut().rust_mut().route = d.default_route.clone();
+            reorder = true;
+        }
+        if reorder {
+            let listed = active_first(&self.rust().net_listed, self.rust().route.as_deref());
             let names = strings(listed.iter().map(|(n, _)| n.as_str()));
             if names != *self.net_names() {
                 self.as_mut().rust_mut().interfaces =
@@ -537,6 +561,24 @@ mod tests {
         ]);
         let labels: Vec<&str> = list.iter().map(|(_, l)| l.as_str()).collect();
         assert_eq!(labels, ["Ethernet (enp6s0)", "Ethernet (enp7s0)", "Wi-Fi"]);
+    }
+
+    #[test]
+    fn the_interface_in_use_goes_first() {
+        let list: Vec<(String, String)> = ["enp6s0", "wlp4s0", "tun0"]
+            .iter()
+            .map(|n| (n.to_string(), n.to_string()))
+            .collect();
+        let names = |active| -> Vec<String> {
+            active_first(&list, active)
+                .into_iter()
+                .map(|(n, _)| n)
+                .collect()
+        };
+        assert_eq!(names(Some("wlp4s0")), ["wlp4s0", "enp6s0", "tun0"]);
+        assert_eq!(names(Some("tun0")), ["tun0", "enp6s0", "wlp4s0"]);
+        assert_eq!(names(None), ["enp6s0", "wlp4s0", "tun0"]);
+        assert_eq!(names(Some("gone0")), ["enp6s0", "wlp4s0", "tun0"]);
     }
 
     #[test]
