@@ -28,8 +28,10 @@ struct AtlasObjects {
     void *gpu;
     void *battery;
     void *sensors;
+    void *apps;
 };
-extern "C" AtlasObjects atlas_objects_new();
+extern "C" AtlasObjects atlas_objects_new(const char *iconTheme);
+extern "C" const char *atlas_icon_search_paths(const char *iconTheme);
 extern "C" void atlas_log_init();
 extern "C" void atlas_crash_install();
 extern "C" void atlas_crash_fatal(const char *msg);
@@ -96,7 +98,19 @@ int main(int argc, char *argv[])
     // Every QObject QML sees, made in Rust; main() owns them, so the QML
     // engine must never delete one. The sampler is listed first: deleting it
     // stops the thread that posts to the others.
-    const AtlasObjects made = atlas_objects_new();
+    // The Apps table picks its icons the way Qt would, in Qt's theme, and
+    // may find one in a folder Qt doesn't search (Flatpak's exports).
+    const QByteArray iconTheme = QIcon::themeName().toUtf8();
+    {
+        QStringList paths = QIcon::themeSearchPaths();
+        for (const QString &p : QString::fromUtf8(atlas_icon_search_paths(iconTheme.constData())).split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
+            if (!paths.contains(p)) {
+                paths.append(p);
+            }
+        }
+        QIcon::setThemeSearchPaths(paths);
+    }
+    const AtlasObjects made = atlas_objects_new(iconTheme.constData());
     const std::pair<const char *, void *> objects[] = {
         {"sampler", made.sampler},
         {"backend", made.backend},
@@ -109,6 +123,7 @@ int main(int argc, char *argv[])
         {"gpu", made.gpu},
         {"battery", made.battery},
         {"sensors", made.sensors},
+        {"apps", made.apps},
     };
     QVariantMap initial;
     for (const auto &[name, object] : objects) {

@@ -8,6 +8,7 @@ mod crash;
 mod devices;
 mod graphics;
 mod logging;
+mod processes;
 mod rc;
 mod sampler;
 mod sampling;
@@ -16,7 +17,8 @@ mod series;
 mod settings;
 mod stats;
 
-use std::ffi::c_void;
+use std::ffi::{CStr, CString, c_char, c_void};
+use std::sync::OnceLock;
 
 use cxx_qt::Threading;
 
@@ -39,13 +41,21 @@ pub struct AtlasObjects {
     pub gpu: *mut c_void,
     pub battery: *mut c_void,
     pub sensors: *mut c_void,
+    pub apps: *mut c_void,
 }
 
 /// Called once from `main.cpp`. Makes every QObject and starts the sampling
 /// thread, which posts to the stats objects. Delete `sampler` first: that
-/// stops the thread.
+/// stops the thread. `icon_theme` is Qt's (`QIcon::themeName()`), UTF-8;
+/// the Apps table looks its icons up there.
+///
+/// # Safety
+///
+/// `icon_theme` is null or a NUL-terminated string.
 #[unsafe(no_mangle)]
-pub extern "C" fn atlas_objects_new() -> AtlasObjects {
+pub unsafe extern "C" fn atlas_objects_new(icon_theme: *const c_char) -> AtlasObjects {
+    // SAFETY: the caller passes null or a NUL-terminated string.
+    let icon_theme = unsafe { text(icon_theme) };
     let backend = backend::qobject::backend_make_unique();
     let mut sampler = sampler::qobject::sampler_make_unique();
     let mut cpu = stats::qobject::cpu_stats_make_unique();
@@ -57,6 +67,7 @@ pub extern "C" fn atlas_objects_new() -> AtlasObjects {
     let mut gpu = graphics::qobject::gpu_stats_make_unique();
     let mut battery = battery::qobject::battery_stats_make_unique();
     let mut sensors = sensors::qobject::sensor_list_make_unique();
+    let mut apps = processes::qobject::process_model_make_unique();
     sensors
         .pin_mut()
         .set_available(atlas_sysinfo::sensors::available());
@@ -71,8 +82,11 @@ pub extern "C" fn atlas_objects_new() -> AtlasObjects {
         gpu: gpu.pin_mut().qt_thread(),
         battery: battery.pin_mut().qt_thread(),
         sensors: sensors.pin_mut().qt_thread(),
+        apps: apps.pin_mut().qt_thread(),
     };
-    sampler.pin_mut().start(*backend.refresh_interval(), sink);
+    sampler
+        .pin_mut()
+        .start(*backend.refresh_interval(), icon_theme, sink);
 
     AtlasObjects {
         backend: backend.into_raw().cast(),
@@ -86,5 +100,43 @@ pub extern "C" fn atlas_objects_new() -> AtlasObjects {
         gpu: gpu.into_raw().cast(),
         battery: battery.into_raw().cast(),
         sensors: sensors.into_raw().cast(),
+        apps: apps.into_raw().cast(),
     }
+}
+
+/// A C string as Rust's, "" for null.
+///
+/// # Safety
+///
+/// `s` is null or a NUL-terminated string.
+unsafe fn text(s: *const c_char) -> String {
+    if s.is_null() {
+        return String::new();
+    }
+    // SAFETY: as the caller promises.
+    unsafe { CStr::from_ptr(s) }.to_string_lossy().into_owned()
+}
+
+/// The `icons/` folders the Apps table finds icons in, one per line, for
+/// `QIcon::setThemeSearchPaths`: Qt's own can miss Flatpak's exports. The
+/// string lives as long as the program.
+///
+/// # Safety
+///
+/// `icon_theme` is null or a NUL-terminated string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn atlas_icon_search_paths(icon_theme: *const c_char) -> *const c_char {
+    static PATHS: OnceLock<CString> = OnceLock::new();
+    // SAFETY: the caller passes null or a NUL-terminated string.
+    let theme = unsafe { text(icon_theme) };
+    PATHS
+        .get_or_init(|| {
+            let paths: Vec<String> = atlas_sysinfo::apps::Resolver::for_session(&theme)
+                .icon_search_paths()
+                .iter()
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect();
+            CString::new(paths.join("\n")).unwrap_or_default()
+        })
+        .as_ptr()
 }

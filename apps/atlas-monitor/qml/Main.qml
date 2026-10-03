@@ -21,6 +21,7 @@ QQC2.ApplicationWindow {
     required property var gpu
     required property var battery
     required property var sensors
+    required property var apps
 
     title: qsTr("Atlas Monitor")
     width: Kirigami.Units.gridUnit * 56
@@ -46,6 +47,7 @@ QQC2.ApplicationWindow {
             "gpu": gpuPage,
             "battery": batteryPage,
             "sensors": sensorsPage,
+            "apps": appsPage,
             "settings": settingsPage,
             "about": aboutPage
         })
@@ -167,8 +169,8 @@ QQC2.ApplicationWindow {
                 anchors.topMargin: Kirigami.Units.gridUnit
                 spacing: 2
 
-                // System (Apps, Energy Saver, Startup, Services) comes, with
-                // their pages; see docs/DESIGN.md.
+                // Energy Saver, Startup and Services join System with their
+                // pages; see docs/DESIGN.md.
                 NavItem {
                     page: "overview"
                     text: qsTr("Overview")
@@ -240,6 +242,14 @@ QQC2.ApplicationWindow {
                     text: qsTr("Sensors")
                     icon.name: "temperature-normal"
                 }
+                NavHeading {
+                    text: qsTr("System")
+                }
+                NavItem {
+                    page: "apps"
+                    text: qsTr("Apps")
+                    icon.name: "view-process-all"
+                }
                 Item {
                     Layout.fillHeight: true
                 }
@@ -308,6 +318,14 @@ QQC2.ApplicationWindow {
             gpu: root.gpu
             battery: root.battery
             onOpenPage: name => root.showPage(name)
+        }
+    }
+    Component {
+        id: appsPage
+        AppsPage {
+            apps: root.apps
+            sampler: root.sampler
+            hasGpu: root.gpu.cardNames.length > 0
         }
     }
     Component {

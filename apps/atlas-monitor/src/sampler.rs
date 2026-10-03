@@ -24,6 +24,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "changeInterval"]
         fn change_interval(self: &Sampler, ms: i32);
+
+        /// Kernel threads as rows of the Apps table.
+        #[qinvokable]
+        #[cxx_name = "showKernelThreads"]
+        fn show_kernel_threads(self: &Sampler, on: bool);
     }
 
     #[namespace = "rust::cxxqtlib1"]
@@ -44,6 +49,7 @@ use cxx_qt_lib::QString;
 use crate::battery::qobject::BatteryStats;
 use crate::devices::qobject::{DeviceList, DiskStats, NetStats};
 use crate::graphics::qobject::GpuStats;
+use crate::processes::qobject::ProcessModel;
 use crate::sampling::{Loop, Page, Tick};
 use crate::sensors::qobject::SensorList;
 use crate::stats::qobject::{CpuStats, HealthStatus, MemoryStats};
@@ -67,11 +73,20 @@ impl qobject::Sampler {
         }
     }
 
+    pub fn show_kernel_threads(&self, on: bool) {
+        if let Some(l) = &self.running {
+            l.set_kernel_threads(on);
+        }
+    }
+
     /// Starts the loop, posting to `sink`'s objects. Called once, from
     /// `lib.rs`, before QML can call in.
-    pub fn start(self: Pin<&mut Self>, ms: i32, sink: Sink) {
+    pub fn start(self: Pin<&mut Self>, ms: i32, icon_theme: String, sink: Sink) {
         match Loop::start(interval(ms), move |tick| sink.post(tick)) {
-            Ok(l) => self.rust_mut().get_mut().running = Some(l),
+            Ok(l) => {
+                l.set_icon_theme(icon_theme);
+                self.rust_mut().get_mut().running = Some(l);
+            }
             Err(e) => log::error!("starting the sampling thread: {e}"),
         }
     }
@@ -93,6 +108,7 @@ pub struct Sink {
     pub gpu: CxxQtThread<GpuStats>,
     pub battery: CxxQtThread<BatteryStats>,
     pub sensors: CxxQtThread<SensorList>,
+    pub apps: CxxQtThread<ProcessModel>,
 }
 
 impl Sink {
@@ -116,6 +132,9 @@ impl Sink {
         }
         if let Some(n) = tick.net {
             let _ = self.net.queue(move |o| o.apply(n, fresh));
+        }
+        if let Some(a) = tick.apps {
+            let _ = self.apps.queue(move |o| o.apply(a));
         }
         if let Some(s) = tick.sensors {
             let _ = self.sensors.queue(move |o| o.apply(s));

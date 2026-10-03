@@ -17,13 +17,16 @@
 //!   channel, whose wait is also the sleep between ticks.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+use atlas_sysinfo::apps::{App, Group, GroupKey, Grouper, Resolver};
 use atlas_sysinfo::gpu::{self, Card, Gpu, GpuSampler};
 use atlas_sysinfo::health::{self, Alert, DiskSpace, Drive, Graphics, Machine};
 use atlas_sysinfo::power::{self, PowerSampler, Supplies};
+use atlas_sysinfo::process::{Proc, ProcessSampler, Wanted};
 use atlas_sysinfo::sensors::{self, Device, Sensors};
 use atlas_sysinfo::services::ServiceReader;
 use atlas_sysinfo::smart::{self, SmartReader};
@@ -54,6 +57,7 @@ pub enum Page {
     Gpu(String),
     Battery(String),
     Sensors,
+    Apps,
     #[default]
     Other,
 }
@@ -71,6 +75,7 @@ impl Page {
             "gpu" if !device.is_empty() => Self::Gpu(device),
             "battery" if !device.is_empty() => Self::Battery(device),
             "sensors" => Self::Sensors,
+            "apps" => Self::Apps,
             _ => Self::Other,
         }
     }
@@ -159,6 +164,18 @@ pub struct Tick {
     pub sensors: Option<Vec<Device>>,
     /// What is wrong, for the Overview.
     pub health: Option<Vec<Alert>>,
+    pub apps: Option<AppsTick>,
+}
+
+/// The Apps table's processes. `keys` and `apps` run parallel to `procs`:
+/// each process's grouped row and the application it belongs to.
+#[derive(Debug, Clone, Default)]
+pub struct AppsTick {
+    pub procs: Vec<Proc>,
+    pub keys: Vec<GroupKey>,
+    pub apps: Vec<Option<Arc<App>>>,
+    /// One per application (or name), in the order of their first members.
+    pub groups: Vec<Group>,
 }
 
 /// Every reader, owned by the worker thread.
@@ -179,6 +196,15 @@ pub struct Worker {
     memory: Option<MemorySampler>,
     gpus: Option<Vec<(Card, GpuSampler)>>,
     sensors: Option<Sensors>,
+    procs: Option<ProcessSampler>,
+
+    // The Apps table's grouping, kept across visits: its caches (desktop
+    // files, icons) are what make a tick cheap.
+    resolver: Option<Resolver>,
+    grouper: Grouper,
+    /// Qt's icon theme, for the resolver's icon lookups.
+    icon_theme: String,
+    kernel_threads: bool,
 
     // Read once, kept.
     cpu_info: Option<CpuInfo>,
@@ -223,6 +249,11 @@ impl Worker {
             memory: None,
             gpus: None,
             sensors: None,
+            procs: None,
+            resolver: None,
+            grouper: Grouper::default(),
+            icon_theme: String::new(),
+            kernel_threads: false,
             cpu_info: None,
             cards: gpu::cards(),
             questions: None,
@@ -237,6 +268,31 @@ impl Worker {
 
     pub fn page(&self) -> &Page {
         &self.page
+    }
+
+    /// Qt's icon theme, which the Apps table's icons are looked up in.
+    pub fn set_icon_theme(&mut self, theme: &str) {
+        theme.clone_into(&mut self.icon_theme);
+        if let Some(r) = &mut self.resolver {
+            r.set_icon_theme(theme);
+        }
+    }
+
+    /// Kernel threads as rows of the Apps table.
+    pub fn set_kernel_threads(&mut self, on: bool) {
+        self.kernel_threads = on;
+        let wanted = self.wanted();
+        if let Some(p) = &mut self.procs {
+            p.set_wanted(wanted);
+        }
+    }
+
+    fn wanted(&self) -> Wanted {
+        Wanted {
+            kernel_threads: self.kernel_threads,
+            gpu: !self.cards.is_empty(),
+            ..Wanted::default()
+        }
     }
 
     /// Makes the readers `page` needs, dropping the ones it doesn't. The
@@ -260,6 +316,7 @@ impl Worker {
                 .collect()
         });
         self.sensors = (page == Page::Sensors && sensors::available()).then(Sensors::new);
+        self.procs = (page == Page::Apps).then(|| ProcessSampler::new(self.wanted()));
         if page == Page::Cpu && self.cpu_info.is_none() {
             self.cpu_info = Some(cpu::info());
         }
@@ -380,9 +437,28 @@ impl Worker {
                     name,
                 });
             }
+            Page::Apps => tick.apps = self.read_apps(),
             _ => {}
         }
         tick
+    }
+
+    /// Every process, with its application and grouped row.
+    fn read_apps(&mut self) -> Option<AppsTick> {
+        let procs = self.procs.as_mut()?.sample().to_vec();
+        let theme = &self.icon_theme;
+        let resolver = self
+            .resolver
+            .get_or_insert_with(|| Resolver::for_session(theme));
+        let groups = self.grouper.group(&procs, resolver).to_vec();
+        let keys = procs.iter().map(|p| resolver.key_of(p)).collect();
+        let apps = procs.iter().map(|p| resolver.of_proc(p).cloned()).collect();
+        Some(AppsTick {
+            procs,
+            keys,
+            apps,
+            groups,
+        })
     }
 
     /// `statvfs` for one disk, or for every disk.
@@ -576,6 +652,8 @@ fn ask_dbus(asks: Receiver<Ask>, answers: Sender<Answer>) {
 enum Command {
     Page(Page),
     Interval(Duration),
+    IconTheme(String),
+    KernelThreads(bool),
 }
 
 /// The running loop. Dropping it stops the thread and waits for the tick in
@@ -607,6 +685,14 @@ impl Loop {
 
     pub fn set_interval(&self, interval: Duration) {
         self.send(Command::Interval(interval));
+    }
+
+    pub fn set_icon_theme(&self, theme: String) {
+        self.send(Command::IconTheme(theme));
+    }
+
+    pub fn set_kernel_threads(&self, on: bool) {
+        self.send(Command::KernelThreads(on));
     }
 
     fn send(&self, command: Command) {
@@ -643,6 +729,16 @@ fn run(rx: Receiver<Command>, mut interval: Duration, mut sink: impl FnMut(Tick)
                     w.set_page(page);
                     next = Some(Instant::now() + interval.min(FIRST_TICK));
                 }
+            }
+            Ok(Command::IconTheme(theme)) => {
+                worker
+                    .get_or_insert_with(Worker::new)
+                    .set_icon_theme(&theme);
+            }
+            Ok(Command::KernelThreads(on)) => {
+                worker
+                    .get_or_insert_with(Worker::new)
+                    .set_kernel_threads(on);
             }
             Ok(Command::Interval(d)) => {
                 interval = d;
@@ -686,6 +782,7 @@ mod tests {
         // A device page needs its device.
         assert_eq!(Page::parse("disk:"), Page::Other);
         assert_eq!(Page::parse("disk"), Page::Other);
+        assert_eq!(Page::parse("apps"), Page::Apps);
         assert_eq!(Page::parse("settings"), Page::Other);
         assert_eq!(Page::parse(""), Page::Other);
     }
@@ -831,5 +928,21 @@ mod tests {
         let start = Instant::now();
         drop(l);
         assert!(start.elapsed() < Duration::from_secs(1));
+    }
+
+    #[test]
+    fn apps_page_lists_processes_with_their_rows() {
+        let mut w = Worker::new();
+        w.set_page(Page::Apps);
+        let t = w.tick().apps.expect("the Apps page reads processes");
+        // This test's own process is always there.
+        assert!(t.procs.iter().any(|p| p.pid == std::process::id()));
+        assert_eq!(t.keys.len(), t.procs.len());
+        assert_eq!(t.apps.len(), t.procs.len());
+        let members: u32 = t.groups.iter().map(|g| g.count).sum();
+        assert_eq!(members as usize, t.procs.len());
+        // Off the page, nothing is read.
+        w.set_page(Page::Cpu);
+        assert!(w.tick().apps.is_none());
     }
 }
