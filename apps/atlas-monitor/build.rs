@@ -10,6 +10,7 @@ fn main() {
         .file("src/processes.rs")
         .file("src/startup.rs")
         .file("src/services.rs")
+        .file("src/details.rs")
         .file("src/battery.rs")
         .file("src/sensors.rs")
         .file("src/sampler.rs")

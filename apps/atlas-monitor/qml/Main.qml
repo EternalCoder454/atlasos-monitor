@@ -24,6 +24,7 @@ QQC2.ApplicationWindow {
     required property var apps
     required property var startup
     required property var services
+    required property var details
 
     title: qsTr("Atlas Monitor")
     width: Kirigami.Units.gridUnit * 56
@@ -351,6 +352,7 @@ QQC2.ApplicationWindow {
         AppsPage {
             apps: root.apps
             sampler: root.sampler
+            details: root.details
             hasGpu: root.gpu.cardNames.length > 0
         }
     }

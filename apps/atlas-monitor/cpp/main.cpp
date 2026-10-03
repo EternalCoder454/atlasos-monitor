@@ -31,6 +31,7 @@ struct AtlasObjects {
     void *apps;
     void *startup;
     void *services;
+    void *details;
 };
 extern "C" AtlasObjects atlas_objects_new(const char *iconTheme);
 extern "C" const char *atlas_icon_search_paths(const char *iconTheme);
@@ -128,6 +129,7 @@ int main(int argc, char *argv[])
         {"apps", made.apps},
         {"startup", made.startup},
         {"services", made.services},
+        {"details", made.details},
     };
     QVariantMap initial;
     for (const auto &[name, object] : objects) {

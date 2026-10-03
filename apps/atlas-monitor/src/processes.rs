@@ -74,6 +74,23 @@ pub mod qobject {
         #[qinvokable]
         fn act(self: &ProcessModel, action: i32) -> QString;
 
+        /// Opens the Details dialog on the pinned row.
+        #[qinvokable]
+        #[cxx_name = "showDetails"]
+        fn show_details(self: &ProcessModel);
+
+        /// Shows the pinned row's program in the file manager. Answers with
+        /// `located` only when the file manager couldn't take it.
+        #[qinvokable]
+        #[cxx_name = "openLocation"]
+        fn open_location(self: Pin<&mut ProcessModel>);
+
+        /// Open File Location couldn't hand the program to a file manager:
+        /// `folder` is its folder's URL to open instead, or "" when no path
+        /// on this machine leads to the program.
+        #[qsignal]
+        fn located(self: Pin<&mut ProcessModel>, name: QString, folder: QString);
+
         #[inherit]
         #[cxx_name = "beginInsertRows"]
         fn begin_insert_rows(
@@ -152,10 +169,13 @@ use std::collections::{HashMap, HashSet};
 use std::pin::Pin;
 
 use atlas_sysinfo::apps::{self, Column, GroupKey, Search};
+use atlas_sysinfo::files::{self, Shown};
 use atlas_sysinfo::process::{self, Action, ActionError, Proc};
-use cxx_qt::CxxQtType;
+use cxx_qt::{CxxQtThread, CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
 
+use crate::details::qobject::ProcessDetails;
+use crate::details::{Member, Subject};
 use crate::rows::int;
 use crate::sampling::AppsTick;
 
@@ -216,6 +236,10 @@ pub struct ProcessModelRust {
     view: View,
     /// The pinned row's processes, by pid and start time.
     pinned: Vec<(u32, u64)>,
+    /// What Details shows for the pinned row.
+    pinned_subject: Option<Subject>,
+    /// The Details dialog's object.
+    pub details: Option<Box<CxxQtThread<ProcessDetails>>>,
 }
 
 impl Default for ProcessModelRust {
@@ -229,6 +253,8 @@ impl Default for ProcessModelRust {
             data: AppsTick::default(),
             view: View::default(),
             pinned: Vec::new(),
+            pinned_subject: None,
+            details: None,
         }
     }
 }
@@ -372,6 +398,60 @@ fn layout(data: &AppsTick, view: &View, shown: &HashMap<RowKey, usize>) -> Vec<R
     rows
 }
 
+/// What Details shows for `row`: a process, or an application of several.
+fn subject_of(data: &AppsTick, row: &Row) -> Subject {
+    let application = |i: usize| data.apps[i].as_ref().map(|a| a.name.to_string());
+    match &row.key {
+        RowKey::Proc(pid, start) => Subject::Process {
+            pid: *pid,
+            start_time: *start,
+            name: row.proc.name.to_string(),
+            application: data
+                .procs
+                .iter()
+                .position(|p| p.pid == *pid && p.start_time == *start)
+                .and_then(application),
+        },
+        RowKey::Group(key) => {
+            let at: Vec<usize> = (0..data.procs.len())
+                .filter(|&i| data.keys[i] == *key)
+                .collect();
+            if let [i] = at[..] {
+                let p = &data.procs[i];
+                return Subject::Process {
+                    pid: p.pid,
+                    start_time: p.start_time,
+                    name: p.name.to_string(),
+                    application: application(i),
+                };
+            }
+            Subject::Group {
+                name: row.proc.name.to_string(),
+                app_id: data
+                    .groups
+                    .iter()
+                    .find(|g| g.key == *key)
+                    .and_then(|g| g.app.as_ref())
+                    .map(|a| a.id.to_string()),
+                members: at
+                    .into_iter()
+                    .map(|i| {
+                        let p = &data.procs[i];
+                        Member {
+                            pid: p.pid,
+                            start_time: p.start_time,
+                            name: p.name.to_string(),
+                            cpu: p.cpu,
+                            memory: p.memory,
+                            unit: p.unit.as_deref().map(str::to_owned),
+                        }
+                    })
+                    .collect(),
+            }
+        }
+    }
+}
+
 fn opt(v: Option<f64>) -> f64 {
     v.unwrap_or(f64::NAN)
 }
@@ -485,6 +565,8 @@ impl qobject::ProcessModel {
                 .collect(),
         };
         let count = int(targets.len());
+        let subject = subject_of(data, &row);
+        self.as_mut().rust_mut().pinned_subject = Some(subject);
         self.as_mut().rust_mut().pinned = targets;
         self.as_mut()
             .set_pinned_name(QString::from(&*row.proc.name));
@@ -522,6 +604,43 @@ impl qobject::ProcessModel {
             worst = "gone";
         }
         QString::from(worst)
+    }
+
+    pub fn show_details(&self) {
+        let r = self.rust();
+        if let (Some(subject), Some(details)) = (&r.pinned_subject, &r.details) {
+            let subject = subject.clone();
+            let _ = details.queue(move |d| d.show(subject));
+        }
+    }
+
+    pub fn open_location(mut self: Pin<&mut Self>) {
+        let targets = self.rust().pinned.clone();
+        let name = self.pinned_name().clone().to_string();
+        let qt = self.as_mut().qt_thread();
+        let spawned = std::thread::Builder::new()
+            .name("open-location".into())
+            .spawn(move || {
+                // The first member still running whose program can be found:
+                // an application's processes are mostly one program.
+                let exe = targets.iter().find_map(|&(pid, start)| {
+                    let exe = process::executable(pid)?;
+                    (process::start_time(pid) == Some(start)).then_some(exe)
+                });
+                let folder = match &exe {
+                    None => String::new(),
+                    Some(exe) => match files::show_in_file_manager(exe) {
+                        Shown::Yes => return,
+                        Shown::NoFileManager => {
+                            exe.parent().map(files::file_uri).unwrap_or_default()
+                        }
+                    },
+                };
+                let _ = qt.queue(move |o| o.located(QString::from(&name), QString::from(&folder)));
+            });
+        if let Err(e) = spawned {
+            log::error!("finding a program's folder: {e}");
+        }
     }
 
     pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {

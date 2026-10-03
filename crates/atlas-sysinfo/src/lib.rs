@@ -24,6 +24,7 @@
 pub mod apps;
 pub mod autostart;
 pub mod ease;
+pub mod files;
 pub mod gpu;
 pub mod health;
 pub mod power;

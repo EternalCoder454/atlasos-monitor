@@ -14,6 +14,7 @@ Item {
     id: page
 
     required property var apps
+    required property var details
     required property var sampler
     // Whether the machine has a graphics card to show a GPU column for.
     required property bool hasGpu
@@ -202,6 +203,12 @@ Item {
             onSortRoleChanged: Qt.callLater(page.resort)
             onSortOrderChanged: Qt.callLater(page.resort)
             onToggleRequested: row => page.apps.toggle(row)
+            // Double-click or Enter, as in every other file and process list.
+            onActivated: row => {
+                if (page.apps.pin(row)) {
+                    page.apps.showDetails();
+                }
+            }
             onDeleteRequested: row => {
                 if (page.apps.pin(row)) {
                     page.endTask();
@@ -217,7 +224,7 @@ Item {
 
             // Rows hold still under the pointer, and while a menu or a
             // question is up about one of them.
-            readonly property bool held: pointerInside || rowMenu.opened || endDialog.opened || killDialog.opened
+            readonly property bool held: pointerInside || rowMenu.opened || endDialog.opened || killDialog.opened || detailsDialog.opened
             onHeldChanged: page.apps.setHeld(held)
         }
     }
@@ -234,10 +241,36 @@ Item {
         function onModelReset() {
             table.currentIndex = -1;
         }
+        // No file manager took the program: its folder opens instead.
+        function onLocated(name, folder) {
+            if (folder.length > 0) {
+                Qt.openUrlExternally(folder);
+            } else {
+                notice.show(qsTr("Atlas Monitor can't find where %1's program is.").arg(name));
+            }
+        }
+    }
+
+    Connections {
+        target: page.details
+        function onShown() {
+            detailsDialog.open();
+        }
     }
 
     ContextMenu {
         id: rowMenu
+        ContextMenuItem {
+            text: qsTr("Details")
+            icon.name: "documentinfo"
+            onTriggered: page.apps.showDetails()
+        }
+        ContextMenuItem {
+            text: qsTr("Open File Location")
+            icon.name: "folder-open"
+            onTriggered: page.apps.openLocation()
+        }
+        ContextMenuSeparator {}
         ContextMenuItem {
             text: qsTr("Stop")
             icon.name: "media-playback-pause"
@@ -262,6 +295,11 @@ Item {
             destructive: true
             onTriggered: killDialog.open()
         }
+    }
+
+    DetailsDialog {
+        id: detailsDialog
+        details: page.details
     }
 
     ConfirmDialog {
