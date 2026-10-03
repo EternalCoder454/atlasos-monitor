@@ -228,18 +228,18 @@ QQC2.ApplicationWindow {
                     page: "cpu"
                     text: qsTr("Processor")
                     value: root.load(root.devices.cpuUsage)
-                    icon.name: "cpu"
+                    icon.name: "cpu-frequency-indicator"
                 }
                 NavItem {
                     page: "memory"
                     text: qsTr("Memory")
                     value: root.load(root.devices.memoryUsage)
-                    icon.name: "memory"
+                    icon.name: "media-flash-memory-stick-symbolic"
                 }
                 DeviceGroup {
                     kind: "disk"
                     text: qsTr("Disk")
-                    iconName: "drive-harddisk"
+                    iconName: "drive-harddisk-symbolic"
                     names: root.devices.diskNames
                     labels: root.devices.diskLabels
                     rates: root.devices.diskRates
@@ -247,7 +247,7 @@ QQC2.ApplicationWindow {
                 DeviceGroup {
                     kind: "network"
                     text: qsTr("Network")
-                    iconName: root.devices.routeWireless ? "network-wireless" : "network-wired"
+                    iconName: root.devices.routeWireless ? "network-wireless-symbolic" : "network-wired-symbolic"
                     names: root.devices.netNames
                     labels: root.devices.netLabels
                     rates: root.devices.netRates
@@ -274,13 +274,13 @@ QQC2.ApplicationWindow {
                     page: "battery:" + (root.battery.packNames[0] ?? "")
                     text: qsTr("Battery")
                     value: Format.percent(root.battery.packPercents[0] ?? NaN)
-                    icon.name: "battery"
+                    icon.name: "battery-symbolic"
                 }
                 DeviceGroup {
                     visible: names.length > 1
                     kind: "battery"
                     text: qsTr("Battery")
-                    iconName: "battery"
+                    iconName: "battery-symbolic"
                     names: root.battery.packNames
                     labels: root.battery.packLabels
                     percents: root.battery.packPercents
@@ -302,17 +302,17 @@ QQC2.ApplicationWindow {
                 NavItem {
                     page: "energy"
                     text: qsTr("Energy Saver")
-                    icon.name: "preferences-system-power-management"
+                    icon.name: "battery-profile-powersave-symbolic"
                 }
                 NavItem {
                     page: "startup"
                     text: qsTr("Startup")
-                    icon.name: "system-run"
+                    icon.name: "system-run-symbolic"
                 }
                 NavItem {
                     page: "services"
                     text: qsTr("Services")
-                    icon.name: "preferences-system-services"
+                    icon.name: "services"
                 }
                 Item {
                     Layout.fillHeight: true
@@ -325,7 +325,7 @@ QQC2.ApplicationWindow {
                 NavItem {
                     page: "about"
                     text: qsTr("About")
-                    icon.name: "help-about"
+                    icon.name: "help-about-symbolic"
                 }
             }
         }
@@ -438,6 +438,15 @@ QQC2.ApplicationWindow {
         target: root.gpu
         function onCardNamesChanged() {
             root.restorePending("gpu", root.gpu.cardNames);
+        }
+    }
+
+    Connections {
+        target: root.sensors
+        function onAvailableChanged() {
+            if (root.pendingPage === "sensors" && root.sensors.available) {
+                root.showPage("sensors");
+            }
         }
     }
 
@@ -598,6 +607,12 @@ QQC2.ApplicationWindow {
         const names = colon >= 0 && Object.prototype.hasOwnProperty.call(lists, kind) ? lists[kind] : undefined;
         if (names !== undefined && names.includes(last.slice(colon + 1))) {
             showPage(last);
+        } else if (last === "sensors" && !sensors.available) {
+            // Like a device's page: Sensors is listed once the first read
+            // finds one, and on a machine with none it never is.
+            showPage("overview");
+            pendingPage = last;
+            forgetPending.start();
         } else {
             showPage(colon < 0 && isPage(last) ? last : "overview");
             if (names !== undefined && names.length === 0) {

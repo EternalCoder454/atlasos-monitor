@@ -236,14 +236,14 @@ Item {
                 {
                     title: qsTr("PID"),
                     role: "pid",
-                    width: 4,
+                    width: 3.5,
                     align: Qt.AlignRight,
                     text: v => v > 0 ? String(v) : ""
                 },
                 {
                     title: qsTr("CPU"),
                     role: "cpu",
-                    width: 5,
+                    width: 4,
                     align: Qt.AlignRight,
                     heat: 100,
                     text: v => page.percent(v)
@@ -251,21 +251,21 @@ Item {
                 {
                     title: qsTr("Memory"),
                     role: "memory",
-                    width: 6,
+                    width: 5,
                     align: Qt.AlignRight,
                     text: v => Format.size(v)
                 },
                 {
                     title: qsTr("Disk Read"),
                     role: "diskRead",
-                    width: 6,
+                    width: 5.5,
                     align: Qt.AlignRight,
                     text: v => Format.rate(v)
                 },
                 {
                     title: qsTr("Disk Write"),
                     role: "diskWrite",
-                    width: 6,
+                    width: 5.5,
                     align: Qt.AlignRight,
                     text: v => Format.rate(v)
                 },
@@ -273,7 +273,7 @@ Item {
                 {
                     title: qsTr("GPU"),
                     role: "gpu",
-                    width: 5,
+                    width: 4,
                     align: Qt.AlignRight,
                     heat: 100,
                     text: v => isNaN(v) ? Format.dash : page.percent(v)
@@ -290,14 +290,14 @@ Item {
                     // program's open sockets.
                     title: qsTr("Net ≈ In"),
                     role: "netIn",
-                    width: 6,
+                    width: 5.5,
                     align: Qt.AlignRight,
                     text: v => Format.rate(v)
                 },
                 {
                     title: qsTr("Net ≈ Out"),
                     role: "netOut",
-                    width: 6,
+                    width: 5.5,
                     align: Qt.AlignRight,
                     text: v => Format.rate(v)
                 }

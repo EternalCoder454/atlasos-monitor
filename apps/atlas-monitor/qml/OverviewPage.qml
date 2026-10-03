@@ -61,7 +61,7 @@ AtlasPage {
 
     Section {
         SectionRow {
-            iconName: "cpu"
+            iconName: "cpu-frequency-indicator"
             chevron: true
             onClicked: page.openPage("cpu")
             title: qsTr("Processor")
@@ -69,7 +69,7 @@ AtlasPage {
             value: page.measured ? page.percent(page.cpu.usage) : ""
         }
         SectionRow {
-            iconName: "memory"
+            iconName: "media-flash-memory-stick-symbolic"
             chevron: true
             onClicked: page.openPage("memory")
             title: qsTr("Memory")
@@ -80,7 +80,7 @@ AtlasPage {
             model: page.devices.diskNames.length
             SectionRow {
                 required property int index
-                iconName: "drive-harddisk"
+                iconName: "drive-harddisk-symbolic"
                 chevron: true
                 onClicked: page.openPage("disk:" + page.devices.diskNames[index])
                 title: page.devices.diskLabels[index] ?? ""
@@ -91,7 +91,7 @@ AtlasPage {
             model: page.devices.netNames.length
             SectionRow {
                 required property int index
-                iconName: "network-wired"
+                iconName: "network-wired-symbolic"
                 chevron: true
                 onClicked: page.openPage("network:" + page.devices.netNames[index])
                 title: page.devices.netLabels[index] ?? ""
@@ -115,7 +115,7 @@ AtlasPage {
         // packs are a click away.
         SectionRow {
             visible: page.battery.packNames.length > 0
-            iconName: "battery"
+            iconName: "battery-symbolic"
             chevron: true
             onClicked: page.openPage("battery:" + page.battery.packNames[0])
             title: qsTr("Battery")
