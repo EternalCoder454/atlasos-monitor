@@ -318,10 +318,12 @@ impl qobject::ProcessDetails {
             cpu.append(m.cpu);
             memory.append(m.memory as f64);
         }
-        self.as_mut().set_member_names(names);
+        // Names last: the list's rows are made per name, and read the
+        // others by index.
         self.as_mut().set_member_pids(pids);
         self.as_mut().set_member_cpu(cpu);
         self.as_mut().set_member_memory(memory);
+        self.as_mut().set_member_names(names);
         self.as_mut().set_app_id(QString::from(&shown.app_id));
         self.as_mut().set_title(QString::from(&shown.name));
         self.as_mut().set_nested(false);

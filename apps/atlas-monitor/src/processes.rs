@@ -551,6 +551,10 @@ impl qobject::ProcessModel {
 
     pub fn pin(mut self: Pin<&mut Self>, row: i32) -> bool {
         let Some(row) = self.row(row).cloned() else {
+            // Nothing is acted on that the user didn't just pick.
+            let mut r = self.as_mut().rust_mut();
+            r.pinned.clear();
+            r.pinned_subject = None;
             return false;
         };
         let data = &self.rust().data;
@@ -616,11 +620,16 @@ impl qobject::ProcessModel {
 
     pub fn open_location(mut self: Pin<&mut Self>) {
         let targets = self.rust().pinned.clone();
+        if targets.is_empty() {
+            return;
+        }
         let name = self.pinned_name().clone().to_string();
         let qt = self.as_mut().qt_thread();
+        let named = name.clone();
         let spawned = std::thread::Builder::new()
             .name("open-location".into())
             .spawn(move || {
+                let name = named;
                 // The first member still running whose program can be found:
                 // an application's processes are mostly one program.
                 let exe = targets.iter().find_map(|&(pid, start)| {
@@ -640,6 +649,7 @@ impl qobject::ProcessModel {
             });
         if let Err(e) = spawned {
             log::error!("finding a program's folder: {e}");
+            self.located(QString::from(&name), QString::default());
         }
     }
 

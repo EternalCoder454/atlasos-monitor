@@ -92,8 +92,11 @@ QQC2.Popup {
         function onShown() {
             scroll.QQC2.ScrollBar.vertical.position = 0;
         }
+        // Into a member; Back keeps the list where it was left.
         function onCanGoBackChanged() {
-            scroll.QQC2.ScrollBar.vertical.position = 0;
+            if (dialog.details.canGoBack) {
+                scroll.QQC2.ScrollBar.vertical.position = 0;
+            }
         }
     }
 
@@ -371,7 +374,7 @@ QQC2.Popup {
                                 required property string modelData
                                 Layout.fillWidth: true
                                 title: modelData
-                                subtitle: qsTr("PID %1 · %2 · %3").arg(dialog.details.memberPids[index]).arg(dialog.percent(dialog.details.memberCpu[index])).arg(Format.scaled(dialog.details.memberMemory[index], ""))
+                                subtitle: qsTr("PID %1 · %2 · %3").arg(dialog.details.memberPids[index] ?? "").arg(dialog.percent(dialog.details.memberCpu[index] ?? 0)).arg(Format.scaled(dialog.details.memberMemory[index] ?? 0, ""))
                                 chevron: true
                                 onClicked: dialog.details.openMember(index)
                             }

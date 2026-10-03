@@ -39,7 +39,6 @@ pub fn show_in_file_manager(path: &Path) -> Shown {
         let call = async {
             let conn = zbus::connection::Builder::session()
                 .ok()?
-                .method_timeout(DEADLINE)
                 .build()
                 .await
                 .ok()?;
@@ -55,8 +54,12 @@ pub fn show_in_file_manager(path: &Path) -> Shown {
             .map(|_| ())
         };
         match tokio::time::timeout(DEADLINE, call).await {
-            Ok(Some(())) | Err(_) => Shown::Yes,
+            Ok(Some(())) => Shown::Yes,
             Ok(None) => Shown::NoFileManager,
+            Err(_) => {
+                log::warn!("the file manager didn't answer in {DEADLINE:?}; taking it as shown");
+                Shown::Yes
+            }
         }
     })
 }

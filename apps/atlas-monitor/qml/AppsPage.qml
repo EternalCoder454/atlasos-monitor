@@ -224,7 +224,7 @@ Item {
 
             // Rows hold still under the pointer, and while a menu or a
             // question is up about one of them.
-            readonly property bool held: pointerInside || rowMenu.opened || endDialog.opened || killDialog.opened || detailsDialog.opened
+            readonly property bool held: pointerInside || rowMenu.opened || endDialog.opened || killDialog.opened || detailsDialog.visible
             onHeldChanged: page.apps.setHeld(held)
         }
     }
