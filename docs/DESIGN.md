@@ -482,6 +482,18 @@ The readers the loop drives (`atlas-sysinfo`):
   while something is busy or eased. To see it: `--example ease` (watches,
   changes nothing), `--bench`, and `--trial`, which eases throwaway
   `app-atlastest*` scopes only, simulates a crash and recovers.
+- `health`: `check` turns what the other readers last gave into the short
+  list of what is wrong, critical first: processor or a graphics card over
+  85 °C (critical), memory short (under 2 GiB available or over 90% used),
+  swap over 25% full while under 25% of memory is available, a disk's
+  mounted filesystems under 5% free, a drive that expects to fail
+  (critical), is out of spare blocks or has used 90% of its rated life,
+  and failed services (three named, the rest counted). The thresholds are
+  the Go version's. It reads nothing itself: the loop passes this tick's
+  temperatures and memory, the last `space` and the slower SMART and
+  `failed` answers. zram and disks with nothing mounted are never full.
+  Each alert has a `title` and a `detail` in English. To see it:
+  `--example health`.
 - History is not kept here: the app's `Series` holds it.
 
 ## Privilege
