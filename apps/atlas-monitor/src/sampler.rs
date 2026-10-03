@@ -29,6 +29,12 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "showKernelThreads"]
         fn show_kernel_threads(self: &Sampler, on: bool);
+
+        /// A service was acted on: the Services list reads whether each
+        /// starts at boot again.
+        #[qinvokable]
+        #[cxx_name = "servicesChanged"]
+        fn services_changed(self: &Sampler);
     }
 
     #[namespace = "rust::cxxqtlib1"]
@@ -52,6 +58,7 @@ use crate::graphics::qobject::GpuStats;
 use crate::processes::qobject::ProcessModel;
 use crate::sampling::{Loop, Page, Tick};
 use crate::sensors::qobject::SensorList;
+use crate::services::qobject::ServiceModel;
 use crate::stats::qobject::{CpuStats, HealthStatus, MemoryStats};
 
 #[derive(Default)]
@@ -76,6 +83,12 @@ impl qobject::Sampler {
     pub fn show_kernel_threads(&self, on: bool) {
         if let Some(l) = &self.running {
             l.set_kernel_threads(on);
+        }
+    }
+
+    pub fn services_changed(&self) {
+        if let Some(l) = &self.running {
+            l.services_changed();
         }
     }
 
@@ -109,6 +122,7 @@ pub struct Sink {
     pub battery: CxxQtThread<BatteryStats>,
     pub sensors: CxxQtThread<SensorList>,
     pub apps: CxxQtThread<ProcessModel>,
+    pub services: CxxQtThread<ServiceModel>,
 }
 
 impl Sink {
@@ -132,6 +146,9 @@ impl Sink {
         }
         if let Some(n) = tick.net {
             let _ = self.net.queue(move |o| o.apply(n, fresh));
+        }
+        if let Some(s) = tick.services {
+            let _ = self.services.queue(move |o| o.apply(s));
         }
         if let Some(a) = tick.apps {
             let _ = self.apps.queue(move |o| o.apply(a));

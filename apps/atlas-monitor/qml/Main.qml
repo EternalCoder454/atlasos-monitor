@@ -23,6 +23,7 @@ QQC2.ApplicationWindow {
     required property var sensors
     required property var apps
     required property var startup
+    required property var services
 
     title: qsTr("Atlas Monitor")
     width: Kirigami.Units.gridUnit * 56
@@ -50,6 +51,7 @@ QQC2.ApplicationWindow {
             "sensors": sensorsPage,
             "apps": appsPage,
             "startup": startupPage,
+            "services": servicesPage,
             "settings": settingsPage,
             "about": aboutPage
         })
@@ -257,6 +259,11 @@ QQC2.ApplicationWindow {
                     text: qsTr("Startup")
                     icon.name: "system-run"
                 }
+                NavItem {
+                    page: "services"
+                    text: qsTr("Services")
+                    icon.name: "preferences-system-services"
+                }
                 Item {
                     Layout.fillHeight: true
                 }
@@ -325,6 +332,13 @@ QQC2.ApplicationWindow {
             gpu: root.gpu
             battery: root.battery
             onOpenPage: name => root.showPage(name)
+        }
+    }
+    Component {
+        id: servicesPage
+        ServicesPage {
+            services: root.services
+            sampler: root.sampler
         }
     }
     Component {

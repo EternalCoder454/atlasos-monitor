@@ -45,7 +45,8 @@ pub mod qobject {
         #[qproperty(QStringList, states)]
         /// Why the last switch failed, by key ("locked", "invalid",
         /// "notFound", "notEnableable", "io", "noAnswer", "refused"), and
-        /// the item's name; "" when it didn't.
+        /// the item's name; "unread" when the list couldn't be read; ""
+        /// when nothing failed.
         #[qproperty(QString, error)]
         #[qproperty(QString, error_name, cxx_name = "errorName")]
         #[namespace = "atlas_monitor"]
@@ -216,8 +217,11 @@ impl qobject::StartupList {
             if let Some((at, was)) = undo {
                 self.as_mut().show_enabled(at, was);
                 self.as_mut().set_error(QString::from("io"));
+            } else {
+                self.as_mut().set_error(QString::from("unread"));
             }
             self.as_mut().set_loading(false);
+            self.as_mut().set_loaded(true);
         }
     }
 

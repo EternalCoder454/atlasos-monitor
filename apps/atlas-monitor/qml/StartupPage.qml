@@ -66,6 +66,8 @@ AtlasPage {
 
     function failure(key, name) {
         switch (key) {
+        case "unread":
+            return qsTr("Couldn't read what starts at login.");
         case "locked":
             return qsTr("%1 can't be changed.").arg(name);
         case "invalid":

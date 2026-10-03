@@ -15,6 +15,7 @@ mod sampler;
 mod sampling;
 mod sensors;
 mod series;
+mod services;
 mod settings;
 mod startup;
 mod stats;
@@ -45,6 +46,7 @@ pub struct AtlasObjects {
     pub sensors: *mut c_void,
     pub apps: *mut c_void,
     pub startup: *mut c_void,
+    pub services: *mut c_void,
 }
 
 /// Called once from `main.cpp`. Makes every QObject and starts the sampling
@@ -72,6 +74,7 @@ pub unsafe extern "C" fn atlas_objects_new(icon_theme: *const c_char) -> AtlasOb
     let mut sensors = sensors::qobject::sensor_list_make_unique();
     let mut apps = processes::qobject::process_model_make_unique();
     let startup = startup::qobject::startup_list_make_unique();
+    let mut services = services::qobject::service_model_make_unique();
     sensors
         .pin_mut()
         .set_available(atlas_sysinfo::sensors::available());
@@ -87,6 +90,7 @@ pub unsafe extern "C" fn atlas_objects_new(icon_theme: *const c_char) -> AtlasOb
         battery: battery.pin_mut().qt_thread(),
         sensors: sensors.pin_mut().qt_thread(),
         apps: apps.pin_mut().qt_thread(),
+        services: services.pin_mut().qt_thread(),
     };
     sampler
         .pin_mut()
@@ -106,6 +110,7 @@ pub unsafe extern "C" fn atlas_objects_new(icon_theme: *const c_char) -> AtlasOb
         sensors: sensors.into_raw().cast(),
         apps: apps.into_raw().cast(),
         startup: startup.into_raw().cast(),
+        services: services.into_raw().cast(),
     }
 }
 

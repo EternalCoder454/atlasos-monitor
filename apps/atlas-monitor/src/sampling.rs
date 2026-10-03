@@ -28,7 +28,7 @@ use atlas_sysinfo::health::{self, Alert, DiskSpace, Drive, Graphics, Machine};
 use atlas_sysinfo::power::{self, PowerSampler, Supplies};
 use atlas_sysinfo::process::{Proc, ProcessSampler, Wanted};
 use atlas_sysinfo::sensors::{self, Device, Sensors};
-use atlas_sysinfo::services::ServiceReader;
+use atlas_sysinfo::services::{Service, ServiceReader, Status};
 use atlas_sysinfo::smart::{self, SmartReader};
 use atlas_sysinfo::stats::cpu::{self, CpuInfo, CpuSample, CpuSampler};
 use atlas_sysinfo::stats::disk::{self, Disk, DiskIo, DiskSampler, Space};
@@ -58,6 +58,7 @@ pub enum Page {
     Battery(String),
     Sensors,
     Apps,
+    Services,
     #[default]
     Other,
 }
@@ -76,6 +77,7 @@ impl Page {
             "battery" if !device.is_empty() => Self::Battery(device),
             "sensors" => Self::Sensors,
             "apps" => Self::Apps,
+            "services" => Self::Services,
             _ => Self::Other,
         }
     }
@@ -165,6 +167,9 @@ pub struct Tick {
     /// What is wrong, for the Overview.
     pub health: Option<Vec<Alert>>,
     pub apps: Option<AppsTick>,
+    /// The Services page's list when a read has come in since the last
+    /// tick; `Some(None)` when systemd didn't answer.
+    pub services: Option<Option<Vec<Service>>>,
 }
 
 /// The Apps table's processes. `keys` and `apps` run parallel to `procs`:
@@ -220,6 +225,10 @@ pub struct Worker {
     waiting_drives: HashSet<String>,
     waiting_failed: bool,
     failed: Vec<String>,
+    waiting_services: bool,
+    /// The services list's unit files must be read again (after an action).
+    services_stale: bool,
+    services_news: Option<Option<Vec<Service>>>,
     /// The Disk page's drive was answered since its last tick.
     disk_news: bool,
 }
@@ -262,6 +271,9 @@ impl Worker {
             waiting_drives: HashSet::new(),
             waiting_failed: false,
             failed: Vec::new(),
+            waiting_services: false,
+            services_stale: false,
+            services_news: None,
             disk_news: false,
         }
     }
@@ -285,6 +297,12 @@ impl Worker {
         if let Some(p) = &mut self.procs {
             p.set_wanted(wanted);
         }
+    }
+
+    /// A service was acted on: the next list reads the unit files again,
+    /// for whether each starts at boot.
+    pub fn services_changed(&mut self) {
+        self.services_stale = true;
     }
 
     fn wanted(&self) -> Wanted {
@@ -438,6 +456,15 @@ impl Worker {
                 });
             }
             Page::Apps => tick.apps = self.read_apps(),
+            Page::Services => {
+                // The list is read on the question thread; a tick passes on
+                // the latest that has come in.
+                if !self.waiting_services {
+                    let stale = std::mem::take(&mut self.services_stale);
+                    self.ask(Ask::Services(stale));
+                }
+                tick.services = self.services_news.take();
+            }
             _ => {}
         }
         tick
@@ -487,6 +514,7 @@ impl Worker {
         let waiting = match &ask {
             Ask::Drive(name) => !self.waiting_drives.insert(name.clone()),
             Ask::Failed => std::mem::replace(&mut self.waiting_failed, true),
+            Ask::Services(_) => std::mem::replace(&mut self.waiting_services, true),
         };
         if waiting {
             return;
@@ -505,6 +533,7 @@ impl Worker {
         self.questions = None;
         self.waiting_drives.clear();
         self.waiting_failed = false;
+        self.waiting_services = false;
     }
 
     /// Takes in what the question thread has answered since the last tick.
@@ -536,6 +565,17 @@ impl Worker {
                     if let Some(failed) = failed {
                         self.failed = failed;
                     }
+                }
+                Ok(Answer::Services(list)) => {
+                    self.waiting_services = false;
+                    if let Some(list) = &list {
+                        self.failed = list
+                            .iter()
+                            .filter(|s| s.status() == Status::Failed)
+                            .map(|s| s.name.clone())
+                            .collect();
+                    }
+                    self.services_news = Some(list);
                 }
                 Err(TryRecvError::Empty) => return,
                 Err(TryRecvError::Disconnected) => {
@@ -591,6 +631,8 @@ enum Ask {
     Drive(String),
     /// The failed system services.
     Failed,
+    /// Every service, the unit files read again if true.
+    Services(bool),
 }
 
 #[derive(Debug)]
@@ -598,6 +640,7 @@ enum Answer {
     Drive(String, Option<smart::Health>),
     /// `None` when the read failed.
     Failed(Option<Vec<String>>),
+    Services(Option<Vec<Service>>),
 }
 
 /// The thread that asks udisks2 and systemd, one question at a time. Each
@@ -640,6 +683,15 @@ fn ask_dbus(asks: Receiver<Ask>, answers: Sender<Answer>) {
                 let reader = services.get_or_insert_with(ServiceReader::new);
                 Answer::Failed(reader.as_mut().and_then(ServiceReader::failed))
             }
+            Ask::Services(stale) => {
+                let reader = services.get_or_insert_with(ServiceReader::new);
+                Answer::Services(reader.as_mut().and_then(|r| {
+                    if stale {
+                        r.invalidate();
+                    }
+                    r.list()
+                }))
+            }
         };
         if answers.send(answer).is_err() {
             return;
@@ -654,6 +706,7 @@ enum Command {
     Interval(Duration),
     IconTheme(String),
     KernelThreads(bool),
+    ServicesChanged,
 }
 
 /// The running loop. Dropping it stops the thread and waits for the tick in
@@ -693,6 +746,10 @@ impl Loop {
 
     pub fn set_kernel_threads(&self, on: bool) {
         self.send(Command::KernelThreads(on));
+    }
+
+    pub fn services_changed(&self) {
+        self.send(Command::ServicesChanged);
     }
 
     fn send(&self, command: Command) {
@@ -739,6 +796,9 @@ fn run(rx: Receiver<Command>, mut interval: Duration, mut sink: impl FnMut(Tick)
                 worker
                     .get_or_insert_with(Worker::new)
                     .set_kernel_threads(on);
+            }
+            Ok(Command::ServicesChanged) => {
+                worker.get_or_insert_with(Worker::new).services_changed();
             }
             Ok(Command::Interval(d)) => {
                 interval = d;
