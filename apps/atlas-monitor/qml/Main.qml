@@ -115,7 +115,7 @@ QQC2.ApplicationWindow {
     }
 
     // Disk and Network: a group with an entry and its live rate per device.
-    // Graphics cards (no figure) and batteries (percent charged) are a group
+    // Graphics cards (load) and batteries (percent charged) are a group
     // when there are two or more.
     // Compact, the group is one icon that opens the first device.
     component DeviceGroup: SidebarGroup {
@@ -125,6 +125,8 @@ QQC2.ApplicationWindow {
         property list<string> labels
         property list<real> rates
         property list<real> percents
+        // Percent, blank where unread (a card left to sleep).
+        property list<real> loads
 
         visible: names.length > 0
         compact: root.compact
@@ -138,11 +140,17 @@ QQC2.ApplicationWindow {
                 Layout.fillWidth: true
                 sub: true
                 text: group.labels[index] ?? ""
-                value: group.rates.length > 0 ? Format.rate(group.rates[index] ?? NaN) : group.percents.length > 0 ? Format.percent(group.percents[index] ?? NaN) : ""
+                value: group.rates.length > 0 ? Format.rate(group.rates[index] ?? NaN) : group.percents.length > 0 ? Format.percent(group.percents[index] ?? NaN) : root.load(group.loads[index] ?? NaN)
                 selected: root.currentPage === page
                 onClicked: root.showPage(page)
             }
         }
+    }
+
+    // A sidebar load: blank, not a dash, before the first reading and for
+    // a card left unread so it can sleep.
+    function load(v) {
+        return isNaN(v) ? "" : Format.percent(v);
     }
 
     component NavItem: SidebarItem {
@@ -200,11 +208,13 @@ QQC2.ApplicationWindow {
                 NavItem {
                     page: "cpu"
                     text: qsTr("Processor")
+                    value: root.load(root.devices.cpuUsage)
                     icon.name: "cpu"
                 }
                 NavItem {
                     page: "memory"
                     text: qsTr("Memory")
+                    value: root.load(root.devices.memoryUsage)
                     icon.name: "memory"
                 }
                 DeviceGroup {
@@ -228,6 +238,7 @@ QQC2.ApplicationWindow {
                     visible: root.gpu.cardNames.length === 1
                     page: "gpu:" + (root.gpu.cardNames[0] ?? "")
                     text: qsTr("Graphics")
+                    value: root.load(root.devices.gpuUsages[0] ?? NaN)
                     icon.name: "show-gpu-effects"
                 }
                 DeviceGroup {
@@ -237,6 +248,7 @@ QQC2.ApplicationWindow {
                     iconName: "show-gpu-effects"
                     names: root.gpu.cardNames
                     labels: root.gpu.cardLabels
+                    loads: root.devices.gpuUsages
                 }
                 NavItem {
                     visible: root.battery.packNames.length === 1
@@ -547,7 +559,7 @@ QQC2.ApplicationWindow {
             "battery": battery.packNames
         };
         const kind = colon < 0 ? last : last.slice(0, colon);
-        const names = colon < 0 ? undefined : lists[kind];
+        const names = colon >= 0 && Object.prototype.hasOwnProperty.call(lists, kind) ? lists[kind] : undefined;
         if (names !== undefined && names.includes(last.slice(colon + 1))) {
             showPage(last);
         } else {

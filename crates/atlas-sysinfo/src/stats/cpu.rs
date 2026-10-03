@@ -181,10 +181,19 @@ impl CpuSampler {
     /// Opens the files and takes the first counters.
     pub fn new() -> Self {
         let temp = find_temperature(Path::new(HWMON_DIR));
-        Self::open(Path::new("/proc/stat"), Path::new(CPU_DIR), temp.as_deref())
+        Self::open(
+            Path::new("/proc/stat"),
+            Some(Path::new(CPU_DIR)),
+            temp.as_deref(),
+        )
     }
 
-    fn open(stat: &Path, cpu_dir: &Path, temp: Option<&Path>) -> Self {
+    /// Load alone, for the sidebar: no clock or temperature files.
+    pub fn load_only() -> Self {
+        Self::open(Path::new("/proc/stat"), None, None)
+    }
+
+    fn open(stat: &Path, cpu_dir: Option<&Path>, temp: Option<&Path>) -> Self {
         // One line per core, about 60 bytes each, before the long intr line
         // the parse never reaches. The buffer grows if this is short.
         let mut stat = HeldFile::with_capacity(stat, 16 * 1024);
@@ -195,11 +204,13 @@ impl CpuSampler {
                 .max()
                 .map_or(0, |max| max + 1)
         });
-        let freq = (0..count)
-            .filter_map(|i| {
-                HeldFile::open(cpu_dir.join(format!("cpu{i}/cpufreq/scaling_cur_freq")))
-            })
-            .collect();
+        let freq = cpu_dir.map_or_else(Vec::new, |dir| {
+            (0..count)
+                .filter_map(|i| {
+                    HeldFile::open(dir.join(format!("cpu{i}/cpufreq/scaling_cur_freq")))
+                })
+                .collect()
+        });
         let mut sampler = Self {
             stat,
             freq,
@@ -483,7 +494,7 @@ mod tests {
         let temp = dir.path().join("temp1_input");
         fs::write(&temp, "51500\n").unwrap();
 
-        let mut s = CpuSampler::open(&stat, &cpu_dir, Some(&temp));
+        let mut s = CpuSampler::open(&stat, Some(&cpu_dir), Some(&temp));
         // cpu0 50% busy, cpu1 fully idle over the next 200 jiffies each.
         fs::write(&stat, "cpu  200 0 100 1100 0 0 0 0 0 0\ncpu0 100 0 100 500 0 0 0 0 0 0\ncpu1 50 0 50 600 0 0 0 0 0 0\n").unwrap();
         let got = s.sample().clone();

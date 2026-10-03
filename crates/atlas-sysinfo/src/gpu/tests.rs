@@ -297,3 +297,37 @@ fn busy_from_idle_time() {
     assert_eq!(busy_from_idle(5000, 1.0), Some(0.0));
     assert_eq!(busy_from_idle(0, 0.0), None);
 }
+
+/// A card with a screen on it, or without runtime power management, is
+/// read for the sidebar; a laptop's spare discrete GPU is left to sleep.
+#[test]
+fn stays_awake_with_a_screen_or_without_runtime_pm() {
+    let sys = Sys::new();
+    let ids = |extra: &'static str| -> Vec<(&'static str, &'static str)> {
+        let mut f = vec![("vendor", "0x1002\n"), ("device", "0x744c\n")];
+        if !extra.is_empty() {
+            f.push(("power/control", extra));
+        }
+        f
+    };
+    sys.card("card0", "0000:03:00.0", "amdgpu", &ids("auto\n"));
+    sys.card("card1", "0000:04:00.0", "amdgpu", &ids("auto\n"));
+    sys.card("card2", "0000:05:00.0", "amdgpu", &ids("on\n"));
+    sys.card("card3", "0000:06:00.0", "amdgpu", &ids(""));
+    let connector = |card: &str, name: &str, status: &str| {
+        let dir = sys.drm().join(card).join(name);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("status"), status).unwrap();
+    };
+    connector("card0", "card0-DP-1", "disconnected\n");
+    connector("card0", "card0-eDP-1", "connected\n");
+    connector("card1", "card1-HDMI-A-1", "disconnected\n");
+    connector("card1", "card1-Writeback-1", "unknown\n");
+
+    let cards = cards_in(&sys.drm());
+    let awake = |node: &str| cards.iter().find(|c| c.node == node).unwrap().stays_awake();
+    assert!(awake("card0"));
+    assert!(!awake("card1"));
+    assert!(awake("card2"));
+    assert!(awake("card3"));
+}

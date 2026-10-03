@@ -121,6 +121,33 @@ impl Card {
     fn pci_slot(&self) -> Option<PciSlot> {
         PciSlot::parse(self.slot.as_bytes())
     }
+
+    /// Whether reading the card every second costs it no sleep: runtime
+    /// power management is off for it, or a display is connected to it,
+    /// which keeps it awake anyway. A laptop's discrete GPU with no screen
+    /// on it is neither, and reading it while it's awake restarts its
+    /// autosuspend timer (amdgpu counts a read as use), so it never sleeps.
+    /// Reads only what the kernel answers without the card.
+    pub fn stays_awake(&self) -> bool {
+        if sysfs::read_string(self.device.join("power/control")).as_deref() != Some("auto") {
+            return true;
+        }
+        // Connectors are `card1-DP-1` beside `device`.
+        let Some(dir) = self.device.parent() else {
+            return false;
+        };
+        let prefix = format!("{}-", self.node);
+        fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| {
+                e.file_name()
+                    .to_str()
+                    .is_some_and(|n| n.starts_with(&prefix))
+            })
+            .any(|e| sysfs::read_string(e.path().join("status")).as_deref() == Some("connected"))
+    }
 }
 
 /// Every graphics card, the one most worth showing first: a discrete GPU
@@ -290,6 +317,9 @@ pub struct GpuSampler {
     only: bool,
     /// Count the clients even where the driver has a figure of its own.
     count_clients: bool,
+    /// The load alone, from the driver's own figure: no other files, and
+    /// no counting clients, which reads every process.
+    load_only: bool,
     /// Whether the files below are open. Not while the card has slept since
     /// the sampler was made: opening NVML or reading a baseline wakes it.
     ready: bool,
@@ -309,7 +339,14 @@ impl GpuSampler {
     /// the card is asleep: then that waits for the first tick it is awake.
     /// `cards` is the whole list, to know whether the card is the only one.
     pub fn new(card: &Card, cards: &[Card]) -> Self {
-        Self::with(card, cards, false)
+        Self::with(card, cards, false, false)
+    }
+
+    /// Like [`Self::new`], but reads only the load, and only where the
+    /// driver keeps a figure (a busy file, idle residency or NVML): the
+    /// rest of a reading is `None`. For the sidebar.
+    pub fn load_only(card: &Card, cards: &[Card]) -> Self {
+        Self::with(card, cards, false, true)
     }
 
     /// Like [`Self::new`], but the load always comes from the clients'
@@ -317,14 +354,15 @@ impl GpuSampler {
     /// that path against the driver's (`--example gpu -- --clients`).
     #[doc(hidden)]
     pub fn counting_clients(card: &Card, cards: &[Card]) -> Self {
-        Self::with(card, cards, true)
+        Self::with(card, cards, true, false)
     }
 
-    fn with(card: &Card, cards: &[Card], count_clients: bool) -> Self {
+    fn with(card: &Card, cards: &[Card], count_clients: bool, load_only: bool) -> Self {
         let mut s = Self {
             card: card.clone(),
             only: cards.len() <= 1,
             count_clients,
+            load_only,
             ready: false,
             runtime_status: HeldFile::open(card.device.join("power/runtime_status")),
             load: Load::None,
@@ -354,36 +392,42 @@ impl GpuSampler {
             self.load = Load::Nvml(n);
             return;
         }
+        let node = card.device.parent().unwrap_or(&card.device);
+        if self.load_only {
+            self.load = Self::own_figure(card, node).unwrap_or(Load::None);
+            return;
+        }
         self.memory_used = HeldFile::open(dev("mem_info_vram_used"));
         self.gtt_used = HeldFile::open(dev("mem_info_gtt_used"));
         self.power_limit = hwmon::power_limit(&card.device);
         self.hwmon = hwmon::Hwmon::open(&card.device);
-        let node = card.device.parent().unwrap_or(&card.device);
         self.clock = HeldFile::open_first([
             node.join("gt_act_freq_mhz"),    // i915
             node.join("gt_cur_freq_mhz"),    // i915, older
             dev("tile0/gt0/freq0/act_freq"), // xe
             dev("tile0/gt0/freq0/cur_freq"), // xe, older
         ]);
-        let busy = || HeldFile::open(dev("gpu_busy_percent"));
-        let idle = || {
-            HeldFile::open_first([
-                node.join("gt/gt0/rc6_residency_ms"),      // i915
-                node.join("power/rc6_residency_ms"),       // i915, older
-                dev("tile0/gt0/gtidle/idle_residency_ms"), // xe
-            ])
-        };
         self.load = if self.count_clients {
             Self::engines(card, self.only)
-        } else if let Some(f) = busy() {
-            Load::Busy(f)
-        } else if let Some(f) = idle() {
-            let mut load = Load::Idle(f, None);
-            load.sample(); // the baseline
-            load
         } else {
-            Self::engines(card, self.only)
+            Self::own_figure(card, node).unwrap_or_else(|| Self::engines(card, self.only))
         };
+    }
+
+    /// The driver's own load figure: a busy file, or idle residency (with
+    /// its baseline taken).
+    fn own_figure(card: &Card, node: &Path) -> Option<Load> {
+        if let Some(f) = HeldFile::open(card.device.join("gpu_busy_percent")) {
+            return Some(Load::Busy(f));
+        }
+        let f = HeldFile::open_first([
+            node.join("gt/gt0/rc6_residency_ms"),                   // i915
+            node.join("power/rc6_residency_ms"),                    // i915, older
+            card.device.join("tile0/gt0/gtidle/idle_residency_ms"), // xe
+        ])?;
+        let mut load = Load::Idle(f, None);
+        load.sample(); // the baseline
+        Some(load)
     }
 
     fn engines(card: &Card, only: bool) -> Load {

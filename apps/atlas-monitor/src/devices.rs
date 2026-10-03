@@ -26,6 +26,12 @@ pub mod qobject {
         #[qproperty(QStringList, net_labels, cxx_name = "netLabels")]
         /// NaN for an interface that is gone (unplugged) or not measured yet.
         #[qproperty(QList_f64, net_rates, cxx_name = "netRates")]
+        /// The Processor, Memory and Graphics entries' figures, percent.
+        /// The cards' come in the order of the GPU object's `cardNames`,
+        /// NaN for a card left unread so it can sleep.
+        #[qproperty(f64, cpu_usage, cxx_name = "cpuUsage")]
+        #[qproperty(f64, memory_usage, cxx_name = "memoryUsage")]
+        #[qproperty(QList_f64, gpu_usages, cxx_name = "gpuUsages")]
         #[namespace = "atlas_monitor"]
         type DeviceList = super::DeviceListRust;
 
@@ -168,7 +174,6 @@ fn active_first(list: &[(String, String)], active: Option<&str>) -> Vec<(String,
     first.into_iter().chain(rest).collect()
 }
 
-#[derive(Default)]
 pub struct DeviceListRust {
     disk_names: QStringList,
     disk_labels: QStringList,
@@ -176,12 +181,35 @@ pub struct DeviceListRust {
     net_names: QStringList,
     net_labels: QStringList,
     net_rates: QList<f64>,
+    cpu_usage: f64,
+    memory_usage: f64,
+    gpu_usages: QList<f64>,
     /// The listed interfaces' kernel names, in order, to match rates to.
     interfaces: Vec<String>,
     /// The interfaces to list, in the system's order, and the default
     /// route's interface, which goes first.
     net_listed: Vec<(String, String)>,
     route: Option<String>,
+}
+
+impl Default for DeviceListRust {
+    fn default() -> Self {
+        Self {
+            disk_names: QStringList::default(),
+            disk_labels: QStringList::default(),
+            disk_rates: QList::default(),
+            net_names: QStringList::default(),
+            net_labels: QStringList::default(),
+            net_rates: QList::default(),
+            // Blank until the first tick, not 0%.
+            cpu_usage: f64::NAN,
+            memory_usage: f64::NAN,
+            gpu_usages: QList::default(),
+            interfaces: Vec::new(),
+            net_listed: Vec::new(),
+            route: None,
+        }
+    }
 }
 
 impl qobject::DeviceList {
@@ -226,6 +254,11 @@ impl qobject::DeviceList {
                 .map_or(f64::NAN, |io| io.rx_rate + io.tx_rate)
         }));
         self.as_mut().set_net_rates(net);
+        self.as_mut().set_cpu_usage(d.cpu_usage.unwrap_or(f64::NAN));
+        self.as_mut()
+            .set_memory_usage(d.memory_usage.unwrap_or(f64::NAN));
+        self.as_mut()
+            .set_gpu_usages(rates(d.gpu_usages.iter().map(|u| u.unwrap_or(f64::NAN))));
     }
 }
 

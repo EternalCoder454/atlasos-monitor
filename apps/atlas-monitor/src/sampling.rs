@@ -6,8 +6,12 @@
 //! - Only the page on screen is read. Its readers are made when it opens,
 //!   which takes their baseline, and dropped when it closes, so a page opened
 //!   again starts with empty charts rather than stale history.
-//! - The sidebar's live values (disk and network rates, battery charge) are
-//!   read on every page: two held files and a power supply or two.
+//! - The sidebar's live values (processor and memory use, disk and network
+//!   rates, battery charge, graphics load) are read on every page: a few
+//!   held files and a power supply or two. Where the page reads the same
+//!   thing, the sidebar takes the page's figure instead of reading twice.
+//!   A graphics card is read for the sidebar only if that can't keep it
+//!   awake ([`Card::stays_awake`]).
 //! - `statvfs` (disk space) and the address dump run on a page's first tick
 //!   and every 5th after. SMART and failed services are D-Bus questions on
 //!   slower timers of their own, asked on a second thread so a slow or hung
@@ -103,6 +107,13 @@ pub struct Devices {
     pub default_route: Option<String>,
     /// Batteries and adapters; `None` on a machine with none.
     pub power: Option<Supplies>,
+    /// Whole-processor load, percent.
+    pub cpu_usage: Option<f64>,
+    /// Memory in use, percent.
+    pub memory_usage: Option<f64>,
+    /// Each card's load, percent, in the order of the cards; `None` for a
+    /// card left unread so it can sleep.
+    pub gpu_usages: Vec<Option<f64>>,
 }
 
 /// The processor, for the Overview and CPU pages.
@@ -195,6 +206,12 @@ pub struct Worker {
     interfaces: Vec<NetInterface>,
     net_io: NetSampler,
     power: Option<PowerSampler>,
+    /// The processor's load while the page doesn't read it.
+    side_cpu: Option<CpuSampler>,
+    side_memory: MemorySampler,
+    /// Per card, in the order of `cards`: the load, while the page doesn't
+    /// read the card and reading it keeps no card awake.
+    side_gpus: Vec<Option<GpuSampler>>,
 
     // Read for the page on screen; `None` on other pages.
     cpu: Option<CpuSampler>,
@@ -263,6 +280,9 @@ impl Worker {
             interfaces: net::interfaces(),
             net_io: NetSampler::new(),
             power: power::available().then(PowerSampler::new),
+            side_cpu: None,
+            side_memory: MemorySampler::new(),
+            side_gpus: Vec::new(),
             cpu: None,
             memory: None,
             gpus: None,
@@ -348,6 +368,17 @@ impl Worker {
                 .map(|c| (c.clone(), GpuSampler::new(c, &self.cards)))
                 .collect()
         });
+        // The sidebar's own readers take over from the page's; a new one
+        // takes its baseline now, not from when the page opened.
+        self.side_cpu = match self.cpu {
+            Some(_) => None,
+            None => self
+                .side_cpu
+                .take()
+                .or_else(|| Some(CpuSampler::load_only())),
+        };
+        self.side_gpus = Vec::new();
+        self.refresh_side_gpus();
         self.sensors = (page == Page::Sensors && sensors::available()).then(Sensors::new);
         self.procs = (page == Page::Apps).then(|| ProcessSampler::new(self.wanted()));
         if page == Page::Cpu && self.cpu_info.is_none() {
@@ -356,6 +387,25 @@ impl Worker {
         self.page = page;
         self.fresh = true;
         self.ticks = 0;
+    }
+
+    /// Makes or drops the sidebar's card readers: one for each card the
+    /// page doesn't read and that stays awake anyway. A screen plugged in
+    /// or out changes that.
+    fn refresh_side_gpus(&mut self) {
+        self.side_gpus.resize_with(self.cards.len(), || None);
+        for (i, card) in self.cards.iter().enumerate() {
+            let on_page = self
+                .gpus
+                .as_ref()
+                .is_some_and(|g| g.iter().any(|(c, _)| c.node == card.node));
+            let wanted = !on_page && card.stays_awake();
+            match (&self.side_gpus[i], wanted) {
+                (None, true) => self.side_gpus[i] = Some(GpuSampler::load_only(card, &self.cards)),
+                (Some(_), false) => self.side_gpus[i] = None,
+                _ => {}
+            }
+        }
     }
 
     /// Reads everything the page shows.
@@ -389,6 +439,10 @@ impl Worker {
             }
         }
 
+        if slow {
+            self.refresh_side_gpus();
+        }
+
         // A battery that turns up later (a dock, a pack put back in) gets
         // its sidebar entry within a slow tick.
         if self.power.is_none() && slow && power::available() {
@@ -403,6 +457,7 @@ impl Worker {
             net_io: self.net_io.sample().to_vec(),
             default_route: self.net_io.default_route().map(str::to_owned),
             power: self.power.as_mut().map(|p| p.sample().clone()),
+            ..Devices::default()
         };
         let cpu = self.cpu.as_mut().map(|c| CpuTick {
             sample: c.sample().clone(),
@@ -421,6 +476,33 @@ impl Worker {
                 .collect()
         });
         let sensors = self.sensors.as_mut().map(|s| s.sample().to_vec());
+        let mut devices = devices;
+        devices.cpu_usage = match (&cpu, &mut self.side_cpu) {
+            (Some(c), _) => Some(c.sample.usage),
+            (None, Some(side)) => Some(side.sample().usage),
+            (None, None) => None,
+        };
+        devices.memory_usage = memory.as_ref().map(Memory::usage_percent).or_else(|| {
+            self.side_memory
+                .sample()
+                .as_ref()
+                .map(Memory::usage_percent)
+        });
+        devices.gpu_usages = self
+            .cards
+            .iter()
+            .zip(&mut self.side_gpus)
+            .map(|(card, side)| {
+                let on_page = gpus
+                    .as_ref()
+                    .and_then(|g: &Vec<GpuTick>| g.iter().find(|t| t.card.node == card.node));
+                match (on_page, side) {
+                    (Some(t), _) => t.reading.usage,
+                    (None, Some(s)) => s.sample().usage,
+                    (None, None) => None,
+                }
+            })
+            .collect();
 
         let mut tick = Tick {
             fresh,
@@ -956,6 +1038,35 @@ mod tests {
         assert!(t.memory.is_none() && t.cpu.is_none());
         // The sidebar reads on every page.
         assert_eq!(t.devices.disk_io.len(), w.disks.len());
+    }
+
+    #[test]
+    fn the_sidebar_figures_come_on_every_page() {
+        let mut w = Worker::new();
+        let percent = |v: Option<f64>| v.is_some_and(|v| (0.0..=100.0).contains(&v));
+        for page in [
+            Page::Other,
+            Page::Cpu,
+            Page::Memory,
+            Page::Overview,
+            Page::Apps,
+        ] {
+            w.set_page(page.clone());
+            for _ in 0..2 {
+                let t = w.tick();
+                assert!(percent(t.devices.cpu_usage), "{page:?}");
+                assert!(percent(t.devices.memory_usage), "{page:?}");
+                assert_eq!(t.devices.gpu_usages.len(), w.cards.len(), "{page:?}");
+                // The page's figure is the sidebar's: one reading, not two.
+                if let Some(c) = &t.cpu {
+                    assert_eq!(t.devices.cpu_usage, Some(c.sample.usage));
+                }
+                if let Some(m) = &t.memory {
+                    assert_eq!(t.devices.memory_usage, Some(m.usage_percent()));
+                }
+            }
+            assert_eq!(w.side_cpu.is_some(), w.cpu.is_none(), "{page:?}");
+        }
     }
 
     #[test]
