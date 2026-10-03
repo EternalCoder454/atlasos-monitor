@@ -1,0 +1,79 @@
+{
+  "type": "a(ssssssouso)",
+  "data": [
+    [
+      [
+        "app-org.kde.plasma\\x2dfallback\\x2dsession\\x2drestore@autostart.service",
+        "Plasma Session Restore",
+        "loaded",
+        "inactive",
+        "dead",
+        "",
+        "/org/freedesktop/systemd1/unit/app_2dorg_2ekde_2eplasma_5cx2dfallback_5cx2dsession_5cx2drestore_40autostart_2eservice",
+        0,
+        "",
+        "/"
+      ],
+      [
+        "app-geoclue\\x2ddemo\\x2dagent@autostart.service",
+        "Geoclue Demo agent",
+        "loaded",
+        "active",
+        "running",
+        "",
+        "/org/freedesktop/systemd1/unit/app_2dgeoclue_5cx2ddemo_5cx2dagent_40autostart_2eservice",
+        0,
+        "",
+        "/"
+      ],
+      [
+        "app-org.kde.discover.notifier@autostart.service",
+        "Discover",
+        "loaded",
+        "active",
+        "running",
+        "",
+        "/org/freedesktop/systemd1/unit/app_2dorg_2ekde_2ediscover_2enotifier_40autostart_2eservice",
+        0,
+        "",
+        "/"
+      ],
+      [
+        "app-org.kde.kdeconnect.daemon@autostart.service",
+        "KDE Connect",
+        "loaded",
+        "failed",
+        "failed",
+        "",
+        "/org/freedesktop/systemd1/unit/app_2dorg_2ekde_2ekdeconnect_2edaemon_40autostart_2eservice",
+        0,
+        "",
+        "/"
+      ],
+      [
+        "syncthing-tray.service",
+        "Syncthing Tray",
+        "loaded",
+        "active",
+        "running",
+        "",
+        "/org/freedesktop/systemd1/unit/x",
+        0,
+        "",
+        "/"
+      ],
+      [
+        "wireplumber.service",
+        "Multimedia Service Session Manager",
+        "loaded",
+        "active",
+        "running",
+        "",
+        "/org/freedesktop/systemd1/unit/x",
+        0,
+        "",
+        "/"
+      ]
+    ]
+  ]
+}

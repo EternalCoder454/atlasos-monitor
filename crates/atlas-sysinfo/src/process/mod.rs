@@ -47,6 +47,7 @@ mod parse;
 pub(crate) mod procfs;
 mod signal;
 
+pub(crate) use details::passwd;
 pub use details::{Info, details, executable, start_time};
 pub use impact::Impact;
 pub use parse::{Stat, container_from_cgroup, parse_io, parse_stat, unit_from_cgroup};

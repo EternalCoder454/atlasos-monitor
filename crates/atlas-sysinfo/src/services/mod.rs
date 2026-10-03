@@ -155,7 +155,7 @@ pub enum ActiveState {
 }
 
 impl ActiveState {
-    fn parse(s: &str) -> Self {
+    pub(crate) fn parse(s: &str) -> Self {
         match s {
             "active" => Self::Active,
             "reloading" => Self::Reloading,
@@ -198,7 +198,7 @@ pub enum FileState {
 }
 
 impl FileState {
-    fn parse(s: &str) -> Self {
+    pub(crate) fn parse(s: &str) -> Self {
         match s {
             "enabled" => Self::Enabled,
             "enabled-runtime" => Self::EnabledRuntime,
@@ -276,8 +276,15 @@ pub struct Service {
 
 impl Service {
     pub fn status(&self) -> Status {
-        match self.active {
-            ActiveState::Active if self.sub == "running" => Status::Running,
+        Status::of(&self.active, &self.sub)
+    }
+}
+
+impl Status {
+    /// The dot for a unit's active state and sub-state.
+    pub fn of(active: &ActiveState, sub: &str) -> Self {
+        match active {
+            ActiveState::Active if sub == "running" => Status::Running,
             ActiveState::Active => Status::Active,
             ActiveState::Reloading | ActiveState::Refreshing => Status::Running,
             ActiveState::Activating => Status::Starting,
@@ -1134,7 +1141,7 @@ fn read_description(path: &str) -> Option<String> {
     parse_description(&text)
 }
 
-fn parse_description(text: &str) -> Option<String> {
+pub(crate) fn parse_description(text: &str) -> Option<String> {
     let mut in_unit = false;
     let mut found = None;
     for line in text.lines() {

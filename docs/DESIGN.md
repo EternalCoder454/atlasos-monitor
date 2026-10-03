@@ -431,6 +431,34 @@ The readers the loop drives (`atlas-sysinfo`):
   A simple service that fails after starting reports Done; the list shows
   the failure. To see it: `--example services` (`--details`, `--bench`,
   `--watch`, and `--act` for the test VM).
+- `autostart`: `list` gives what starts at login, sorted by name without
+  case, and `set_enabled` switches one; no reader to keep, since the page
+  reads it on open and after a switch (about 10 ms). XDG autostart entries
+  (`~/.config/autostart` over each `$XDG_CONFIG_DIRS/autostart`, the first
+  listed winning) are read the way `systemd-xdg-autostart-generator` reads
+  them, since Plasma 6 starts in systemd mode: `Hidden`,
+  `OnlyShowIn`/`NotShowIn`, `TryExec`, `X-KDE-autostart-condition` (the
+  KConfig key), and `X-systemd-skip`, whose entry a unit of the desktop's
+  own starts instead, so its switch is locked; `X-GNOME-Autostart-enabled`
+  is ignored, as the generator does. Each entry's unit
+  (`app-…@autostart.service`) comes from `SourcePath=` in the generator's
+  output, its state from the user's manager. Off writes `Hidden=true` in
+  the user's file, or in a copy of the system's there (written beside and
+  renamed; a link there is replaced, never written through); on removes a
+  copy that only switched it off, so the entry follows the package again.
+  Units: the user's own (Enable/Disable), and the installed ones that
+  start, enabled from `/etc` or wanted by a login target from `/usr/lib`
+  or a generator (Quadlets), switched by Mask/Unmask in the user's own
+  folder, since the user can't remove `/etc`'s links. Candidates come
+  from the link folders and only they are asked about: the full unit file
+  list costs the user's manager about 40 ms, a dozen names about 10.
+  Locked: Atlas Updater's tray, and D-Bus, `systemd-*`, `plasma-*` and
+  portal units (off only). `NoDisplay` entries, skipped entries and
+  installed units the user didn't enable are `plumbing`. Tested against a
+  real user manager in a systemd container: each switch, both locks, and
+  the generator dropping a hidden entry's unit. To see it:
+  `--example autostart` (`--bench`, and `--set <id> on|off` for the test
+  VM).
 - History is not kept here: the app's `Series` holds it.
 
 ## Privilege
@@ -447,7 +475,7 @@ it.
 | Services: start, stop, restart, enable, disable | systemd's `org.freedesktop.systemd1` over the system bus (zbus), the call flagged to allow interactive authorization | systemd's own polkit actions (`manage-units`, `manage-unit-files`); polkit's agent asks for the password. Listing and details need nothing. |
 | Drive health (SMART) | udisks2 over the system bus (`NVMe.Controller` and `Drive.Ata` properties and `SmartGetAttributes`, its cached values) | udisks2, which asks polkit for none of these. No section when udisks2 is missing. |
 | Energy Saver | `CPUWeight` on the app's unit through the **user's** systemd manager | None needed: the user's own units. Reversible; restored on exit and after a crash. |
-| Startup items | XDG autostart files in `~/.config/autostart` and the user's systemd units | The user's own files. Atlas Updater's tray entry is shown but can't be switched off. |
+| Startup items | XDG autostart files in `~/.config/autostart`; the user's systemd units through the **user's** systemd manager (Enable, Disable, Mask, Unmask) | None needed: the user's own files and manager. Atlas Updater's tray entry and the session's own units are shown but can't be switched off. |
 
 ## Settings
 

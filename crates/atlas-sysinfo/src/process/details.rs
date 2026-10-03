@@ -5,8 +5,9 @@
 //! each, and nobody needs them for every process every second. Run on a
 //! short-lived thread, never the GUI thread (DESIGN.md, Threading rule).
 
-use std::ffi::CStr;
+use std::ffi::{CStr, OsStr};
 use std::fs;
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
@@ -211,17 +212,23 @@ fn boot_time() -> Option<SystemTime> {
     Some(SystemTime::UNIX_EPOCH + Duration::from_secs(secs))
 }
 
-/// The user name for a uid, through NSS: on Fedora Atomic most system users
-/// live in `/usr/lib/passwd` (nss-altfiles) and a service's dynamic user in
-/// systemd's userdb, so reading `/etc/passwd` alone would miss them.
+/// The user name for a uid, through NSS.
 fn user_name(uid: u32) -> Option<String> {
+    passwd(uid).map(|(name, _)| name)
+}
+
+/// A uid's user name and home folder, through NSS: on Fedora Atomic most
+/// system users live in `/usr/lib/passwd` (nss-altfiles) and a service's
+/// dynamic user in systemd's userdb, so reading `/etc/passwd` alone would
+/// miss them.
+pub(crate) fn passwd(uid: u32) -> Option<(String, PathBuf)> {
     let mut buf = vec![0 as libc::c_char; 1024];
     loop {
         let mut pwd = std::mem::MaybeUninit::<libc::passwd>::uninit();
         let mut result = std::ptr::null_mut();
         // SAFETY: every pointer is valid for the call and `buf.len()` is the
         // buffer's real size; on success `result` points at `pwd`, whose
-        // strings live in `buf`, and both outlive the read below.
+        // strings live in `buf`, and both outlive the reads below.
         let rc = unsafe {
             libc::getpwuid_r(
                 uid,
@@ -238,9 +245,16 @@ fn user_name(uid: u32) -> Option<String> {
         if rc != 0 || result.is_null() {
             return None;
         }
-        // SAFETY: as above; pw_name is a NUL-terminated string in `buf`.
-        let name = unsafe { CStr::from_ptr((*result).pw_name) };
-        return Some(name.to_string_lossy().into_owned());
+        // SAFETY: as above; pw_name and pw_dir, when set, are NUL-terminated
+        // strings in `buf`.
+        let (name, dir) = unsafe {
+            let field = |p: *const libc::c_char| (!p.is_null()).then(|| CStr::from_ptr(p));
+            (field((*result).pw_name)?, field((*result).pw_dir))
+        };
+        let dir = dir.map_or_else(PathBuf::new, |d| {
+            PathBuf::from(OsStr::from_bytes(d.to_bytes()))
+        });
+        return Some((name.to_string_lossy().into_owned(), dir));
     }
 }
 
@@ -298,6 +312,7 @@ mod tests {
             return;
         }
         assert_eq!(user_name(0).as_deref(), Some("root"));
+        assert_eq!(passwd(0).map(|(_, dir)| dir), Some(PathBuf::from("/root")));
     }
 
     /// The process has gone: not an error dressed as an empty panel.
