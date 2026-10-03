@@ -110,6 +110,14 @@ int main(int argc, char *argv[])
     if (qEnvironmentVariableIsEmpty("QT_NO_GUI_THREADPOOL")) {
         qputenv("QT_NO_GUI_THREADPOOL", "1");
     }
+    // The software renderer repaints only what changed, except at a
+    // fractional scale, where it repaints the whole window on every change
+    // for fear of seams. At 1.5x that made the sidebar's figures alone cost
+    // 11-13 ms/s on every page; partially, 3.5 (bench/pages). Nothing seams
+    // inside the window; its edge is seen to in Main.qml (edgeFill).
+    if (qEnvironmentVariableIsEmpty("QSG_SOFTWARE_RENDERER_FORCE_PARTIAL_UPDATES")) {
+        qputenv("QSG_SOFTWARE_RENDERER_FORCE_PARTIAL_UPDATES", "1");
+    }
     atlas_log_init();
     atlas_crash_install(); // Rust panic hook, before anything can panic.
     // Before QApplication: its constructor raises the most common fatal

@@ -40,6 +40,19 @@ QQC2.ApplicationWindow {
     LayoutMirroring.enabled: Qt.application.layoutDirection === Qt.RightToLeft
     LayoutMirroring.childrenInherit: true
 
+    // Under everything, past the window's right and bottom edges. At a
+    // fractional scale the last device row or column can be only partly
+    // inside the window (1150 px at 1.25x is 1437.5 rows). A full repaint
+    // clears it first, but the partial updates main.cpp turns on would draw
+    // the window's edge half over nothing, a half-transparent line.
+    Rectangle {
+        id: edgeFill
+        z: -1
+        width: parent.width + 1
+        height: parent.height + 1
+        color: root.color
+    }
+
     property string currentPage: ""
     // Icons only when the window is narrow.
     readonly property bool compact: width < Kirigami.Units.gridUnit * 40
