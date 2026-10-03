@@ -29,13 +29,9 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "showKernelThreads"]
         fn show_kernel_threads(self: &Sampler, on: bool);
-
-        /// A service was acted on: the Services list reads whether each
-        /// starts at boot again.
-        #[qinvokable]
-        #[cxx_name = "servicesChanged"]
-        fn services_changed(self: &Sampler);
     }
+
+    impl cxx_qt::Threading for Sampler {}
 
     #[namespace = "rust::cxxqtlib1"]
     unsafe extern "C++" {

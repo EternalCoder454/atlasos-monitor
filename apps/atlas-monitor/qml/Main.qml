@@ -338,7 +338,6 @@ QQC2.ApplicationWindow {
         id: servicesPage
         ServicesPage {
             services: root.services
-            sampler: root.sampler
         }
     }
     Component {

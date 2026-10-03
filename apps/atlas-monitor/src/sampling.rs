@@ -228,6 +228,12 @@ pub struct Worker {
     waiting_services: bool,
     /// The services list's unit files must be read again (after an action).
     services_stale: bool,
+    /// The list being read was asked for with the files read again: if the
+    /// question is lost, the next one must be too.
+    services_asked_stale: bool,
+    /// An action finished while a list was being read: that list may be
+    /// from before it, and is dropped.
+    services_outdated: bool,
     services_news: Option<Option<Vec<Service>>>,
     /// The Disk page's drive was answered since its last tick.
     disk_news: bool,
@@ -273,6 +279,8 @@ impl Worker {
             failed: Vec::new(),
             waiting_services: false,
             services_stale: false,
+            services_asked_stale: false,
+            services_outdated: false,
             services_news: None,
             disk_news: false,
         }
@@ -303,6 +311,7 @@ impl Worker {
     /// for whether each starts at boot.
     pub fn services_changed(&mut self) {
         self.services_stale = true;
+        self.services_outdated = self.waiting_services;
     }
 
     fn wanted(&self) -> Wanted {
@@ -461,6 +470,7 @@ impl Worker {
                 // the latest that has come in.
                 if !self.waiting_services {
                     let stale = std::mem::take(&mut self.services_stale);
+                    self.services_asked_stale = stale;
                     self.ask(Ask::Services(stale));
                 }
                 tick.services = self.services_news.take();
@@ -534,6 +544,10 @@ impl Worker {
         self.waiting_drives.clear();
         self.waiting_failed = false;
         self.waiting_services = false;
+        // The reader forgets its unit files only when the question reaches
+        // it: a lost one still owes that.
+        self.services_stale |= std::mem::take(&mut self.services_asked_stale);
+        self.services_outdated = false;
     }
 
     /// Takes in what the question thread has answered since the last tick.
@@ -568,12 +582,19 @@ impl Worker {
                 }
                 Ok(Answer::Services(list)) => {
                     self.waiting_services = false;
+                    self.services_asked_stale = false;
+                    if std::mem::take(&mut self.services_outdated) {
+                        continue;
+                    }
                     if let Some(list) = &list {
-                        self.failed = list
+                        let mut failed: Vec<String> = list
                             .iter()
                             .filter(|s| s.status() == Status::Failed)
                             .map(|s| s.name.clone())
                             .collect();
+                        failed.sort_unstable();
+                        failed.dedup();
+                        self.failed = failed;
                     }
                     self.services_news = Some(list);
                 }

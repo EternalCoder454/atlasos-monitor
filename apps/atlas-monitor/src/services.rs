@@ -161,16 +161,19 @@ pub mod qobject {
 }
 
 use std::cmp::Ordering;
+use std::collections::HashSet;
+use std::panic::AssertUnwindSafe;
 use std::pin::Pin;
 
 use atlas_sysinfo::services::{
     self, Action, ActionError, ActiveState, FileState, JobResult, LoadState, Outcome, Service,
     Status,
 };
-use cxx_qt::{CxxQtType, Threading};
+use cxx_qt::{CxxQtThread, CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
 
 use crate::rows::int;
+use crate::sampler::qobject::Sampler;
 
 #[derive(Debug, Clone, PartialEq)]
 struct Row {
@@ -217,6 +220,9 @@ pub struct ServiceModelRust {
     rows: Vec<Row>,
     services: Vec<Service>,
     view: View,
+    /// Told when an action finishes, so the list reads the unit files again
+    /// even if the page has closed in the meantime.
+    pub sampler: Option<Box<CxxQtThread<Sampler>>>,
 }
 
 const ROLES: [&str; 5] = ["name", "description", "status", "startup", "job"];
@@ -374,7 +380,13 @@ impl qobject::ServiceModel {
             self.as_mut().set_loaded(true);
             return;
         };
-        let failed = int(list.iter().filter(|s| s.status() == Status::Failed).count());
+        // By name, as the rows are.
+        let failed = int(list
+            .iter()
+            .filter(|s| s.status() == Status::Failed)
+            .map(|s| &s.name)
+            .collect::<HashSet<_>>()
+            .len());
         self.as_mut().rust_mut().services = list;
         self.as_mut().relayout();
         if failed != *self.failed() {
@@ -448,11 +460,20 @@ impl qobject::ServiceModel {
         }
         self.as_mut().set_busy(true);
         let qt = self.qt_thread();
+        let sampler = self.rust().sampler.as_deref().cloned();
         let unit = name.clone();
         let spawned = std::thread::Builder::new()
             .name("service-action".into())
             .spawn(move || {
-                let (result, detail) = result_of(services::act(&unit, what));
+                // A panic in the bus code still answers: `busy` is cleared
+                // only by the answer.
+                let (result, detail) = std::panic::catch_unwind(AssertUnwindSafe(|| {
+                    result_of(services::act(&unit, what))
+                }))
+                .unwrap_or_else(|_| ("noAnswer", String::new()));
+                if let Some(s) = sampler {
+                    let _ = s.queue(|s| s.services_changed());
+                }
                 let _ = qt.queue(move |mut o| {
                     o.as_mut().set_busy(false);
                     o.acted(

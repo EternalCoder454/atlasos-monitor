@@ -23,7 +23,7 @@ mod stats;
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::sync::OnceLock;
 
-use cxx_qt::Threading;
+use cxx_qt::{CxxQtType, Threading};
 
 // cxx-qt-build's generated initializer calls into cxx-qt-lib; keep the crate
 // linked even while no bridge uses one of its types.
@@ -78,6 +78,8 @@ pub unsafe extern "C" fn atlas_objects_new(icon_theme: *const c_char) -> AtlasOb
     sensors
         .pin_mut()
         .set_available(atlas_sysinfo::sensors::available());
+
+    services.pin_mut().rust_mut().sampler = Some(Box::new(sampler.pin_mut().qt_thread()));
 
     let sink = sampler::Sink {
         cpu: cpu.pin_mut().qt_thread(),

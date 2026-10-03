@@ -14,7 +14,6 @@ Item {
     id: page
 
     required property var services
-    required property var sampler
 
     readonly property var actions: ({
             start: 0,
@@ -109,8 +108,10 @@ Item {
     }
 
     function act(action) {
-        if (!page.services.act(page.target, action)) {
+        if (page.services.busy) {
             notice.show(qsTr("Wait for the change under way to finish."), Kirigami.MessageType.Information);
+        } else if (!page.services.act(page.target, action)) {
+            notice.show(qsTr("That didn't work for %1.").arg(page.target), Kirigami.MessageType.Warning);
         }
     }
 
@@ -126,10 +127,8 @@ Item {
 
     Connections {
         target: page.services
+        // The model has already told the sampler to read the list again.
         function onActed(name, action, result, detail) {
-            // Enable and Disable change the unit files, which the list reads
-            // only when told.
-            page.sampler.servicesChanged();
             const text = page.failure(result, name, detail);
             if (text.length > 0) {
                 notice.show(text, result === "stillRunning" ? Kirigami.MessageType.Information : Kirigami.MessageType.Warning);
