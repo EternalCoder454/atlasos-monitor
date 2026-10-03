@@ -433,7 +433,6 @@ impl Worker {
             if plugged {
                 self.interfaces = now;
             }
-            self.route = self.net_io.default_route().map(str::to_owned);
         }
 
         // A drive plugged in or out, or a filesystem mounted on one, likewise.
@@ -456,12 +455,18 @@ impl Worker {
             self.power = Some(PowerSampler::new());
         }
 
+        let net_io = self.net_io.sample().to_vec();
+        // After the sample: the route names an interface only once the
+        // sampler has it, so one that just appeared isn't missed.
+        if slow {
+            self.route = self.net_io.default_route().map(str::to_owned);
+        }
         let devices = Devices {
             disks: (fresh || disks_changed).then(|| self.disks.clone()),
             interfaces: (fresh || plugged).then(|| self.interfaces.clone()),
             cards: fresh.then(|| self.cards.clone()),
             disk_io: self.disk_io.sample().to_vec(),
-            net_io: self.net_io.sample().to_vec(),
+            net_io,
             default_route: self.route.clone(),
             power: self.power.as_mut().map(|p| p.sample().clone()),
             ..Devices::default()
