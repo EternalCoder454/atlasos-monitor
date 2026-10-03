@@ -52,13 +52,48 @@ Item {
         }
     }
 
-    // One of View's Columns items: shows or hides the column `role`.
-    component ColumnItem: QQC2.MenuItem {
-        required property string role
-        checkable: true
-        checked: !page.apps.hiddenColumns.includes(role)
-        onTriggered: page.apps.setColumnShown(role, checked)
-    }
+    // The columns that can be hidden, for View's Columns and the header's
+    // menu. Name always shows; GPU only with a card to show.
+    readonly property var columnChoices: [
+        {
+            role: "pid",
+            text: qsTr("PID")
+        },
+        {
+            role: "cpu",
+            text: qsTr("CPU")
+        },
+        {
+            role: "memory",
+            text: qsTr("Memory")
+        },
+        {
+            role: "diskRead",
+            text: qsTr("Disk Read")
+        },
+        {
+            role: "diskWrite",
+            text: qsTr("Disk Write")
+        }
+    ].concat(page.hasGpu ? [
+            {
+                role: "gpu",
+                text: qsTr("GPU")
+            }
+        ] : []).concat([
+        {
+            role: "power",
+            text: qsTr("Power")
+        },
+        {
+            role: "netIn",
+            text: qsTr("Net In")
+        },
+        {
+            role: "netOut",
+            text: qsTr("Net Out")
+        }
+    ])
 
     // A table sorted by a hidden column (hidden now, or saved hidden) sorts
     // by CPU instead, or by name when that is hidden too.
@@ -135,46 +170,20 @@ Item {
                 }
                 QQC2.MenuSeparator {}
                 QQC2.Menu {
+                    id: viewColumns
                     title: qsTr("Columns")
 
-                    ColumnItem {
-                        role: "pid"
-                        text: qsTr("PID")
-                    }
-                    ColumnItem {
-                        role: "cpu"
-                        text: qsTr("CPU")
-                    }
-                    ColumnItem {
-                        role: "memory"
-                        text: qsTr("Memory")
-                    }
-                    ColumnItem {
-                        role: "diskRead"
-                        text: qsTr("Disk Read")
-                    }
-                    ColumnItem {
-                        role: "diskWrite"
-                        text: qsTr("Disk Write")
-                    }
-                    ColumnItem {
-                        role: "gpu"
-                        text: qsTr("GPU")
-                        // No card, no column to offer.
-                        visible: page.hasGpu
-                        height: visible ? implicitHeight : 0
-                    }
-                    ColumnItem {
-                        role: "power"
-                        text: qsTr("Power")
-                    }
-                    ColumnItem {
-                        role: "netIn"
-                        text: qsTr("Net In")
-                    }
-                    ColumnItem {
-                        role: "netOut"
-                        text: qsTr("Net Out")
+                    Instantiator {
+                        model: page.columnChoices
+                        delegate: QQC2.MenuItem {
+                            required property var modelData
+                            text: modelData.text
+                            checkable: true
+                            checked: !page.apps.hiddenColumns.includes(modelData.role)
+                            onTriggered: page.apps.setColumnShown(modelData.role, checked)
+                        }
+                        onObjectAdded: (index, object) => viewColumns.insertItem(index, object)
+                        onObjectRemoved: (index, object) => viewColumns.removeItem(object)
                     }
                 }
             }
@@ -311,11 +320,33 @@ Item {
                     rowMenu.popup(table, x, y);
                 }
             }
+            onHeaderMenuRequested: (x, y) => columnsMenu.popup(table, x, y)
 
             // Rows hold still under the pointer, and while a menu or a
             // question is up about one of them.
             readonly property bool held: pointerInside || rowMenu.opened || endDialog.opened || killDialog.opened || detailsDialog.visible
             onHeldChanged: page.apps.setHeld(held)
+        }
+    }
+
+    // The header's right-click menu: the columns, a check by each shown.
+    ContextMenu {
+        id: columnsMenu
+
+        Instantiator {
+            model: page.columnChoices
+            delegate: ContextMenuItem {
+                required property var modelData
+                readonly property bool shown: !page.apps.hiddenColumns.includes(modelData.role)
+                text: modelData.text
+                // ContextMenuItem draws no check box of its own.
+                icon.name: shown ? "checkmark" : ""
+                Accessible.checkable: true
+                Accessible.checked: shown
+                onTriggered: page.apps.setColumnShown(modelData.role, !shown)
+            }
+            onObjectAdded: (index, object) => columnsMenu.insertItem(index, object)
+            onObjectRemoved: (index, object) => columnsMenu.removeItem(object)
         }
     }
 
