@@ -5,6 +5,7 @@ fn main() {
     // static library. Qt is found through $QMAKE (CMake sets it).
     CxxQtBuilder::new()
         .file("src/backend.rs")
+        .file("src/devices.rs")
         .file("src/sampler.rs")
         .file("src/stats.rs")
         .build();

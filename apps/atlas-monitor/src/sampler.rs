@@ -41,6 +41,7 @@ use std::time::Duration;
 use cxx_qt::{CxxQtThread, CxxQtType};
 use cxx_qt_lib::QString;
 
+use crate::devices::qobject::{DeviceList, DiskStats, NetStats};
 use crate::sampling::{Loop, Page, Tick};
 use crate::stats::qobject::{CpuStats, HealthStatus, MemoryStats};
 
@@ -83,6 +84,9 @@ pub struct Sink {
     pub cpu: CxxQtThread<CpuStats>,
     pub memory: CxxQtThread<MemoryStats>,
     pub health: CxxQtThread<HealthStatus>,
+    pub devices: CxxQtThread<DeviceList>,
+    pub disk: CxxQtThread<DiskStats>,
+    pub net: CxxQtThread<NetStats>,
 }
 
 impl Sink {
@@ -101,5 +105,13 @@ impl Sink {
         if let Some(m) = tick.memory {
             let _ = self.memory.queue(move |o| o.apply(m, fresh));
         }
+        if let Some(d) = tick.disk {
+            let _ = self.disk.queue(move |o| o.apply(d, fresh));
+        }
+        if let Some(n) = tick.net {
+            let _ = self.net.queue(move |o| o.apply(n, fresh));
+        }
+        let devices = tick.devices;
+        let _ = self.devices.queue(move |o| o.apply(devices));
     }
 }

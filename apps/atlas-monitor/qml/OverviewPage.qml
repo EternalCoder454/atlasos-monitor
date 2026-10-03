@@ -11,6 +11,9 @@ AtlasPage {
     required property var memory
     required property var health
 
+    // A row asks for its page ("cpu", "memory").
+    signal openPage(string name)
+
     // Until the first tick, say nothing rather than "all is well".
     readonly property bool measured: page.memory.total > 0
 
@@ -45,14 +48,18 @@ AtlasPage {
     Section {
         SectionRow {
             iconName: "cpu"
+            chevron: true
+            onClicked: page.openPage("cpu")
             title: qsTr("Processor")
             subtitle: isNaN(page.cpu.temperature) ? "" : qsTr("%1 °C").arg(Math.round(page.cpu.temperature))
             value: page.measured ? page.percent(page.cpu.usage) : ""
         }
         SectionRow {
             iconName: "memory"
+            chevron: true
+            onClicked: page.openPage("memory")
             title: qsTr("Memory")
-            subtitle: page.measured ? qsTr("%1 of %2").arg(Qt.locale().formattedDataSize(page.memory.used)).arg(Qt.locale().formattedDataSize(page.memory.total)) : ""
+            subtitle: page.measured ? Format.share(page.memory.used, page.memory.total) : ""
             value: page.measured ? page.percent(page.memory.used / page.memory.total * 100) : ""
         }
     }

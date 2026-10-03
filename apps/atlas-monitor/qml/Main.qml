@@ -15,6 +15,9 @@ QQC2.ApplicationWindow {
     required property var cpu
     required property var memory
     required property var health
+    required property var devices
+    required property var disk
+    required property var net
 
     title: qsTr("Atlas Monitor")
     width: Kirigami.Units.gridUnit * 56
@@ -35,18 +38,30 @@ QQC2.ApplicationWindow {
             "overview": overviewPage,
             "cpu": cpuPage,
             "memory": memoryPage,
+            "disk": diskPage,
+            "network": networkPage,
             "settings": settingsPage,
             "about": aboutPage
         })
 
+    // `name` is a page ("cpu"), or a kind and a device ("disk:nvme0n1").
     function showPage(name) {
         if (name === currentPage) {
             return;
         }
-        var c = pages[name] ? pages[name] : overviewPage;
-        currentPage = pages[name] ? name : "overview";
+        const [kind, device] = name.split(":");
+        const known = pages[kind] !== undefined && (device !== undefined) === (kind === "disk" || kind === "network") && device !== "";
+        var c = known ? pages[kind] : overviewPage;
+        currentPage = known ? name : "overview";
         // Only the page on screen is sampled.
         sampler.showPage(currentPage);
+        // A device page's object forgets the last device first, so the page
+        // opens on dashes, not on the previous drive's figures.
+        if (known && kind === "disk") {
+            disk.show(device, devices.diskLabels[devices.diskNames.indexOf(device)] ?? device);
+        } else if (known && kind === "network") {
+            net.show(device, devices.netLabels[devices.netNames.indexOf(device)] ?? device);
+        }
         if (stack.depth === 0) {
             stack.push(c, {}, QQC2.StackView.Immediate);
         } else {
@@ -64,6 +79,34 @@ QQC2.ApplicationWindow {
         font: Kirigami.Theme.smallFont
         opacity: 0.6
         elide: Text.ElideRight
+    }
+
+    // Disk and Network: a group with an entry and its live rate per device.
+    // Compact, the group is one icon that opens the first device.
+    component DeviceGroup: SidebarGroup {
+        id: group
+        required property string kind
+        property list<string> names
+        property list<string> labels
+        property list<real> rates
+
+        visible: names.length > 0
+        compact: root.compact
+        onActivated: root.showPage(kind + ":" + names[0])
+
+        Repeater {
+            model: group.names.length
+            SidebarItem {
+                required property int index
+                readonly property string page: group.kind + ":" + group.names[index]
+                Layout.fillWidth: true
+                sub: true
+                text: group.labels[index] ?? ""
+                value: Format.rate(group.rates[index] ?? NaN)
+                selected: root.currentPage === page
+                onClicked: root.showPage(page)
+            }
+        }
     }
 
     component NavItem: SidebarItem {
@@ -129,6 +172,22 @@ QQC2.ApplicationWindow {
                     text: qsTr("Memory")
                     icon.name: "memory"
                 }
+                DeviceGroup {
+                    kind: "disk"
+                    text: qsTr("Disk")
+                    iconName: "drive-harddisk"
+                    names: root.devices.diskNames
+                    labels: root.devices.diskLabels
+                    rates: root.devices.diskRates
+                }
+                DeviceGroup {
+                    kind: "network"
+                    text: qsTr("Network")
+                    iconName: "network-wired"
+                    names: root.devices.netNames
+                    labels: root.devices.netLabels
+                    rates: root.devices.netRates
+                }
                 Item {
                     Layout.fillHeight: true
                 }
@@ -193,6 +252,7 @@ QQC2.ApplicationWindow {
             cpu: root.cpu
             memory: root.memory
             health: root.health
+            onOpenPage: name => root.showPage(name)
         }
     }
     Component {
@@ -206,6 +266,20 @@ QQC2.ApplicationWindow {
         id: memoryPage
         MemoryPage {
             memory: root.memory
+            interval: root.backend.refreshInterval
+        }
+    }
+    Component {
+        id: diskPage
+        DiskPage {
+            disk: root.disk
+            interval: root.backend.refreshInterval
+        }
+    }
+    Component {
+        id: networkPage
+        NetworkPage {
+            net: root.net
             interval: root.backend.refreshInterval
         }
     }

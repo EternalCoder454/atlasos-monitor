@@ -76,7 +76,6 @@ impl Page {
 }
 
 /// What the sidebar shows on every page.
-#[allow(dead_code, reason = "read by the pages as they land; drop this then")]
 #[derive(Debug, Clone, Default)]
 pub struct Devices {
     /// Whole disks, root first, swap last. Sent with a fresh tick only.
@@ -88,8 +87,10 @@ pub struct Devices {
     /// Throughput per interface present now.
     pub net_io: Vec<NetIo>,
     /// The interface carrying the default route.
+    #[allow(dead_code, reason = "the Network page will mark it; drop this then")]
     pub default_route: Option<String>,
     /// Batteries and adapters; `None` on a machine with none.
+    #[allow(dead_code, reason = "the Battery page will read it; drop this then")]
     pub power: Option<Supplies>,
 }
 
@@ -108,16 +109,32 @@ pub struct GpuTick {
     pub reading: Gpu,
 }
 
-/// A disk's slow figures, for the Disk page.
-#[allow(dead_code, reason = "read by the pages as they land; drop this then")]
+/// The Disk page's drive.
 #[derive(Debug, Clone, Default)]
 pub struct DiskTick {
     pub name: String,
+    /// What the drive is. On a fresh tick only; `None` for a drive that
+    /// isn't in the list (gone since the page opened).
+    pub disk: Option<Disk>,
+    /// Its throughput this tick.
+    pub io: Option<DiskIo>,
     /// `None` when nothing on it is mounted. Only on a slow tick.
     pub space: Option<Option<Space>>,
     /// What the drive says about itself: on the first tick, then whenever
     /// udisks2 answers (asked once a minute).
     pub health: Option<Option<smart::Health>>,
+}
+
+/// The Network page's interface.
+#[derive(Debug, Clone, Default)]
+pub struct NetTick {
+    pub name: String,
+    /// What the interface is. On a fresh tick only.
+    pub interface: Option<NetInterface>,
+    /// Its throughput this tick; `None` while it is gone (unplugged).
+    pub io: Option<NetIo>,
+    /// Its addresses. Only on a slow tick.
+    pub addresses: Option<Addresses>,
 }
 
 /// One reading of everything the page on screen shows. A part the page
@@ -133,8 +150,7 @@ pub struct Tick {
     pub memory: Option<Memory>,
     pub gpus: Option<Vec<GpuTick>>,
     pub disk: Option<DiskTick>,
-    /// The Network page's addresses, on a slow tick.
-    pub addresses: Option<Addresses>,
+    pub net: Option<NetTick>,
     pub sensors: Option<Vec<Device>>,
     /// What is wrong, for the Overview.
     pub health: Option<Vec<Alert>>,
@@ -307,17 +323,27 @@ impl Worker {
                 self.ask_drive(name.clone());
                 let news = std::mem::take(&mut self.disk_news);
                 tick.disk = Some(DiskTick {
+                    disk: fresh
+                        .then(|| index.map(|i| self.disks[i].clone()))
+                        .flatten(),
+                    io: index.and_then(|i| tick.devices.disk_io.get(i).cloned()),
                     space: (slow && index.is_some()).then(|| index.and_then(|i| self.space[i])),
                     health: (news || fresh).then(|| self.drives.get(&name).cloned().flatten()),
                     name,
                 });
             }
-            Page::Network(name) if slow => {
-                let index = self.interfaces.iter().find(|i| i.name == name);
-                tick.addresses = match (index, net::addresses()) {
-                    (Some(i), Ok(mut all)) => Some(all.remove(&i.index).unwrap_or_default()),
-                    _ => None,
-                };
+            Page::Network(name) => {
+                let interface = self.interfaces.iter().find(|i| i.name == name);
+                let addresses = slow.then(|| match (interface, net::addresses()) {
+                    (Some(i), Ok(mut all)) => all.remove(&i.index).unwrap_or_default(),
+                    _ => Addresses::default(),
+                });
+                tick.net = Some(NetTick {
+                    interface: fresh.then(|| interface.cloned()).flatten(),
+                    io: tick.devices.net_io.iter().find(|n| n.name == name).cloned(),
+                    addresses,
+                    name,
+                });
             }
             _ => {}
         }

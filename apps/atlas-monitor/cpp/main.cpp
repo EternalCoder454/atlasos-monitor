@@ -22,6 +22,9 @@ struct AtlasObjects {
     void *cpu;
     void *memory;
     void *health;
+    void *devices;
+    void *disk;
+    void *net;
 };
 extern "C" AtlasObjects atlas_objects_new();
 extern "C" void atlas_log_init();
@@ -97,6 +100,9 @@ int main(int argc, char *argv[])
         {"cpu", made.cpu},
         {"memory", made.memory},
         {"health", made.health},
+        {"devices", made.devices},
+        {"disk", made.disk},
+        {"net", made.net},
     };
     QVariantMap initial;
     for (const auto &[name, object] : objects) {
