@@ -275,7 +275,7 @@ fn network_is_shared_by_socket_count() {
         io: None,
         io_age: 0.0,
         io_denied: false,
-        gpu_ns: None,
+        gpu_time: None,
         drm_fds: Vec::new(),
         fd_denied,
         sockets,

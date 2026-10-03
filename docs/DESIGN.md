@@ -265,6 +265,54 @@ The readers the loop drives (`atlas-sysinfo`):
   `process::executable` keeps a path only when the host's file there is
   the running program (same device and inode), which also covers a
   Flatpak's mapped paths.
+- `gpu`: `gpu::cards()` lists every card, read once: discrete before
+  integrated, then NVIDIA, AMD, Intel and others, then more video memory
+  first. An Intel GPU on the processor's root bus (`0000:00`) is
+  integrated, and so is an AMD one whose VRAM has no maker
+  (`mem_info_vram_vendor`), since a carve-out has no memory chips. An
+  integrated AMD GPU listed by codename alone ("Raphael") is named "AMD
+  Radeon Graphics".
+  It is named "AMD Radeon RX 7900 XTX": the driver's `product_name`, else
+  the PCI ID database's model. Where a chip is sold as several models, the
+  board's subsystem entry picks one. The GPU page and the Overview's GPU row
+  show the first card. `GpuSampler` reads the card the best way its driver
+  allows:
+  - amdgpu: `gpu_busy_percent`, VRAM and GTT in use, and the card's hwmon
+    (edge, junction and memory temperatures by label, fan, power, clocks).
+    About 11 `pread`s a tick on the development machine, and no `open`.
+  - NVIDIA's driver: NVML, `dlopen`ed only for a card bound to `nvidia`.
+    AtlasOS ships no NVIDIA driver, so this is for someone who layered it.
+    Not checked on hardware yet.
+  - Intel (i915, xe): load from the time out of RC6 (idle residency).
+    Clocks and VRAM size come from the driver's files. A discrete card's power
+    comes from its hwmon energy counter.
+  - Other drivers: load from the clients' drm-usage-stats counters. `/proc`
+    is listed every 5 ticks and only new processes are walked. A process
+    with no GPU handle is walked again on its own tick once every 30, if
+    its descriptor count changed. Known clients have only their fdinfo
+    re-read. Deltas are taken per client, and the busiest engine is the
+    load. On this machine that is ~74 syscalls a tick, after a first walk
+    of ~7,900.
+
+  These counters are a last resort because they can't see the compositor.
+  `kwin_wayland` has `cap_sys_nice`, which makes it non-dumpable, so its
+  descriptors are closed to the user. For the same reason the Apps table
+  shows no GPU use for KWin. `gpu::fdinfo` is the one fdinfo parser, for
+  this and for the Apps table. It reads time counters (`drm-engine-*`),
+  cycle counters (`drm-cycles-*`, xe) and engine capacities.
+
+  A runtime-suspended card (a laptop's sleeping dGPU) is checked through
+  `power/runtime_status` and otherwise left alone: on many kernels, reading
+  its sysfs or asking NVML would wake it. The reading says `asleep`.
+  `cards()` reads only identity files and sizes the kernel keeps in memory.
+  A card asleep when its sampler is made gets its files, NVML and
+  baselines on its first awake tick, which shows nothing else. Reading an awake card every second
+  can restart its autosuspend timer, so a dGPU that would have dozed off
+  may stay up while the GPU page is open (not yet measured on a laptop).
+  To see
+  the readings live: `--example gpu -- --clients`. `--clients` adds the
+  counter path beside the driver's figure. Here amdgpu says 15% at idle
+  clocks and the counters say 4%, KWin left out.
 - History is not kept here: the app's `Series` holds it.
 
 ## Privilege

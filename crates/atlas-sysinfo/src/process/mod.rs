@@ -44,15 +44,12 @@
 mod details;
 mod impact;
 mod parse;
-mod procfs;
+pub(crate) mod procfs;
 mod signal;
 
 pub use details::{Info, details, executable, start_time};
 pub use impact::Impact;
-pub use parse::{
-    DrmClient, Stat, container_from_cgroup, parse_fdinfo_drm, parse_io, parse_stat,
-    unit_from_cgroup,
-};
+pub use parse::{Stat, container_from_cgroup, parse_io, parse_stat, unit_from_cgroup};
 pub use signal::{Action, ActionError, act};
 
 use std::sync::Arc;
@@ -60,6 +57,7 @@ use std::time::Instant;
 
 use rustix::io::Errno;
 
+use crate::gpu::fdinfo::GpuTime;
 use crate::stats::{elapsed, net, rate};
 use crate::sysfs::HeldFile;
 use procfs::{Entry, FdBuffers, ProcDir};
@@ -184,7 +182,7 @@ struct Prev {
     /// Its `io` was unreadable: another user's.
     io_denied: bool,
     /// Summed engine time, if it holds a GPU handle.
-    gpu_ns: Option<u64>,
+    gpu_time: Option<GpuTime>,
     /// One descriptor per GPU client, to re-read without a walk.
     drm_fds: Vec<u32>,
     /// Its `fd/` was unreadable the last time it was walked.
@@ -390,11 +388,11 @@ impl ProcessSampler {
                 .as_mut()
                 .map(|p| std::mem::take(&mut p.drm_fds))
                 .unwrap_or_default();
-            let known_gpu = prev.as_ref().is_some_and(|p| p.gpu_ns.is_some());
+            let known_gpu = prev.as_ref().is_some_and(|p| p.gpu_time.is_some());
             let mut fd_denied = prev.as_ref().is_some_and(|p| p.fd_denied);
             let mut sockets = prev.as_ref().map_or(0, |p| p.sockets);
             let mut fd_count = prev.as_ref().and_then(|p| p.fd_count);
-            let mut gpu_ns = None;
+            let mut gpu_time = None;
             let sweep = (tick + u64::from(pid)).is_multiple_of(SWEEP_TICKS);
             let mut gpu_walk = wanted.gpu && (sweep || prev.is_none());
             // A process whose fd/ is closed to us is tried again only on its
@@ -411,8 +409,8 @@ impl ProcessSampler {
                 if net_walk {
                     gpu_walk = true; // walking anyway
                 } else {
-                    gpu_ns = dir.drm_usage(pid, &drm_fds, &mut self.fd_bufs.clients);
-                    gpu_walk = gpu_ns.is_none();
+                    gpu_time = dir.drm_usage(pid, &drm_fds, &mut self.fd_bufs.clients);
+                    gpu_walk = gpu_time.is_none();
                 }
             }
             let probe = wanted.network && prev.is_none();
@@ -426,7 +424,7 @@ impl ProcessSampler {
                             sockets = walk.sockets;
                             fd_count = Some(walk.fds);
                         }
-                        gpu_ns = walk.has_drm.then_some(walk.gpu_ns);
+                        gpu_time = walk.has_drm.then_some(walk.gpu);
                     }
                     Err(Errno::ACCESS | Errno::PERM) => {
                         fd_denied = true;
@@ -435,17 +433,15 @@ impl ProcessSampler {
                     }
                     // Exited, most likely; or out of descriptors, in which
                     // case a known GPU client stays one until next time.
-                    Err(_) => gpu_ns = prev.as_ref().and_then(|p| p.gpu_ns),
+                    Err(_) => gpu_time = prev.as_ref().and_then(|p| p.gpu_time),
                 }
             }
             if !wanted.gpu {
-                gpu_ns = None;
+                gpu_time = None;
             }
-            let gpu = gpu_ns.map(|ns| match prev.as_ref().and_then(|p| p.gpu_ns) {
-                Some(before) if ns >= before => {
-                    ((ns - before) as f64 / (dt * 1e9) * 100.0).clamp(0.0, 100.0)
-                }
-                _ => 0.0, // a GPU client, but no interval to measure yet
+            let gpu = gpu_time.map(|now| match prev.as_ref().and_then(|p| p.gpu_time) {
+                Some(before) => now.percent_since(&before, dt),
+                None => 0.0, // a GPU client, but no interval to measure yet
             });
 
             next.push(Prev {
@@ -461,7 +457,7 @@ impl ProcessSampler {
                 io,
                 io_age,
                 io_denied,
-                gpu_ns,
+                gpu_time,
                 drm_fds,
                 fd_denied,
                 sockets,

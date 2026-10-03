@@ -9,11 +9,13 @@
 //!
 //! - [`sysfs`]: kernel files held open and re-read with one `pread`.
 //! - [`stats`]: processor, memory, disks and network for the Hardware pages.
+//! - [`gpu`]: graphics cards, their load, memory, temperatures and power.
 //! - [`process`]: the Apps page's process table, details and actions.
 //! - [`apps`]: which application each process is, and the table grouped by it.
 //! - [`sysmem`]: Atlas Monitor's own memory use, for Settings.
 
 pub mod apps;
+pub mod gpu;
 pub mod process;
 pub mod stats;
 pub mod sysfs;

@@ -155,43 +155,6 @@ fn cgroup_path(b: &[u8]) -> Option<&[u8]> {
     path
 }
 
-/// One DRM client, from `/proc/<pid>/fdinfo/<fd>` of a `/dev/dri` handle.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DrmClient {
-    /// `drm-client-id`: one client can be reachable through several
-    /// descriptors, and must be counted once.
-    pub id: Option<u64>,
-    /// Busy time summed over every engine (gfx, compute, video, ...), in ns.
-    pub engine_ns: u64,
-}
-
-/// Parses a DRM handle's fdinfo (the kernel's drm-usage-stats format).
-/// `None` when it has neither a client id nor an engine line: not a GPU
-/// client, or a driver that doesn't report usage.
-pub fn parse_fdinfo_drm(b: &[u8]) -> Option<DrmClient> {
-    let (mut id, mut engine_ns, mut found) = (None, 0u64, false);
-    for line in b.split(|&c| c == b'\n') {
-        if let Some(v) = line.strip_prefix(b"drm-client-id:") {
-            id = sysfs::parse_uint(v.trim_ascii_start());
-            found |= id.is_some();
-        } else if let Some(rest) = line.strip_prefix(b"drm-engine-") {
-            // drm-engine-capacity-<engine> is how many of that engine there
-            // are (i915), not a time.
-            if rest.starts_with(b"capacity-") {
-                continue;
-            }
-            let Some(colon) = rest.iter().position(|&c| c == b':') else {
-                continue;
-            };
-            if let Some(ns) = sysfs::parse_uint(rest[colon + 1..].trim_ascii_start()) {
-                engine_ns = engine_ns.saturating_add(ns);
-                found = true;
-            }
-        }
-    }
-    found.then_some(DrmClient { id, engine_ns })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -199,8 +162,6 @@ mod tests {
     const STAT: &[u8] = include_bytes!("../../tests/fixtures/pid_stat");
     const STAT_KTHREAD: &[u8] = include_bytes!("../../tests/fixtures/pid_stat_kthread");
     const IO: &[u8] = include_bytes!("../../tests/fixtures/pid_io");
-    const FDINFO_AMDGPU: &[u8] = include_bytes!("../../tests/fixtures/fdinfo_amdgpu");
-    const FDINFO_I915: &[u8] = include_bytes!("../../tests/fixtures/fdinfo_i915");
 
     #[test]
     fn stat_of_a_program() {
@@ -428,44 +389,5 @@ mod tests {
             Some(ID.as_bytes())
         );
         assert_eq!(container_from_cgroup(b""), None);
-    }
-
-    #[test]
-    fn amdgpu_fdinfo() {
-        let c = parse_fdinfo_drm(FDINFO_AMDGPU).unwrap();
-        assert_eq!(c.id, Some(64));
-        assert_eq!(c.engine_ns, 5_715_782_407 + 63_383_433);
-    }
-
-    /// i915 lists how many of each engine there are beside the times; those
-    /// counts are not nanoseconds.
-    #[test]
-    fn i915_fdinfo_skips_capacities() {
-        let c = parse_fdinfo_drm(FDINFO_I915).unwrap();
-        assert_eq!(c.id, Some(8));
-        assert_eq!(c.engine_ns, 3_124_890_011 + 88_000_123);
-    }
-
-    #[test]
-    fn fdinfo_without_usage() {
-        assert_eq!(
-            parse_fdinfo_drm(b"pos:\t0\nflags:\t02\nmnt_id:\t24\n"),
-            None
-        );
-        assert_eq!(parse_fdinfo_drm(b""), None);
-        assert_eq!(
-            parse_fdinfo_drm(b"drm-engine-gfx:\t5 ns\n"),
-            Some(DrmClient {
-                id: None,
-                engine_ns: 5
-            })
-        );
-        assert_eq!(
-            parse_fdinfo_drm(b"drm-client-id:\t3\n"),
-            Some(DrmClient {
-                id: Some(3),
-                engine_ns: 0
-            })
-        );
     }
 }

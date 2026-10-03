@@ -23,18 +23,18 @@ use std::os::fd::OwnedFd;
 use rustix::fs::{self as rfs, AtFlags, Mode, OFlags, RawDir, SeekFrom};
 use rustix::io::{self as rio, Errno};
 
-use super::parse;
+use crate::gpu::fdinfo::{self, GpuTime};
 
 /// Room for a `getdents64` batch: about 500 entries of `/proc`.
-pub(super) const DENTS: usize = 16 * 1024;
+pub(crate) const DENTS: usize = 16 * 1024;
 
 /// Room for a descriptor's link target. Only its start is looked at
 /// (`socket:[`, `/dev/dri/`), so a longer path cut short does no harm.
-pub(super) const LINK: usize = 256;
+pub(crate) const LINK: usize = 256;
 
 /// `/proc` held open, with the buffers its reads reuse.
 #[derive(Debug)]
-pub(super) struct ProcDir {
+pub(crate) struct ProcDir {
     fd: OwnedFd,
     /// `<pid>/<file>` and a NUL, rebuilt for each open.
     path: Vec<u8>,
@@ -44,19 +44,19 @@ pub(super) struct ProcDir {
 
 /// What one walk of a process's descriptors found.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub(super) struct FdWalk {
+pub(crate) struct FdWalk {
     /// Descriptors listed, to compare with [`ProcDir::fd_count`] later.
     pub fds: u64,
     pub sockets: u32,
     /// Holds a `/dev/dri` handle: a GPU client, busy or not.
     pub has_drm: bool,
-    /// Engine time summed over its distinct DRM clients, in ns.
-    pub gpu_ns: u64,
+    /// Engine time summed over its distinct DRM clients.
+    pub gpu: GpuTime,
 }
 
 /// A process's entry in the `/proc` listing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct Entry {
+pub(crate) struct Entry {
     pub pid: u32,
     /// The inode of `/proc/<pid>`. It stays the same while the process lives
     /// and a new process given the same pid gets a new one, so a pid and inode
@@ -85,6 +85,13 @@ impl ProcDir {
             Mode::empty(),
         )?;
         read_whole(&fd, &mut self.buf)
+    }
+
+    /// Reads `/proc/<pid>/fdinfo/<fd>`, like [`Self::read`].
+    pub fn fdinfo(&mut self, pid: u32, fd: u32) -> Result<&[u8], Errno> {
+        let mut digits = [0; 10];
+        let fd = decimal(fd, &mut digits);
+        self.read(pid, b"/fdinfo/", fd)
     }
 
     /// How many descriptors the process has open: the size `stat` gives its
@@ -171,7 +178,7 @@ impl ProcDir {
             let Ok(info) = self.read(pid, b"/fdinfo/", name.to_bytes()) else {
                 continue;
             };
-            let Some(client) = parse::parse_fdinfo_drm(info) else {
+            let Some(client) = fdinfo::parse(info) else {
                 continue;
             };
             if let Some(id) = client.id {
@@ -180,7 +187,7 @@ impl ProcDir {
                 }
                 bufs.clients.push(id);
             }
-            walk.gpu_ns = walk.gpu_ns.saturating_add(client.engine_ns);
+            walk.gpu.add(client.time());
             if let Some(fd) = parse_pid(name.to_bytes()) {
                 drm_fds.push(fd);
             }
@@ -191,20 +198,24 @@ impl ProcDir {
     /// Engine time summed over the GPU clients a walk found, re-read through
     /// the descriptors it remembered. `None` if one of them is no longer a
     /// DRM client (closed, or the number reused), which calls for a walk.
-    pub fn drm_usage(&mut self, pid: u32, drm_fds: &[u32], clients: &mut Vec<u64>) -> Option<u64> {
+    pub fn drm_usage(
+        &mut self,
+        pid: u32,
+        drm_fds: &[u32],
+        clients: &mut Vec<u64>,
+    ) -> Option<GpuTime> {
         clients.clear();
-        let mut total = 0u64;
+        let mut total = GpuTime::default();
         for &fd in drm_fds {
-            let mut digits = [0; 10];
-            let info = self.read(pid, b"/fdinfo/", decimal(fd, &mut digits)).ok()?;
-            let client = parse::parse_fdinfo_drm(info)?;
+            let info = self.fdinfo(pid, fd).ok()?;
+            let client = fdinfo::parse(info)?;
             if let Some(id) = client.id {
                 if clients.contains(&id) {
                     continue;
                 }
                 clients.push(id);
             }
-            total = total.saturating_add(client.engine_ns);
+            total.add(client.time());
         }
         Some(total)
     }
@@ -212,7 +223,7 @@ impl ProcDir {
 
 /// The scratch a descriptor walk needs besides [`ProcDir`]'s own.
 #[derive(Debug)]
-pub(super) struct FdBuffers {
+pub(crate) struct FdBuffers {
     pub dents: Vec<MaybeUninit<u8>>,
     pub link: Vec<u8>,
     pub clients: Vec<u64>,
@@ -285,6 +296,7 @@ fn parse_pid(name: &[u8]) -> Option<u32> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::parse;
     use super::*;
     use std::os::fd::AsRawFd;
     use std::os::unix::net::UnixDatagram;
@@ -316,7 +328,10 @@ mod tests {
         let mut dir = ProcDir::open().unwrap();
         let me = std::process::id();
         let mut clients = Vec::new();
-        assert_eq!(dir.drm_usage(me, &[], &mut clients), Some(0));
+        assert_eq!(
+            dir.drm_usage(me, &[], &mut clients),
+            Some(GpuTime::default())
+        );
         // stdin is not a GPU handle.
         assert_eq!(dir.drm_usage(me, &[0], &mut clients), None);
         assert_eq!(dir.drm_usage(me, &[999_999], &mut clients), None);
