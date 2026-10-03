@@ -43,9 +43,9 @@ pub mod qobject {
         /// Its unit's state: "", "running", "active", "starting",
         /// "stopping", "stopped" or "failed".
         #[qproperty(QStringList, states)]
-        /// Why the last switch failed, by key ("locked", "notFound",
-        /// "notEnableable", "io", "noAnswer", "refused"), and the item's
-        /// name; "" when it didn't.
+        /// Why the last switch failed, by key ("locked", "invalid",
+        /// "notFound", "notEnableable", "io", "noAnswer", "refused"), and
+        /// the item's name; "" when it didn't.
         #[qproperty(QString, error)]
         #[qproperty(QString, error_name, cxx_name = "errorName")]
         #[namespace = "atlas_monitor"]
@@ -153,7 +153,8 @@ fn state(s: Option<Status>) -> &'static str {
 fn error_key(e: &Error) -> &'static str {
     match e {
         Error::Locked => "locked",
-        Error::InvalidName | Error::NotFound => "notFound",
+        Error::InvalidName => "invalid",
+        Error::NotFound => "notFound",
         Error::NotEnableable => "notEnableable",
         Error::Io(_) => "io",
         Error::NoAnswer => "noAnswer",
@@ -162,8 +163,27 @@ fn error_key(e: &Error) -> &'static str {
 }
 
 impl qobject::StartupList {
-    pub fn refresh(self: Pin<&mut Self>) {
+    /// Ignored while a read or a switch is under way: its answer is on its
+    /// way, and a newer read would drop it.
+    pub fn refresh(mut self: Pin<&mut Self>) {
+        if *self.loading() {
+            return;
+        }
+        self.as_mut().set_error(QString::default());
         self.read(None);
+    }
+
+    /// Shows item `at` switched `on`, before or without the manager's say.
+    fn show_enabled(mut self: Pin<&mut Self>, at: usize, on: bool) {
+        let mut enabled = self.enabled().clone();
+        if let Ok(i) = isize::try_from(at) {
+            enabled.remove(i);
+            enabled.insert(i, on);
+        }
+        self.as_mut().set_enabled(enabled);
+        if let Some(item) = self.as_mut().rust_mut().items.get_mut(at) {
+            item.enabled = on;
+        }
     }
 
     /// Reads the list on a thread, after switching `switch` if given, and
@@ -175,6 +195,9 @@ impl qobject::StartupList {
             r.reading
         };
         self.as_mut().set_loading(true);
+        let undo = switch.as_ref().and_then(|(item, on)| {
+            Some((self.rust().items.iter().position(|i| i.id == item.id)?, !on))
+        });
         let qt = self.qt_thread();
         let spawned = std::thread::Builder::new()
             .name("startup".into())
@@ -189,6 +212,11 @@ impl qobject::StartupList {
             });
         if let Err(e) = spawned {
             log::error!("reading the startup list: {e}");
+            // Nothing was switched: the switch goes back.
+            if let Some((at, was)) = undo {
+                self.as_mut().show_enabled(at, was);
+                self.as_mut().set_error(QString::from("io"));
+            }
             self.as_mut().set_loading(false);
         }
     }
@@ -259,14 +287,9 @@ impl qobject::StartupList {
         }
         // The switch moves now; the read after the change puts it back if
         // it didn't take.
-        let mut enabled = self.enabled().clone();
-        if let Ok(i) = isize::try_from(at) {
-            enabled.remove(i);
-            enabled.insert(i, on);
-        }
-        self.as_mut().set_enabled(enabled);
-        self.as_mut().rust_mut().items[at].enabled = on;
+        self.as_mut().show_enabled(at, on);
         self.as_mut().set_error(QString::default());
+        self.as_mut().set_error_name(QString::from(&item.name));
         self.read(Some((item, on)));
     }
 }

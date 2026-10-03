@@ -231,6 +231,9 @@ Item {
                 table.currentIndex = -1;
             }
         }
+        function onModelReset() {
+            table.currentIndex = -1;
+        }
     }
 
     ContextMenu {

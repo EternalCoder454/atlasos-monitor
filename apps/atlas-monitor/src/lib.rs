@@ -10,6 +10,7 @@ mod graphics;
 mod logging;
 mod processes;
 mod rc;
+mod rows;
 mod sampler;
 mod sampling;
 mod sensors;

@@ -154,10 +154,9 @@ use std::pin::Pin;
 use atlas_sysinfo::apps::{self, Column, GroupKey, Search};
 use atlas_sysinfo::process::{self, Action, ActionError, Proc};
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::{
-    QByteArray, QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QVariant,
-};
+use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
 
+use crate::rows::int;
 use crate::sampling::AppsTick;
 
 /// What a row stands for: an application's (or a name's) group, or one
@@ -373,110 +372,11 @@ fn layout(data: &AppsTick, view: &View, shown: &HashMap<RowKey, usize>) -> Vec<R
     rows
 }
 
-/// One step from the rows shown to the rows wanted.
-#[derive(Debug, Clone, PartialEq)]
-enum Op {
-    /// Rows `first..=last` go.
-    Remove(usize, usize),
-    /// The row at `from` moves to `to` (its index once moved).
-    Move(usize, usize),
-    /// `n` new rows from `at`.
-    Insert(usize, usize),
-}
-
-/// Indices into `seq` of a longest strictly increasing run of its values.
-fn increasing(seq: &[usize]) -> Vec<usize> {
-    // tails[l]: the index ending the best run of length l + 1 found so far.
-    let mut tails: Vec<usize> = Vec::new();
-    let mut prev = vec![usize::MAX; seq.len()];
-    for (i, &v) in seq.iter().enumerate() {
-        let l = tails.partition_point(|&t| seq[t] < v);
-        if l > 0 {
-            prev[i] = tails[l - 1];
-        }
-        if l == tails.len() {
-            tails.push(i);
-        } else {
-            tails[l] = i;
-        }
-    }
-    let mut run = Vec::with_capacity(tails.len());
-    let mut at = tails.last().copied().unwrap_or(usize::MAX);
-    while at != usize::MAX {
-        run.push(at);
-        at = prev[at];
-    }
-    run.reverse();
-    run
-}
-
-/// The steps that turn `old` into `new`: removals from the bottom up, then
-/// moves, then the new rows. The longest run of rows already in order stays
-/// put and every other row moves once, so one row jumping is one step, not
-/// a step for every row it passes.
-fn plan(old: &[RowKey], new: &[RowKey]) -> Vec<Op> {
-    let wanted: HashSet<&RowKey> = new.iter().collect();
-    let mut ops = Vec::new();
-    let mut cur: Vec<&RowKey> = old.iter().collect();
-    let mut i = cur.len();
-    while i > 0 {
-        i -= 1;
-        if !wanted.contains(cur[i]) {
-            let last = i;
-            while i > 0 && !wanted.contains(cur[i - 1]) {
-                i -= 1;
-            }
-            ops.push(Op::Remove(i, last));
-            cur.drain(i..=last);
-        }
-    }
-    let place: HashMap<&RowKey, usize> = new.iter().enumerate().map(|(i, k)| (k, i)).collect();
-    let places: Vec<usize> = cur.iter().map(|k| place[k]).collect();
-    let still: HashSet<&RowKey> = increasing(&places).into_iter().map(|i| cur[i]).collect();
-    // Every other row that stays moves once, in the new order, to just
-    // after the row it follows there (or to the top): then the rows that
-    // stay are in the new order, short only of the new ones.
-    let staying: HashSet<&RowKey> = cur.iter().copied().collect();
-    let mut before: Option<&RowKey> = None;
-    for k in new {
-        if !staying.contains(k) {
-            continue;
-        }
-        if !still.contains(k) {
-            let from = cur.iter().position(|c| *c == k).unwrap_or_default();
-            let after = before.and_then(|b| cur.iter().position(|c| *c == b));
-            let to = match after {
-                None => 0,
-                Some(a) if a < from => a + 1,
-                Some(a) => a,
-            };
-            if to != from {
-                ops.push(Op::Move(from, to));
-                let moved = cur.remove(from);
-                cur.insert(to, moved);
-            }
-        }
-        before = Some(k);
-    }
-    for (i, k) in new.iter().enumerate() {
-        if cur.get(i) != Some(&k) {
-            match ops.last_mut() {
-                Some(Op::Insert(at, n)) if *at + *n == i => *n += 1,
-                _ => ops.push(Op::Insert(i, 1)),
-            }
-            cur.insert(i, k);
-        }
-    }
-    ops
-}
-
-fn int(v: usize) -> i32 {
-    i32::try_from(v).unwrap_or(i32::MAX)
-}
-
 fn opt(v: Option<f64>) -> f64 {
     v.unwrap_or(f64::NAN)
 }
+
+crate::rows::row_model!(qobject::ProcessModel, Row, "Apps");
 
 impl qobject::ProcessModel {
     /// A tick from the sampling thread.
@@ -503,74 +403,8 @@ impl qobject::ProcessModel {
                 .collect();
             layout(&r.data, &r.view, &shown)
         };
-        let old: Vec<RowKey> = self.rust().rows.iter().map(|r| r.key.clone()).collect();
-        let keys: Vec<RowKey> = new.iter().map(|r| r.key.clone()).collect();
-        let root = QModelIndex::default();
-        for op in plan(&old, &keys) {
-            match op {
-                Op::Remove(first, last) => {
-                    self.as_mut()
-                        .begin_remove_rows(&root, int(first), int(last));
-                    self.as_mut().rust_mut().rows.drain(first..=last);
-                    self.as_mut().end_remove_rows();
-                }
-                Op::Move(from, to) => {
-                    // Qt's destination is the row it goes before, counted
-                    // with it still in place.
-                    let dest = if to > from { to + 1 } else { to };
-                    if !self
-                        .as_mut()
-                        .begin_move_rows(&root, int(from), int(from), &root, int(dest))
-                    {
-                        // Can't happen for a real move; if Qt refuses one
-                        // anyway, start the view over rather than drift.
-                        log::error!("the Apps model refused a move from {from} to {to}");
-                        self.as_mut().begin_reset_model();
-                        self.as_mut().rust_mut().rows = new;
-                        self.as_mut().end_reset_model();
-                        self.as_mut().update_count();
-                        return;
-                    }
-                    let rows = &mut self.as_mut().rust_mut().rows;
-                    let row = rows.remove(from);
-                    rows.insert(to, row);
-                    self.as_mut().end_move_rows();
-                }
-                Op::Insert(at, n) => {
-                    self.as_mut()
-                        .begin_insert_rows(&root, int(at), int(at + n - 1));
-                    self.as_mut()
-                        .rust_mut()
-                        .rows
-                        .splice(at..at, new[at..at + n].iter().cloned());
-                    self.as_mut().end_insert_rows();
-                }
-            }
-        }
-        // The figures: one report covering every row that changed.
-        let mut changed: Option<(usize, usize)> = None;
-        {
-            let mut r = self.as_mut().rust_mut();
-            for (i, (row, want)) in r.rows.iter_mut().zip(new).enumerate() {
-                if *row != want {
-                    *row = want;
-                    changed = Some(changed.map_or((i, i), |(a, _)| (a, i)));
-                }
-            }
-        }
-        if let Some((a, b)) = changed {
-            let top = self.index(int(a), 0, &root);
-            let bottom = self.index(int(b), 0, &root);
-            self.as_mut().data_changed(&top, &bottom, &QList::default());
-        }
+        self.as_mut().replace_rows(new);
         self.update_count();
-    }
-
-    fn update_count(self: Pin<&mut Self>) {
-        let count = int(self.rust().rows.len());
-        if count != *self.count() {
-            self.set_count(count);
-        }
     }
 
     pub fn sort_by(mut self: Pin<&mut Self>, role: &QString, descending: bool) {
@@ -752,90 +586,6 @@ mod tests {
         RowKey::Proc(n, 0)
     }
 
-    /// Plays a plan on `old`, as the model does.
-    fn play(old: &[RowKey], new: &[RowKey]) -> Vec<RowKey> {
-        let mut cur = old.to_vec();
-        for op in plan(old, new) {
-            match op {
-                Op::Remove(a, b) => {
-                    cur.drain(a..=b);
-                }
-                Op::Move(from, to) => {
-                    assert_ne!(to, from);
-                    let r = cur.remove(from);
-                    cur.insert(to, r);
-                }
-                Op::Insert(at, n) => {
-                    for (j, key) in new[at..at + n].iter().enumerate() {
-                        cur.insert(at + j, key.clone());
-                    }
-                }
-            }
-        }
-        cur
-    }
-
-    #[test]
-    fn plans_reach_the_new_rows() {
-        let cases: [(&[u32], &[u32]); 7] = [
-            (&[], &[1, 2, 3]),
-            (&[1, 2, 3], &[]),
-            (&[1, 2, 3], &[1, 2, 3]),
-            (&[1, 2, 3], &[3, 2, 1]),
-            (&[1, 2, 3, 4, 5], &[2, 6, 4, 7, 8]),
-            (&[1, 2, 3, 4], &[1, 3]),
-            (&[5, 1, 2], &[1, 2, 5, 9]),
-        ];
-        for (old, new) in cases {
-            let old: Vec<_> = old.iter().map(|&n| k(n)).collect();
-            let new: Vec<_> = new.iter().map(|&n| k(n)).collect();
-            assert_eq!(play(&old, &new), new, "{old:?} -> {new:?}");
-        }
-    }
-
-    #[test]
-    fn one_row_moving_is_one_step() {
-        let old: Vec<_> = (1..=50).map(k).collect();
-        let mut new = old.clone();
-        let top = new.remove(0);
-        new.push(top);
-        assert_eq!(plan(&old, &new), vec![Op::Move(0, 49)]);
-        assert_eq!(plan(&new, &old), vec![Op::Move(49, 0)]);
-        let mut new = old.clone();
-        new.swap(10, 30);
-        assert_eq!(play(&old, &new), new);
-        assert_eq!(plan(&old, &new).len(), 2);
-    }
-
-    #[test]
-    fn random_plans_reach_the_new_rows_moving_each_row_at_most_once() {
-        let mut seed: u64 = 0x2545_f491_4f6c_dd1d;
-        let mut next = |n: u64| {
-            seed ^= seed << 13;
-            seed ^= seed >> 7;
-            seed ^= seed << 17;
-            seed % n
-        };
-        for _ in 0..500 {
-            let old: Vec<RowKey> = (0..next(30)).map(|n| k(n as u32)).collect();
-            let mut new: Vec<RowKey> = old.iter().filter(|_| next(4) != 0).cloned().collect();
-            for j in (1..new.len()).rev() {
-                if next(3) == 0 {
-                    new.swap(j, next(j as u64 + 1) as usize);
-                }
-            }
-            for n in 100..100 + next(5) {
-                new.insert(next(new.len() as u64 + 1) as usize, k(n as u32));
-            }
-            assert_eq!(play(&old, &new), new, "{old:?} -> {new:?}");
-            let moves = plan(&old, &new)
-                .iter()
-                .filter(|o| matches!(o, Op::Move(..)))
-                .count();
-            assert!(moves <= old.len(), "{old:?} -> {new:?}");
-        }
-    }
-
     #[test]
     fn a_search_shows_only_the_members_it_finds() {
         let data = tick(vec![proc(1, "sh", 1.0), proc(2, "sh", 2.0)]);
@@ -848,17 +598,6 @@ mod tests {
         let rows = layout(&data, &view, &HashMap::new());
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[1].key, RowKey::Proc(2, 0));
-    }
-
-    #[test]
-    fn an_unchanged_order_is_no_step_and_new_rows_come_together() {
-        let old = [k(1), k(2)];
-        assert!(plan(&old, &old).is_empty());
-        assert_eq!(
-            plan(&old, &[k(1), k(2), k(3), k(4)]),
-            vec![Op::Insert(2, 2)]
-        );
-        assert_eq!(plan(&[k(1), k(2), k(3)], &[k(3)]), vec![Op::Remove(0, 1)]);
     }
 
     fn proc(pid: u32, name: &str, cpu: f64) -> Proc {
