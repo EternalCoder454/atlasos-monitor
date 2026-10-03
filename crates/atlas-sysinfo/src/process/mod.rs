@@ -14,7 +14,8 @@
 //!   as their stat line says what they are, unless asked for, and after that
 //!   are recognised from the `/proc` listing alone (pid and inode), so they
 //!   cost no syscalls at all;
-//! - `/proc/<pid>/io` is read only while disk columns are wanted;
+//! - `/proc/<pid>/io` is read only while disk columns are wanted, and one
+//!   closed to us is tried again only every 30 ticks;
 //! - a process whose CPU time, page faults and rss haven't moved since the
 //!   last tick keeps its memory figure without reading `statm`, and shows no
 //!   disk traffic without reading `io`, except on a refresh every 5 ticks:
@@ -354,13 +355,17 @@ impl ProcessSampler {
 
             // Carried counters age, so that when they are read again the
             // rate is over the whole time since, not one tick's worth.
-            // An idle process can't have gained the right to be read.
+            // A process whose io was closed to us is tried again only on its
+            // sweep, like its fd/: it opens up only by changing its
+            // credentials, and a busy one was a failed read every tick.
             let skip_io = idle.filter(|_| wanted.disk);
             let carried = skip_io.and_then(|p| p.io.map(|io| (io, p.io_age + dt)));
+            let io_closed = prev.as_ref().is_some_and(|p| p.io_denied)
+                && !(tick + u64::from(pid)).is_multiple_of(SWEEP_TICKS);
             let (io, io_age, io_denied) = match carried {
                 _ if !wanted.disk => (None, 0.0, false),
                 Some((io, age)) => (Some(io), age, false),
-                None if skip_io.is_some_and(|p| p.io_denied) => (None, 0.0, true),
+                None if io_closed => (None, 0.0, true),
                 None => match dir.read(pid, b"/io", b"") {
                     Ok(b) => (parse::parse_io(b), 0.0, false),
                     Err(e) => (None, 0.0, matches!(e, Errno::ACCESS | Errno::PERM)),

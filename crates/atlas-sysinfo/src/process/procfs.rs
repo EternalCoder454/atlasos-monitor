@@ -138,7 +138,10 @@ impl ProcDir {
     /// every descriptor again: a browser holds hundreds.
     ///
     /// An error opening `fd/` is returned as it is: `EACCES` means the
-    /// process isn't ours to look into, `ENOENT` that it has exited.
+    /// process isn't ours to look into, `ENOENT` that it has exited. So is
+    /// `EACCES` on the first link: some processes (not dumpable, or another
+    /// user namespace's) let `fd/` be listed but none of its links read, and
+    /// trying every one cost hundreds of failed calls a second.
     pub fn walk_fds(
         &mut self,
         pid: u32,
@@ -163,8 +166,10 @@ impl ProcDir {
                 continue; // "." and ".."
             }
             walk.fds += 1;
-            let Ok(len) = rfs::readlinkat_raw(&dir, name, &mut bufs.link[..]) else {
-                continue;
+            let len = match rfs::readlinkat_raw(&dir, name, &mut bufs.link[..]) {
+                Ok(len) => len,
+                Err(e @ (Errno::ACCESS | Errno::PERM)) => return Err(e),
+                Err(_) => continue, // closed since the listing
             };
             let target = &bufs.link[..len];
             if sockets && target.starts_with(b"socket:[") {
