@@ -74,7 +74,9 @@ of 30 s each, medians.
      differ after ~60 frames at 1.25, 1.5 and 1.75x). But it saved nothing:
      Atlas Monitor 11.2 vs 11.2 ms/s with 12 charts and 4.5 vs 4.5 with one;
      KWin's CPU was the same within noise. The rest of the window is flat
-     rectangles, so repainting it is cheap.
+     rectangles, so repainting it is cheap. *In the app it is not:* the
+     sidebar, text and cards made a whole-window repaint 11-13 ms/s on every
+     page, and the app now forces partial updates (bench/pages, cdc1b68).
    - **Opaque charts:** no measurable change.
    - **The clip rectangle:** no cost to remove.
    - **The `values` list** instead of reading a ring buffer: costs the same.
