@@ -7,6 +7,7 @@ mod battery;
 mod crash;
 mod details;
 mod devices;
+mod energy;
 mod graphics;
 mod logging;
 mod processes;
@@ -49,6 +50,7 @@ pub struct AtlasObjects {
     pub startup: *mut c_void,
     pub services: *mut c_void,
     pub details: *mut c_void,
+    pub energy: *mut c_void,
 }
 
 /// Called once from `main.cpp`. Makes every QObject and starts the sampling
@@ -78,6 +80,7 @@ pub unsafe extern "C" fn atlas_objects_new(icon_theme: *const c_char) -> AtlasOb
     let startup = startup::qobject::startup_list_make_unique();
     let mut services = services::qobject::service_model_make_unique();
     let mut details = details::qobject::process_details_make_unique();
+    let mut energy = energy::qobject::energy_saver_make_unique();
     sensors
         .pin_mut()
         .set_available(atlas_sysinfo::sensors::available());
@@ -98,6 +101,7 @@ pub unsafe extern "C" fn atlas_objects_new(icon_theme: *const c_char) -> AtlasOb
         apps: apps.pin_mut().qt_thread(),
         services: services.pin_mut().qt_thread(),
     };
+    energy.pin_mut().start(icon_theme.clone());
     sampler
         .pin_mut()
         .start(*backend.refresh_interval(), icon_theme, sink);
@@ -118,6 +122,7 @@ pub unsafe extern "C" fn atlas_objects_new(icon_theme: *const c_char) -> AtlasOb
         startup: startup.into_raw().cast(),
         services: services.into_raw().cast(),
         details: details.into_raw().cast(),
+        energy: energy.into_raw().cast(),
     }
 }
 

@@ -25,6 +25,7 @@ QQC2.ApplicationWindow {
     required property var startup
     required property var services
     required property var details
+    required property var energy
 
     title: qsTr("Atlas Monitor")
     width: Kirigami.Units.gridUnit * 56
@@ -53,6 +54,7 @@ QQC2.ApplicationWindow {
             "apps": appsPage,
             "startup": startupPage,
             "services": servicesPage,
+            "energy": energyPage,
             "settings": settingsPage,
             "about": aboutPage
         })
@@ -265,6 +267,11 @@ QQC2.ApplicationWindow {
                     text: qsTr("Services")
                     icon.name: "preferences-system-services"
                 }
+                NavItem {
+                    page: "energy"
+                    text: qsTr("Energy Saver")
+                    icon.name: "preferences-system-power-management"
+                }
                 Item {
                     Layout.fillHeight: true
                 }
@@ -339,6 +346,12 @@ QQC2.ApplicationWindow {
         id: servicesPage
         ServicesPage {
             services: root.services
+        }
+    }
+    Component {
+        id: energyPage
+        EnergyPage {
+            energy: root.energy
         }
     }
     Component {

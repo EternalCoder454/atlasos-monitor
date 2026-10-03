@@ -4,6 +4,10 @@
 //! [General]
 //! RefreshInterval=1000
 //! GpuRendering=false
+//!
+//! [EnergySaver]
+//! Automatic=false
+//! Never=org.kde.kdenlive,com.obsproject.Studio
 //! ```
 //!
 //! Missing or unparseable values fall back to the defaults; an interval that
@@ -16,6 +20,9 @@ use crate::rc;
 const GROUP: &str = "General";
 const KEY_INTERVAL: &str = "RefreshInterval";
 const KEY_GPU: &str = "GpuRendering";
+const ENERGY: &str = "EnergySaver";
+const KEY_AUTOMATIC: &str = "Automatic";
+const KEY_NEVER: &str = "Never";
 
 /// The refresh intervals Settings offers, in milliseconds.
 pub const INTERVALS_MS: [i32; 4] = [500, 1000, 2000, 5000];
@@ -61,6 +68,55 @@ impl Settings {
 
     pub fn save_gpu_rendering(on: bool) -> io::Result<()> {
         rc::set(GROUP, KEY_GPU, Some(if on { "true" } else { "false" }))
+    }
+}
+
+/// Energy Saver's choices.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Energy {
+    /// Ease busy applications off by itself. Off until the user turns it on.
+    pub automatic: bool,
+    /// Applications, by ID, never eased automatically.
+    pub never: Vec<String>,
+}
+
+impl Energy {
+    pub fn load() -> Self {
+        Self::from_values(rc::get(ENERGY, KEY_AUTOMATIC), rc::get(ENERGY, KEY_NEVER))
+    }
+
+    fn from_values(automatic: Option<String>, never: Option<String>) -> Self {
+        let mut list: Vec<String> = never
+            .unwrap_or_default()
+            .split(',')
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
+            .map(str::to_owned)
+            .collect();
+        list.sort();
+        list.dedup();
+        Self {
+            automatic: automatic.is_some_and(|v| parse_bool(&v)),
+            never: list,
+        }
+    }
+
+    pub fn save_automatic(on: bool) -> io::Result<()> {
+        rc::set(
+            ENERGY,
+            KEY_AUTOMATIC,
+            Some(if on { "true" } else { "false" }),
+        )
+    }
+
+    /// Desktop IDs hold no commas, so a plain KConfig list needs no escapes.
+    pub fn save_never(ids: &[String]) -> io::Result<()> {
+        let value = ids.join(",");
+        rc::set(
+            ENERGY,
+            KEY_NEVER,
+            (!value.is_empty()).then_some(value.as_str()),
+        )
     }
 }
 
@@ -111,6 +167,14 @@ mod tests {
         assert!(got.gpu_rendering);
         assert!(Settings::from_values(None, s(" Yes ")).gpu_rendering);
         assert!(!Settings::from_values(None, s("false")).gpu_rendering);
+    }
+
+    #[test]
+    fn energy_lists_read_back() {
+        assert_eq!(Energy::from_values(None, None), Energy::default());
+        let got = Energy::from_values(s("true"), s(" b.App, a.App,,b.App "));
+        assert!(got.automatic);
+        assert_eq!(got.never, ["a.App", "b.App"]);
     }
 
     #[test]

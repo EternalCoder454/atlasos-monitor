@@ -11,6 +11,7 @@ fn main() {
         .file("src/startup.rs")
         .file("src/services.rs")
         .file("src/details.rs")
+        .file("src/energy.rs")
         .file("src/battery.rs")
         .file("src/sensors.rs")
         .file("src/sampler.rs")
