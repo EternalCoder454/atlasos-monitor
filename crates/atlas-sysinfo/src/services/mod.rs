@@ -27,6 +27,9 @@
 //!   and in between the loaded services are listed by name, with `UnitNew`
 //!   and `UnitRemoved` keeping the names.
 //!
+//! The failed services are listed again only after systemd says a service
+//! changed (`PropertiesChanged`), or once a minute.
+//!
 //! systemd sends those signals only while a client is subscribed, so the
 //! reader subscribes. The state is eventually right rather than right at
 //! once: systemd sends `UnitNew` and `UnitRemoved` a little after the
@@ -58,6 +61,8 @@ use zbus::{Connection, MatchRule, Message, MessageStream};
 
 const DEST: &str = "org.freedesktop.systemd1";
 const PATH: &str = "/org/freedesktop/systemd1";
+/// Where systemd puts its units' objects.
+const UNIT_PATH: &str = "/org/freedesktop/systemd1/unit";
 const MANAGER_IF: &str = "org.freedesktop.systemd1.Manager";
 const UNIT_IF: &str = "org.freedesktop.systemd1.Unit";
 const PROPS_IF: &str = "org.freedesktop.DBus.Properties";
@@ -391,6 +396,12 @@ struct State {
     /// `Reloading` signals so far, so a list that a reload overtook isn't
     /// taken as fresh.
     reloads: u64,
+    /// Changes to services seen so far (and anything else after which they
+    /// may have changed), so the failed ones are listed again.
+    changes: u64,
+    /// The failed services as last listed, when, and [`State::changes`]
+    /// then: see [`ServiceReader::failed`].
+    failed: Option<(Vec<String>, Instant, u64)>,
 }
 
 impl State {
@@ -403,7 +414,18 @@ impl State {
             Some("Reloading") => {
                 self.files.stale = true;
                 self.listed_at = None;
+                self.changes += 1;
                 self.reloads += 1;
+            }
+            // A unit's state changed: a service's is all that matters to
+            // the failed ones. The path is the name escaped, `.` as `_2e`.
+            Some("PropertiesChanged") => {
+                if header
+                    .path()
+                    .is_some_and(|p| p.as_str().ends_with("_2eservice"))
+                {
+                    self.changes += 1;
+                }
             }
             Some(member @ ("UnitNew" | "UnitRemoved")) => {
                 let Ok((id, _)) = msg.body().deserialize::<(String, OwnedObjectPath)>() else {
@@ -411,6 +433,9 @@ impl State {
                 };
                 if kind(&id).is_none() {
                     return;
+                }
+                if kind(&id) == Some("service") {
+                    self.changes += 1;
                 }
                 let new = member == "UnitNew";
                 if let Some(during) = &mut self.during {
@@ -430,6 +455,14 @@ impl State {
         }
     }
 
+    /// The failed services as last listed, if no service has changed since
+    /// and they are under [`FAILED_EVERY`] old at `now`.
+    fn listed_failed(&self, now: Instant) -> Option<&[String]> {
+        let (names, at, changes) = self.failed.as_ref()?;
+        (*changes == self.changes && now.saturating_duration_since(*at) < FAILED_EVERY)
+            .then_some(names.as_slice())
+    }
+
     /// Takes in what a signal stream gave: a signal, or an error when one
     /// was lost, after which everything is read again.
     fn take(&mut self, msg: zbus::Result<Message>) {
@@ -438,13 +471,14 @@ impl State {
             Err(_) => {
                 self.files.stale = true;
                 self.listed_at = None;
+                self.changes += 1;
             }
         }
     }
 }
 
-/// The connection and the signal streams, one for each signal in
-/// [`SIGNALS`].
+/// The connection and the signal streams: one for each signal in
+/// [`SIGNALS`], and one for the units' `PropertiesChanged`.
 struct Live {
     conn: Connection,
     signals: Vec<MessageStream>,
@@ -456,6 +490,9 @@ const SIGNALS: &[&str] = &["UnitFilesChanged", "Reloading", "UnitNew", "UnitRemo
 /// drops signals for a client that falls far behind, as a reader nobody
 /// reads for a long time can.
 pub const FULL_LIST_EVERY: Duration = Duration::from_secs(60);
+/// How often the failed services are listed again with no signal saying a
+/// service changed, for the same reason.
+pub const FAILED_EVERY: Duration = Duration::from_secs(60);
 /// How often the unit files are listed again for the same reason. Rarer:
 /// it costs PID 1 about 240 ms.
 pub const FILES_EVERY: Duration = Duration::from_secs(600);
@@ -515,7 +552,11 @@ impl ServiceReader {
 
     /// The names of the failed services, and nothing else. It lists the
     /// loaded services as [`ServiceReader::list`] does, without the unit
-    /// files: cheap enough to ask every few seconds.
+    /// files, and only when a service has changed since the last time
+    /// (systemd's `PropertiesChanged`, `UnitNew` or `UnitRemoved` for one)
+    /// or [`FAILED_EVERY`] has passed. Otherwise a read is one round trip,
+    /// so it can be asked every few seconds: a list costs PID 1 and the
+    /// reader about 2.5 ms each.
     ///
     /// A read that times out drops the connection, and every read in the
     /// next [`RETRY`] is `None` at once; the one after connects again, and
@@ -543,6 +584,7 @@ impl ServiceReader {
     /// has been read.
     pub fn invalidate(&mut self) {
         self.state.files.stale = true;
+        self.state.changes += 1;
     }
 
     /// Whether there is a connection, making one when the back-off allows.
@@ -566,6 +608,7 @@ impl ServiceReader {
         // Changes while there was no connection went unseen.
         self.state.files.stale = true;
         self.state.listed_at = None;
+        self.state.changes += 1;
         true
     }
 
@@ -655,6 +698,7 @@ async fn connect() -> Option<Live> {
     for member in SIGNALS {
         signals.push(signal_stream(&conn, member).await?);
     }
+    signals.push(changes_stream(&conn).await?);
     conn.call_method(Some(DEST), PATH, Some(MANAGER_IF), "Subscribe", &())
         .await
         .ok()?;
@@ -672,6 +716,29 @@ async fn signal_stream(conn: &Connection, member: &str) -> Option<MessageStream>
         .interface(MANAGER_IF)
         .ok()?
         .member(member)
+        .ok()?
+        .build();
+    MessageStream::for_match_rule(rule, conn, Some(QUEUE))
+        .await
+        .ok()
+}
+
+/// Every unit's `PropertiesChanged` for its Unit interface, queued from now
+/// on. systemd sends one for each change of a unit's state, and another for
+/// the kind's own interface, left out here. None at all while nothing
+/// changes: two minutes of an idle desktop had not one.
+async fn changes_stream(conn: &Connection) -> Option<MessageStream> {
+    let rule = MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .sender(DEST)
+        .ok()?
+        .path_namespace(UNIT_PATH)
+        .ok()?
+        .interface(PROPS_IF)
+        .ok()?
+        .member("PropertiesChanged")
+        .ok()?
+        .arg(0, UNIT_IF)
         .ok()?
         .build();
     MessageStream::for_match_rule(rule, conn, Some(QUEUE))
@@ -759,6 +826,11 @@ impl Live {
 /// asked for: systemd loads a unit that is asked for by name.
 async fn units(live: &mut Live, state: &mut State) -> zbus::Result<Vec<Unit>> {
     live.sync(state).await?;
+    synced_units(live, state).await
+}
+
+/// [`units`] after [`Live::sync`].
+async fn synced_units(live: &mut Live, state: &mut State) -> zbus::Result<Vec<Unit>> {
     let full = state
         .listed_at
         .is_none_or(|at| at.elapsed() >= FULL_LIST_EVERY);
@@ -893,7 +965,14 @@ async fn list(live: &mut Live, state: &mut State) -> zbus::Result<Vec<Service>> 
 }
 
 async fn failed(live: &mut Live, state: &mut State) -> zbus::Result<Vec<String>> {
-    let mut names: Vec<String> = units(live, state)
+    live.sync(state).await?;
+    if let Some(names) = state.listed_failed(Instant::now()) {
+        return Ok(names.to_vec());
+    }
+    // Counted from before the list: a service that changes while it is on
+    // its way has the next read list again.
+    let (at, changes) = (Instant::now(), state.changes);
+    let mut names: Vec<String> = synced_units(live, state)
         .await?
         .into_iter()
         // Services only: a failed mount or socket is shown on the page
@@ -902,6 +981,7 @@ async fn failed(live: &mut Live, state: &mut State) -> zbus::Result<Vec<String>>
         .map(|u| u.name)
         .collect();
     names.sort_by(|a, b| by_name(a, b));
+    state.failed = Some((names.clone(), at, changes));
     Ok(names)
 }
 

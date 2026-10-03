@@ -560,6 +560,52 @@ fn a_lost_signal_reads_everything_again() {
     state.take(Err(zbus::Error::Failure("lost".into())));
     assert!(state.files.stale);
     assert!(state.listed_at.is_none());
+    assert_eq!(state.changes, 1, "and the failed services");
+}
+
+#[test]
+fn failed_services_are_kept_until_a_change_or_a_minute() {
+    let mut state = State::default();
+    let at = Instant::now();
+    assert_eq!(state.listed_failed(at), None, "nothing listed yet");
+    state.failed = Some((vec!["x.service".to_owned()], at, state.changes));
+    assert_eq!(state.listed_failed(at), Some(&["x.service".to_owned()][..]));
+    assert_eq!(state.listed_failed(at + FAILED_EVERY), None, "too old");
+    // A change while the list was on its way: it was counted from before.
+    state.changes += 1;
+    assert_eq!(state.listed_failed(at), None);
+}
+
+#[test]
+fn a_service_changing_lists_the_failed_again() {
+    let mut state = State::default();
+    let changed = |path: &str| {
+        let props: HashMap<&str, OwnedValue> = HashMap::new();
+        let none: &[&str] = &[];
+        Message::signal(path, PROPS_IF, "PropertiesChanged")
+            .unwrap()
+            .sender(":1.1")
+            .unwrap()
+            .build(&(UNIT_IF, props, none))
+            .unwrap()
+    };
+    state.seen(&changed(
+        "/org/freedesktop/systemd1/unit/getty_40tty1_2eservice",
+    ));
+    assert_eq!(state.changes, 1);
+    // Other kinds don't count, nor does a unit of them coming or going.
+    state.seen(&changed(
+        "/org/freedesktop/systemd1/unit/dev_2dsda_2edevice",
+    ));
+    state.seen(&changed("/org/freedesktop/systemd1/unit/tmp_2emount"));
+    let path = OwnedObjectPath::try_from("/org/freedesktop/systemd1/unit/tmp_2emount").unwrap();
+    state.seen(&signal("UnitNew", &("tmp.mount", &path)));
+    assert_eq!(state.changes, 1);
+    // A service coming or going does, and so does a reload.
+    let path = OwnedObjectPath::try_from("/org/freedesktop/systemd1/unit/x_2eservice").unwrap();
+    state.seen(&signal("UnitRemoved", &("x.service", &path)));
+    state.seen(&signal("Reloading", &(true,)));
+    assert_eq!(state.changes, 3);
 }
 
 #[test]
