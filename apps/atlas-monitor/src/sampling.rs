@@ -198,6 +198,10 @@ pub struct AppsTick {
     pub apps: Vec<Option<Arc<App>>>,
     /// One per application (or name), in the order of their first members.
     pub groups: Vec<Group>,
+    /// The first reading since the page opened: it covers only a moment
+    /// since the baseline, so its figures (and the order they give) are
+    /// mostly zeros.
+    pub first: bool,
 }
 
 /// Every reader, owned by the worker thread.
@@ -584,7 +588,7 @@ impl Worker {
                     name,
                 });
             }
-            Page::Apps => tick.apps = self.read_apps(),
+            Page::Apps => tick.apps = self.read_apps(fresh),
             Page::Services => {
                 // The list is read on the question thread; a tick passes on
                 // the latest that has come in.
@@ -643,7 +647,7 @@ impl Worker {
     }
 
     /// Every process, with its application and grouped row.
-    fn read_apps(&mut self) -> Option<AppsTick> {
+    fn read_apps(&mut self, first: bool) -> Option<AppsTick> {
         let procs = self.procs.as_mut()?.sample().to_vec();
         let theme = &self.icon_theme;
         let resolver = self
@@ -657,6 +661,7 @@ impl Worker {
             keys,
             apps,
             groups,
+            first,
         })
     }
 

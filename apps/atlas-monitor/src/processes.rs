@@ -549,14 +549,22 @@ crate::rows::row_model!(qobject::ProcessModel, Row, "Apps");
 impl qobject::ProcessModel {
     /// A tick from the sampling thread.
     pub fn apply(mut self: Pin<&mut Self>, data: AppsTick) {
-        {
+        let after_first = {
             let mut r = self.as_mut().rust_mut();
             // Applications that have gone are forgotten as open.
             let alive: HashSet<&GroupKey> = data.groups.iter().map(|g| &g.key).collect();
             r.view.expanded.retain(|k| alive.contains(k));
-            r.data = data;
+            std::mem::replace(&mut r.data, data).first
+        };
+        // The first reading's order is mostly ties, so the one after sorts
+        // even under the pointer, which may have rested there since the
+        // page opened. Should the row menu or a question be up already, its
+        // answer still goes to its row: that was pinned by pid as it opened.
+        if after_first {
+            self.relayout_unheld();
+        } else {
+            self.relayout();
         }
-        self.relayout();
     }
 
     /// Lays the rows out again and brings the model to them, step by step.
@@ -879,6 +887,7 @@ mod tests {
             procs,
             keys,
             groups,
+            first: false,
         }
     }
 
