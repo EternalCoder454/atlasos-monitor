@@ -39,13 +39,15 @@ use atlas_sysinfo::stats::disk::{self, Disk, DiskIo, DiskSampler, Space};
 use atlas_sysinfo::stats::memory::{Memory, MemorySampler};
 use atlas_sysinfo::stats::net::{self, Addresses, NetInterface, NetIo, NetSampler};
 
-/// Disk space and addresses are read on this tick of every this many.
+/// Disk space and addresses are read, and drives and interfaces listed
+/// again, on this tick of every this many: every 5 s at the default
+/// interval, every 50 s at the longest.
 const SLOW_EVERY: u64 = 5;
 /// udisks2 refreshes SMART every 10 minutes; once a minute is plenty.
 const SMART_EVERY: Duration = Duration::from_secs(60);
 /// A page's first reading comes this soon after it opens (or one interval,
 /// if shorter): long enough for a fair CPU load, short enough not to show
-/// an empty page at a 5 s interval.
+/// an empty page at a 5 or 10 s interval.
 const FIRST_TICK: Duration = Duration::from_millis(500);
 
 /// The page on screen, from QML's `activePage` ("overview", "cpu",

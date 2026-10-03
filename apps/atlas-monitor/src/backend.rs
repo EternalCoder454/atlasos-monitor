@@ -97,8 +97,10 @@ pub struct BackendRust {
     window_height: i32,
     window_maximized: bool,
     last_page: QString,
-    /// A memory read is running; a second request is dropped.
+    /// A memory read is running; a second request waits for it.
     reading_memory: Arc<AtomicBool>,
+    /// Something changed while a read was under way: read again after it.
+    read_again: bool,
 }
 
 impl Default for BackendRust {
@@ -115,6 +117,7 @@ impl Default for BackendRust {
             own_pss: 0,
             own_rss: 0,
             reading_memory: Arc::new(AtomicBool::new(false)),
+            read_again: false,
         }
     }
 }
@@ -163,13 +166,24 @@ impl qobject::Backend {
     }
 
     pub fn release_idle_memory(self: Pin<&mut Self>) {
-        sysmem::trim();
-        self.refresh_own_memory();
+        // A grown heap takes a while to walk, and other threads' mallocs
+        // wait on it: not on this thread.
+        let qt = self.qt_thread();
+        let spawned = std::thread::Builder::new()
+            .name("trim".into())
+            .spawn(move || {
+                sysmem::trim();
+                let _ = qt.queue(|o| o.refresh_own_memory());
+            });
+        if let Err(e) = spawned {
+            log::warn!("starting the memory trim: {e}");
+        }
     }
 
-    pub fn refresh_own_memory(self: Pin<&mut Self>) {
+    pub fn refresh_own_memory(mut self: Pin<&mut Self>) {
         let flag = &self.rust().reading_memory;
         if flag.swap(true, Ordering::AcqRel) {
+            self.as_mut().rust_mut().read_again = true;
             return;
         }
         // Clears the flag when the last holder drops it: after the result is
@@ -189,6 +203,9 @@ impl qobject::Backend {
                         obj.as_mut().set_own_rss(to_i64(m.rss));
                     }
                     drop(busy);
+                    if std::mem::take(&mut obj.as_mut().rust_mut().read_again) {
+                        obj.refresh_own_memory();
+                    }
                 });
             });
         if let Err(e) = spawned {

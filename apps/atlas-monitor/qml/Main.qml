@@ -521,6 +521,7 @@ QQC2.ApplicationWindow {
         SettingsPage {
             backend: root.backend
             energy: root.energy
+            onReleaseIdleMemory: root.releaseIdleMemory()
         }
     }
     Component {
@@ -528,6 +529,21 @@ QQC2.ApplicationWindow {
         AboutPage {
             backend: root.backend
         }
+    }
+
+    // Script objects nothing holds, then the window's caches (glyphs,
+    // textures), which go as it draws its next frame; what they leave free
+    // goes back to the system a moment after.
+    function releaseIdleMemory() {
+        gc();
+        releaseResources();
+        update();
+        trim.restart();
+    }
+    Timer {
+        id: trim
+        interval: 500
+        onTriggered: root.backend.releaseIdleMemory()
     }
 
     // Pages are saved as they change, from when the last one is back.

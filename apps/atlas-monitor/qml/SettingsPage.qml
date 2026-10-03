@@ -11,6 +11,10 @@ AtlasPage {
     required property var backend
     required property var energy
 
+    // Release Idle Memory: the window does it, so leaving the page at once
+    // doesn't stop it.
+    signal releaseIdleMemory
+
     title: qsTr("Settings")
 
     Component.onCompleted: backend.refreshOwnMemory()
@@ -25,8 +29,7 @@ AtlasPage {
             delegate: SectionRow {
                 required property int modelData
                 title: modelData < 1000 ? qsTr("Every half second") : modelData === 1000 ? qsTr("Every second") : qsTr("Every %1 seconds").arg(modelData / 1000)
-                // A chart holds 60 readings.
-                subtitle: modelData < 1000 ? qsTr("Charts cover the last half minute") : modelData === 1000 ? qsTr("Charts cover the last minute") : qsTr("Charts cover the last %1 minutes").arg(modelData / 1000)
+                subtitle: qsTr("Charts cover the last %1").arg(Format.span(modelData))
                 clickable: true
                 radio: true
                 checkmark: page.backend.refreshInterval === modelData
@@ -72,21 +75,8 @@ AtlasPage {
 
             SecondaryButton {
                 text: qsTr("Release Idle Memory")
-                onClicked: {
-                    // Script objects nothing holds, then the window's
-                    // caches (glyphs, textures), which go at its next
-                    // frame; what they leave free goes back after that.
-                    gc();
-                    page.Window.window?.releaseResources();
-                    trim.restart();
-                }
+                onClicked: page.releaseIdleMemory()
             }
-        }
-
-        Timer {
-            id: trim
-            interval: 500
-            onTriggered: page.backend.releaseIdleMemory()
         }
     }
 
