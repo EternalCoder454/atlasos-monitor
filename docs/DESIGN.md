@@ -358,6 +358,37 @@ The readers the loop drives (`atlas-sysinfo`):
   online gives the charger's highest offer (`voltage_max` ×
   `current_max`, up to 240 W). To see it:
   `--example power`.
+- `smart`: `SmartReader` asks udisks2 over the system bus what a drive
+  says about itself, by kernel name (a partition gives its drive). It
+  exists only when udisks2 is running or activatable; otherwise there is
+  no health section. udisks2 reads every drive's SMART log in its own
+  10-minute housekeeping and serves the cached values without polkit, so
+  the disk page reads them when it opens and once a minute after: a few
+  calls, about 10 ms for every drive here. zbus runs on a current-thread
+  tokio runtime the reader owns, driven only during a read. A read has a
+  4 s deadline (3 s a call), and so does connecting; one that times out or
+  loses the bus drops the connection, reads are `None` at once for 30 s,
+  doubling with each failure in a row up to 5 minutes, then it connects
+  again, so a hung udisks2 can't stall the sampling thread every minute and
+  a restarted bus is picked up. An error reply (no drive, no such
+  interface) is an answer, not a failure: only that moves on from NVMe to
+  ATA. NVMe:
+  wear (`percent_used`, held to 100), spare against its threshold, the
+  critical warnings (low spare and heat are warnings, the rest are
+  failure), temperature and its warning limit, hours, cycles, data read
+  and written, unsafe shutdowns, media errors. ATA: the drive's
+  `SmartFailing` verdict as udisks2 gives it (also set when smartctl
+  couldn't get the status: a missed failure is worse than a false alarm,
+  and the failing-attribute count shows whether an attribute agrees),
+  temperature, hours, failing attributes, bad sectors summed from
+  `reallocated-sector-count` and `current-pending-sector` (udisks2's own
+  count is 0, not unknown, for a drive without them), and on a
+  solid-state drive (`RotationRate` 0) wear from
+  `wear-leveling-count`'s normalized value, a best effort since vendors
+  scale it differently (over 100 gives none); libblockdev names an
+  attribute only when smartmontools' drive database vouches for its ID
+  on that model, so the name is matched, never the ID. udisks2's 0 K,
+  0 s and -1 are "unknown", and so is a temperature outside -40..150 °C. To see it: `--example smart`.
 - History is not kept here: the app's `Series` holds it.
 
 ## Privilege
@@ -372,7 +403,7 @@ it.
 | Read /proc, /sys, hwmon | Plain files | File permissions. Another user's `/proc/<pid>/io`, `fd/` and `environ` are unreadable; shown as unknown, never as zero. |
 | End Task, Kill, Stop, Continue | `kill(2)` / `pidfd_send_signal` on the user's own processes | The kernel. Other users' processes get "Not allowed", with no escalation. |
 | Services: start, stop, restart, enable, disable | systemd's `org.freedesktop.systemd1` over the system bus (zbus) | systemd's own polkit actions (`manage-units`, `manage-unit-files`); polkit asks. |
-| Drive health (SMART) | udisks2 over the system bus (`Drive.Ata` properties) | udisks2. No section when udisks2 is missing. |
+| Drive health (SMART) | udisks2 over the system bus (`NVMe.Controller` and `Drive.Ata` properties and `SmartGetAttributes`, its cached values) | udisks2, which asks polkit for none of these. No section when udisks2 is missing. |
 | Energy Saver | `CPUWeight` on the app's unit through the **user's** systemd manager | None needed: the user's own units. Reversible; restored on exit and after a crash. |
 | Startup items | XDG autostart files in `~/.config/autostart` and the user's systemd units | The user's own files. Atlas Updater's tray entry is shown but can't be switched off. |
 

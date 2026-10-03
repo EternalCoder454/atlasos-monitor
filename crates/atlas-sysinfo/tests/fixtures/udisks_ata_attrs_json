@@ -1,0 +1,21 @@
+{
+  "type": "a(ysqiiixia{sv})",
+  "data": [
+    [
+      [5, "reallocated-sector-count", 51, 100, 100, 10, 0, 3, {}],
+      [9, "power-on-hours", 50, 99, 99, 0, 12600000000, 2, {}],
+      [12, "power-cycle-count", 50, 99, 99, 0, 812, 1, {}],
+      [177, "wear-leveling-count", 19, 97, 97, 0, 21, 1, {}],
+      [179, "used-reserved-blocks-total", 19, 100, 100, 10, 0, 1, {}],
+      [181, "program-fail-count-total", 50, 100, 100, 10, 0, 1, {}],
+      [182, "erase-fail-count-total", 50, 100, 100, 10, 0, 1, {}],
+      [183, "runtime-bad-block-total", 19, 100, 100, 10, 0, 1, {}],
+      [187, "attribute-187", 50, 100, 100, 0, 0, 0, {}],
+      [190, "airflow-temperature-celsius", 50, 66, 52, 0, 307150, 4, {}],
+      [195, "hardware-ecc-recovered", 26, 200, 200, 0, 0, 1, {}],
+      [199, "udma-crc-error-count", 62, 100, 100, 0, 0, 1, {}],
+      [235, "attribute-235", 18, 99, 99, 0, 41, 0, {}],
+      [241, "attribute-241", 50, 99, 99, 0, 23456789012, 0, {}]
+    ]
+  ]
+}

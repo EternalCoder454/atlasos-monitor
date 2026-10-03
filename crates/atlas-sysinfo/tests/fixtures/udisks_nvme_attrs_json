@@ -1,0 +1,76 @@
+{
+  "type": "a{sv}",
+  "data": [
+    {
+      "avail_spare": {
+        "type": "y",
+        "data": 100
+      },
+      "spare_thresh": {
+        "type": "y",
+        "data": 10
+      },
+      "percent_used": {
+        "type": "y",
+        "data": 6
+      },
+      "total_data_read": {
+        "type": "t",
+        "data": 108720236544000
+      },
+      "total_data_written": {
+        "type": "t",
+        "data": 90201113088000
+      },
+      "ctrl_busy_time": {
+        "type": "t",
+        "data": 7098
+      },
+      "power_cycles": {
+        "type": "t",
+        "data": 2060
+      },
+      "unsafe_shutdowns": {
+        "type": "t",
+        "data": 157
+      },
+      "media_errors": {
+        "type": "t",
+        "data": 0
+      },
+      "num_err_log_entries": {
+        "type": "t",
+        "data": 9643
+      },
+      "temp_sensors": {
+        "type": "aq",
+        "data": [
+          315,
+          313,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "wctemp": {
+        "type": "q",
+        "data": 358
+      },
+      "cctemp": {
+        "type": "q",
+        "data": 358
+      },
+      "warning_temp_time": {
+        "type": "u",
+        "data": 0
+      },
+      "critical_temp_time": {
+        "type": "u",
+        "data": 0
+      }
+    }
+  ]
+}

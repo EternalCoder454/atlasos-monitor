@@ -1,0 +1,35 @@
+{
+  "type": "a{sv}",
+  "data": [
+    {
+      "State": {
+        "type": "s",
+        "data": "live"
+      },
+      "SmartUpdated": {
+        "type": "t",
+        "data": 1790989948
+      },
+      "SmartCriticalWarning": {
+        "type": "as",
+        "data": []
+      },
+      "SmartPowerOnHours": {
+        "type": "t",
+        "data": 16595
+      },
+      "SmartTemperature": {
+        "type": "q",
+        "data": 315
+      },
+      "SmartSelftestStatus": {
+        "type": "s",
+        "data": "success"
+      },
+      "SmartSelftestPercentRemaining": {
+        "type": "i",
+        "data": -1
+      }
+    }
+  ]
+}
