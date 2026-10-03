@@ -344,7 +344,9 @@ fn disk_rates_cover_the_time_since_the_last_reading() {
 fn held_files_stay_within_the_budget_and_go_with_their_process() {
     let child = Command::new("sleep").arg("30").spawn().unwrap();
     let pid = child.id();
-    let mut s = ProcessSampler::default();
+    let mut s = ProcessSampler::new(Wanted::default());
+    // Room for every process, whatever this machine's limit.
+    s.max_held = usize::MAX;
     s.sample();
     let held = |s: &ProcessSampler| -> usize {
         s.prev
@@ -358,7 +360,6 @@ fn held_files_stay_within_the_budget_and_go_with_their_process() {
             .sum()
     };
     assert!(held(&s) > 0);
-    assert!(held(&s) <= s.max_held);
     let p = s
         .prev
         .iter()
@@ -369,13 +370,12 @@ fn held_files_stay_within_the_budget_and_go_with_their_process() {
     assert!(find(s.sample(), pid).is_none());
     assert!(s.prev.iter().all(|p| p.pid != pid));
 
-    // A budget of none holds nothing new.
-    let mut s = ProcessSampler::new(Wanted::default());
-    s.max_held = 0;
-    for p in &mut s.prev {
-        (p.stat_fd, p.statm_fd, p.io_fd) = (None, None, None);
-    }
+    // A smaller budget lets go of what it can't hold, and still lists
+    // every process.
+    let listed = s.procs.len();
+    s.max_held = 6;
     s.sample();
-    assert_eq!(held(&s), 0);
+    assert!(held(&s) <= 6, "{} held", held(&s));
     assert!(find(&s.procs, std::process::id()).is_some());
+    assert!(s.procs.len() + 20 > listed);
 }

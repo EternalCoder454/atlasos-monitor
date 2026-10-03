@@ -294,7 +294,7 @@ impl ProcessSampler {
         }
 
         let wanted = self.wanted;
-        let max_held = self.max_held;
+        let mut max_held = self.max_held;
         // Descriptors kept into `next` so far.
         let mut held = 0;
         let tick = self.tick;
@@ -322,8 +322,17 @@ impl ProcessSampler {
                 continue;
             }
 
-            let Ok(line) = dir.read_held(&mut stat_fd, keep, pid, b"/stat") else {
-                continue; // exited since the listing
+            let line = match dir.read_held(&mut stat_fd, keep, pid, b"/stat") {
+                Ok(line) => line,
+                // Out of descriptors, not exited: hold fewer from now on.
+                // The process is left out this tick and reads as new on
+                // the next (carried, its CPU time would be two ticks'
+                // over one).
+                Err(Errno::MFILE | Errno::NFILE) => {
+                    max_held /= 2;
+                    continue;
+                }
+                Err(_) => continue, // exited since the listing
             };
             let Some(stat) = parse::parse_stat(line) else {
                 continue;
@@ -486,6 +495,10 @@ impl ProcessSampler {
             if !wanted.disk {
                 io_fd = None;
             }
+            if !keep {
+                // Over the budget: held files carried from before go too.
+                (stat_fd, statm_fd, io_fd) = (None, None, None);
+            }
             held += [&stat_fd, &statm_fd, &io_fd]
                 .iter()
                 .filter(|f| f.is_some())
@@ -531,6 +544,7 @@ impl ProcessSampler {
         }
         drop(old);
         drop(old_kernel);
+        self.max_held = max_held;
 
         if wanted.network {
             share_network(&mut self.procs, &next, traffic, (rx_rate, tx_rate));

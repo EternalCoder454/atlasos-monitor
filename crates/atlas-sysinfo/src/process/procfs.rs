@@ -481,8 +481,6 @@ mod tests {
         assert_eq!(dir.read(me, b"/no-such-file", b""), Err(Errno::NOENT));
     }
 
-    /// The count from `stat` is what a walk lists: the scan skips a walk
-    /// when it hasn't moved.
     /// A held file is read again from the start; once its process has
     /// gone, reading fails rather than read whoever has the pid next.
     #[test]
@@ -513,6 +511,8 @@ mod tests {
         assert!(held.is_none());
     }
 
+    /// The count from `stat` is what a walk lists: the scan skips a walk
+    /// when it hasn't moved.
     #[test]
     fn the_descriptor_count_matches_a_walk() {
         // A child, so that no other test's descriptors come and go meanwhile.
