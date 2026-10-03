@@ -85,6 +85,32 @@ fn parse_int(b: &[u8]) -> Option<i32> {
     i32::try_from(if negative { -v } else { v }).ok()
 }
 
+/// The longest `comm` the kernel keeps (`TASK_COMM_LEN` less its NUL).
+pub const COMM_MAX: usize = 15;
+
+/// The program's whole name, where `comm` was cut at [`COMM_MAX`] bytes
+/// (`systemd-nsresou`, `dbus-broker-lau`): the file name in the first
+/// argument of `cmdline`, if it carries on from `comm`. `None` for a name
+/// that wasn't cut, or a program that renamed itself (`Isolated Web Co`) or
+/// rewrote its arguments into something else.
+pub fn full_name<'a>(comm: &[u8], cmdline: &'a [u8]) -> Option<&'a [u8]> {
+    if comm.len() < COMM_MAX {
+        return None;
+    }
+    let argv0 = cmdline.split(|&c| c == 0).next()?;
+    let file = argv0.rsplit(|&c| c == b'/').next()?;
+    if file.len() <= comm.len() || !file.starts_with(comm) {
+        return None;
+    }
+    // One that put a status after its name ("systemd-nsresourced: worker")
+    // is named up to there.
+    let end = file[comm.len()..]
+        .iter()
+        .position(|&c| c == b' ' || c == b':')
+        .map_or(file.len(), |i| comm.len() + i);
+    Some(&file[..end])
+}
+
 /// Resident pages from `/proc/<pid>/statm` (its second field). This is the
 /// figure `ps` and `top` report; the rss field of `stat` is counted
 /// differently and would make Atlas disagree with every other tool.
@@ -389,5 +415,52 @@ mod tests {
             Some(ID.as_bytes())
         );
         assert_eq!(container_from_cgroup(b""), None);
+    }
+
+    #[test]
+    fn full_names() {
+        for (name, comm, cmdline, want) in [
+            (
+                "cut",
+                "systemd-nsresou",
+                "/usr/lib/systemd/systemd-nsresourced\0",
+                Some("systemd-nsresourced"),
+            ),
+            (
+                "with arguments",
+                "dbus-broker-lau",
+                "/usr/bin/dbus-broker-launch\0--scope\0user\0",
+                Some("dbus-broker-launch"),
+            ),
+            (
+                "status after the name",
+                "systemd-nsresou",
+                "systemd-nsresourced: worker\0",
+                Some("systemd-nsresourced"),
+            ),
+            ("not cut", "bash", "/usr/bin/bash-long-name\0", None),
+            (
+                "renamed itself",
+                "Isolated Web Co",
+                "/usr/lib64/firefox/firefox\0-contentproc\0",
+                None,
+            ),
+            (
+                "exactly 15",
+                "abcdefghijklmno",
+                "/usr/bin/abcdefghijklmno\0",
+                None,
+            ),
+            ("no cmdline (a zombie)", "systemd-nsresou", "", None),
+            (
+                "rewritten arguments",
+                "systemd-nsresou",
+                "sshd: someone@pts/0\0",
+                None,
+            ),
+        ] {
+            let got = full_name(comm.as_bytes(), cmdline.as_bytes());
+            assert_eq!(got, want.map(str::as_bytes), "{name}");
+        }
     }
 }

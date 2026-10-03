@@ -35,8 +35,17 @@ fn finds_this_process() {
     let mut s = ProcessSampler::default();
     let procs = s.sample();
     let p = find(procs, me).expect("this process is not in the table");
+    // The test binary's name (atlas_sysinfo-<hash>) is longer than the 15
+    // bytes the kernel keeps, and is shown whole.
     let comm = std::fs::read_to_string("/proc/self/comm").unwrap();
-    assert_eq!(&*p.name, comm.trim_end());
+    let exe = std::env::current_exe().unwrap();
+    let file = exe.file_name().unwrap().to_str().unwrap();
+    let want = if comm.trim_end().len() < parse::COMM_MAX {
+        comm.trim_end()
+    } else {
+        file
+    };
+    assert_eq!(&*p.name, want);
     assert!(!p.kernel);
     assert!(p.memory > 0);
     assert_eq!(p.parent, std::os::unix::process::parent_id());

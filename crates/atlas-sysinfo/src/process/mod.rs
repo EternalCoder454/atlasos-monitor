@@ -114,7 +114,8 @@ pub struct Proc {
     /// Start time in clock ticks since boot. With the pid, it names this
     /// process: pass both to [`act`] so a reused pid is never signalled.
     pub start_time: u64,
-    /// The kernel's short name (`comm`, at most 15 bytes).
+    /// The kernel's short name (`comm`), or the program's file name where
+    /// the kernel cut that at 15 bytes ([`parse::full_name`]).
     pub name: Arc<str>,
     pub parent: u32,
     pub kernel: bool,
@@ -346,12 +347,35 @@ impl ProcessSampler {
                 // Another process's, given the same pid.
                 (statm_fd, io_fd) = (None, None);
             }
-            // The name is copied out of the read buffer only when it changed:
-            // a process's name almost never does.
-            let name = reuse(prev.as_ref().map(|p| &p.name), stat.name);
             let (kernel, jiffies, start_time, parent) =
                 (stat.kernel, stat.jiffies, stat.start_time, stat.ppid);
             let (faults, rss) = (stat.faults, stat.rss);
+            // The name is copied out of the read buffer only when it changed:
+            // a process's name almost never does. One the kernel cut short
+            // is looked up whole in `cmdline` when the process appears, and
+            // again with the unit (a read that failed, or caught it mid-exec,
+            // would otherwise leave it cut, and apart from its siblings).
+            let cut = stat.name.len() == parse::COMM_MAX && !kernel;
+            let rescan = (tick + u64::from(pid)).is_multiple_of(UNIT_RESCAN_TICKS);
+            let prev_name = prev.as_ref().map(|p| &p.name);
+            let name = match prev_name {
+                Some(p)
+                    if p.as_bytes().starts_with(stat.name)
+                        && (p.len() == stat.name.len() || cut)
+                        && !(cut && rescan) =>
+                {
+                    Arc::clone(p)
+                }
+                _ if cut => {
+                    let mut comm = [0; parse::COMM_MAX];
+                    comm.copy_from_slice(stat.name);
+                    match dir.read(pid, b"/cmdline", b"") {
+                        Ok(b) => reuse(prev_name, parse::full_name(&comm, b).unwrap_or(&comm)),
+                        Err(_) => reuse(prev_name, &comm),
+                    }
+                }
+                _ => reuse(prev_name, stat.name),
+            };
 
             // Read when the process first appears and on the occasional
             // rescan, not every tick: one more file per process per tick
@@ -360,7 +384,7 @@ impl ProcessSampler {
             let prev_container = prev.as_ref().and_then(|p| p.container.as_ref());
             let (unit, container) = if kernel {
                 (None, None)
-            } else if prev.is_none() || (tick + u64::from(pid)).is_multiple_of(UNIT_RESCAN_TICKS) {
+            } else if prev.is_none() || rescan {
                 match dir.read(pid, b"/cgroup", b"") {
                     Ok(b) => (
                         parse::unit_from_cgroup(b).map(|u| reuse(prev_unit, u)),
