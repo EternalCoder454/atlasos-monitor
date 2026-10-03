@@ -11,3 +11,5 @@ Keywords=task;manager;process;cpu;memory;disk;network;gpu;sensors;services;start
 StartupNotify=true
 SingleMainWindow=true
 X-KDE-StartupNotify=true
+# Windows' Task Manager keys, and Ctrl+Esc, which Plasma's System Monitor had.
+X-KDE-Shortcuts=Ctrl+Shift+Esc,Ctrl+Esc

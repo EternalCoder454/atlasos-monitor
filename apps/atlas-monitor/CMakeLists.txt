@@ -75,6 +75,10 @@ target_link_libraries(atlas-monitor-app PRIVATE
 install(TARGETS atlas-monitor-app RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES data/net.eterneon.atlas.monitor.desktop
         DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+# Plasma's global shortcuts read X-KDE-Shortcuts from the copies here: the
+# desktop file again is how Konsole and Dolphin get theirs.
+install(FILES data/net.eterneon.atlas.monitor.desktop
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/kglobalaccel)
 install(FILES data/net.eterneon.atlas.monitor.metainfo.xml
         DESTINATION ${CMAKE_INSTALL_DATADIR}/metainfo)
 install(FILES data/net.eterneon.atlas.monitor.svg

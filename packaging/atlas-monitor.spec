@@ -80,6 +80,7 @@ appstream-util validate-relax --nonet \
 %license LICENSE
 %{_bindir}/atlas-monitor
 %{_datadir}/applications/net.eterneon.atlas.monitor.desktop
+%{_datadir}/kglobalaccel/net.eterneon.atlas.monitor.desktop
 %{_datadir}/metainfo/net.eterneon.atlas.monitor.metainfo.xml
 %{_datadir}/icons/hicolor/scalable/apps/net.eterneon.atlas.monitor.svg
 %{_datadir}/icons/hicolor/16x16/apps/net.eterneon.atlas.monitor.svg
