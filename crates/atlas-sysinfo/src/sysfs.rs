@@ -87,6 +87,12 @@ impl HeldFile {
     pub fn uint(&mut self) -> Option<u64> {
         parse_uint(self.bytes()?.trim_ascii())
     }
+
+    /// Re-reads the file as a signed integer, trimmed like [`Self::uint`]:
+    /// hwmon temperatures go below zero.
+    pub fn int(&mut self) -> Option<i64> {
+        parse_int(self.bytes()?.trim_ascii())
+    }
 }
 
 /// Reads the leading ASCII digits of `b`. `None` if there are none, or if the
@@ -100,6 +106,15 @@ pub fn parse_uint(b: &[u8]) -> Option<u64> {
     b[..digits].iter().try_fold(0u64, |v, &c| {
         v.checked_mul(10)?.checked_add(u64::from(c - b'0'))
     })
+}
+
+/// Reads a signed integer: [`parse_uint`]'s digits after an optional `-`.
+/// `None` for a number that doesn't fit in an `i64`.
+pub fn parse_int(b: &[u8]) -> Option<i64> {
+    match b.strip_prefix(b"-") {
+        Some(rest) => 0i64.checked_sub_unsigned(parse_uint(rest)?),
+        None => i64::try_from(parse_uint(b)?).ok(),
+    }
 }
 
 /// Returns the `idx`-th field of `line`, fields being separated by runs of
@@ -215,6 +230,32 @@ mod tests {
         ] {
             assert_eq!(parse_uint(input.as_bytes()), None, "{input:?}");
         }
+    }
+
+    #[test]
+    fn parse_int_reads_a_sign() {
+        for (input, want) in [
+            ("0", 0),
+            ("-5000", -5000),
+            ("42\n", 42),
+            ("9223372036854775807", i64::MAX),
+            ("-9223372036854775808", i64::MIN),
+        ] {
+            assert_eq!(parse_int(input.as_bytes()), Some(want), "{input:?}");
+        }
+        for input in [
+            "",
+            "-",
+            "--5",
+            "+5",
+            "9223372036854775808",
+            "-9223372036854775809",
+        ] {
+            assert_eq!(parse_int(input.as_bytes()), None, "{input:?}");
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let mut f = HeldFile::open(write(dir.path(), "temp", " -1500\n")).unwrap();
+        assert_eq!(f.int(), Some(-1500));
     }
 
     /// `uint` and `read_uint` share one contract: whitespace around the digits

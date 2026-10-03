@@ -313,6 +313,25 @@ The readers the loop drives (`atlas-sysinfo`):
   the readings live: `--example gpu -- --clients`. `--clients` adds the
   counter path beside the driver's figure. Here amdgpu says 15% at idle
   clocks and the counters say 4%, KWin left out.
+- `sensors`: `Sensors` finds every hwmon device when made, holds each
+  reading's file open and samples them all: one `pread` per reading, 42 a
+  tick on the development machine. A device is named for what it is:
+  the processor's model, the graphics card's name as the GPU page has it,
+  "Memory Slot 2" from the SPD address, a drive's model, "Motherboard",
+  "Wi-Fi Adapter". Readings get the chip's labels made readable ("junction"
+  is "Hotspot", "Tccd1" is "Chiplet 1"). On a hybrid Intel processor,
+  coretemp's "Core 32" is "E-core 1" (core types from `cpu_atom/cpus`).
+  More than four per-core temperatures are `folded` behind the package.
+  Temperatures carry the hardware's `_max` and `_crit` as `high` and
+  `critical`, and `warmth()` grades them. Two devices with the same name get
+  what tells them apart ("(nvme1)") or a number. A motherboard chip's
+  unconnected headers (0 RPM, -128 °C) are left out and checked again every
+  30 ticks. `/sys/class/hwmon` is listed again every 10 ticks, so a device
+  that comes or goes appears or disappears. A graphics card or network adapter
+  that is runtime-suspended is not read and shows `asleep`, the GPU rule.
+  Other devices are read even when their bus sleeps: the SMBus controller
+  the memory sensors sit behind suspends between transfers. To see it:
+  `--example sensors`.
 - History is not kept here: the app's `Series` holds it.
 
 ## Privilege

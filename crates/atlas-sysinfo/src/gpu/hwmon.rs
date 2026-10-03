@@ -8,9 +8,9 @@
 //! energy (µJ): there power is the energy used since the last tick.
 
 use std::path::{Path, PathBuf};
-use std::time::Instant;
 
 use super::Gpu;
+use crate::sensors::Energy;
 use crate::sysfs::{self, HeldFile};
 
 #[derive(Debug, Default)]
@@ -28,13 +28,6 @@ pub(super) struct Hwmon {
     energy: Option<Energy>,
     core_clock: Option<HeldFile>,
     memory_clock: Option<HeldFile>,
-}
-
-/// An energy counter and its last reading, for power without a power file.
-#[derive(Debug)]
-struct Energy {
-    file: HeldFile,
-    last: Option<(u64, Instant)>,
 }
 
 impl Hwmon {
@@ -82,11 +75,7 @@ impl Hwmon {
             HeldFile::open(at("power1_input")),
         ];
         if h.power.iter().all(Option::is_none) {
-            h.energy = HeldFile::open(at("energy1_input")).map(|file| {
-                let mut e = Energy { file, last: None };
-                e.watts(); // the baseline
-                e
-            });
+            h.energy = HeldFile::open(at("energy1_input")).map(|file| Energy::new(file, true));
         }
         h
     }
@@ -123,20 +112,8 @@ impl Hwmon {
     /// whole nap would read as a low figure for a card just woken.
     pub fn rest(&mut self) {
         if let Some(e) = &mut self.energy {
-            e.last = None;
+            e.rest();
         }
-    }
-}
-
-impl Energy {
-    /// Watts since the last reading; `None` for the first.
-    fn watts(&mut self) -> Option<f64> {
-        let uj = self.file.uint()?;
-        let now = Instant::now();
-        let last = self.last.replace((uj, now));
-        let (before, then) = last?;
-        let seconds = now.duration_since(then).as_secs_f64();
-        (uj >= before && seconds > 0.0).then(|| (uj - before) as f64 / 1e6 / seconds)
     }
 }
 

@@ -12,11 +12,13 @@
 //! - [`gpu`]: graphics cards, their load, memory, temperatures and power.
 //! - [`process`]: the Apps page's process table, details and actions.
 //! - [`apps`]: which application each process is, and the table grouped by it.
+//! - [`sensors`]: every hwmon temperature, fan, voltage and power reading.
 //! - [`sysmem`]: Atlas Monitor's own memory use, for Settings.
 
 pub mod apps;
 pub mod gpu;
 pub mod process;
+pub mod sensors;
 pub mod stats;
 pub mod sysfs;
 pub mod sysmem;

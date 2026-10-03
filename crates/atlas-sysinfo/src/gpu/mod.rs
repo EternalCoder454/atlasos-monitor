@@ -133,7 +133,7 @@ pub fn cards() -> Vec<Card> {
     cards_in(Path::new(DRM_DIR))
 }
 
-fn cards_in(drm: &Path) -> Vec<Card> {
+pub(crate) fn cards_in(drm: &Path) -> Vec<Card> {
     let Ok(dir) = fs::read_dir(drm) else {
         return Vec::new();
     };
