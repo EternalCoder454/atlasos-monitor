@@ -54,6 +54,7 @@ target_compile_definitions(atlas-monitor-app PRIVATE ATLAS_MONITOR_VERSION="${PR
 
 # qmlcachegen compiles every QML file to C++ at build time; the app reads no
 # .qml from disk at run time.
+set_source_files_properties(qml/Format.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 qt_add_qml_module(atlas-monitor-app
     URI net.eterneon.atlas.monitor
     VERSION 1.0
@@ -61,7 +62,8 @@ qt_add_qml_module(atlas-monitor-app
     # their plugins at run time. No static plugin import scan needed.
     NO_IMPORT_SCAN
     QML_FILES
-        qml/Main.qml qml/OverviewPage.qml qml/SettingsPage.qml qml/AboutPage.qml
+        qml/Main.qml qml/Format.qml qml/OverviewPage.qml qml/CpuPage.qml qml/MemoryPage.qml
+        qml/SettingsPage.qml qml/AboutPage.qml
 )
 
 target_link_libraries(atlas-monitor-app PRIVATE

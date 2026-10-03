@@ -33,6 +33,8 @@ QQC2.ApplicationWindow {
 
     readonly property var pages: ({
             "overview": overviewPage,
+            "cpu": cpuPage,
+            "memory": memoryPage,
             "settings": settingsPage,
             "about": aboutPage
         })
@@ -50,6 +52,18 @@ QQC2.ApplicationWindow {
         } else {
             stack.replace(c);
         }
+    }
+
+    // A group's name above its entries; hidden when the sidebar is icons only.
+    component NavHeading: QQC2.Label {
+        Layout.fillWidth: true
+        Layout.topMargin: Kirigami.Units.largeSpacing
+        Layout.bottomMargin: Kirigami.Units.smallSpacing
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        visible: !root.compact
+        font: Kirigami.Theme.smallFont
+        opacity: 0.6
+        elide: Text.ElideRight
     }
 
     component NavItem: SidebarItem {
@@ -94,13 +108,26 @@ QQC2.ApplicationWindow {
                 anchors.topMargin: Kirigami.Units.gridUnit
                 spacing: 2
 
-                // Hardware (CPU, Memory, Disk, Network, GPU, Battery, Sensors)
-                // and System (Apps, Energy Saver, Startup, Services) come with
+                // Disk, Network, GPU, Battery and Sensors join Hardware, and
+                // System (Apps, Energy Saver, Startup, Services) comes, with
                 // their pages; see docs/DESIGN.md.
                 NavItem {
                     page: "overview"
                     text: qsTr("Overview")
                     icon.name: "speedometer"
+                }
+                NavHeading {
+                    text: qsTr("Hardware")
+                }
+                NavItem {
+                    page: "cpu"
+                    text: qsTr("Processor")
+                    icon.name: "cpu"
+                }
+                NavItem {
+                    page: "memory"
+                    text: qsTr("Memory")
+                    icon.name: "memory"
                 }
                 Item {
                     Layout.fillHeight: true
@@ -166,6 +193,20 @@ QQC2.ApplicationWindow {
             cpu: root.cpu
             memory: root.memory
             health: root.health
+        }
+    }
+    Component {
+        id: cpuPage
+        CpuPage {
+            cpu: root.cpu
+            interval: root.backend.refreshInterval
+        }
+    }
+    Component {
+        id: memoryPage
+        MemoryPage {
+            memory: root.memory
+            interval: root.backend.refreshInterval
         }
     }
     Component {
