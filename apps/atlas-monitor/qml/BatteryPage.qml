@@ -110,7 +110,7 @@ AtlasPage {
         }
         SectionRow {
             title: qsTr("Energy")
-            value: page.b.full > 0 ? qsTr("%1 of %2").arg(Format.wh(page.b.energy)).arg(Format.wh(page.b.full)) : Format.dash
+            value: page.b.full > 0 ? Format.shareFormat.arg(Format.wh(page.b.energy)).arg(Format.wh(page.b.full)) : Format.dash
         }
         SectionRow {
             title: qsTr("Battery Health")

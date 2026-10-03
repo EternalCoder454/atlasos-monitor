@@ -363,7 +363,11 @@ impl Worker {
     /// Makes the readers `page` needs, dropping the ones it doesn't. The
     /// sidebar's readers are kept, so its rates don't restart.
     pub fn set_page(&mut self, page: Page) {
-        self.cpu = matches!(page, Page::Overview | Page::Cpu).then(CpuSampler::new);
+        self.cpu = match page {
+            Page::Cpu => Some(CpuSampler::new()),
+            Page::Overview => Some(CpuSampler::without_clock()),
+            _ => None,
+        };
         self.memory = matches!(page, Page::Overview | Page::Memory).then(MemorySampler::new);
         // The Overview reads every card; a GPU page only its own, so a
         // laptop's other card can still sleep. Each sampler gets the whole

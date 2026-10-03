@@ -65,7 +65,7 @@ AtlasPage {
             chevron: true
             onClicked: page.openPage("cpu")
             title: qsTr("Processor")
-            subtitle: isNaN(page.cpu.temperature) ? "" : qsTr("%1 °C").arg(Math.round(page.cpu.temperature))
+            subtitle: isNaN(page.cpu.temperature) ? "" : Format.celsiusFormat.arg(Math.round(page.cpu.temperature))
             value: page.measured ? page.percent(page.cpu.usage) : ""
         }
         SectionRow {
@@ -107,7 +107,7 @@ AtlasPage {
                 chevron: true
                 onClicked: page.openPage("gpu:" + page.gpu.cardNames[index])
                 title: page.gpu.cardLabels[index] ?? ""
-                subtitle: isNaN(temperature) ? "" : qsTr("%1 °C").arg(Math.round(temperature))
+                subtitle: isNaN(temperature) ? "" : Format.celsiusFormat.arg(Math.round(temperature))
                 value: Format.percent(page.gpu.cardUsages[index] ?? NaN)
             }
         }

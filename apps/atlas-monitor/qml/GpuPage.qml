@@ -95,7 +95,7 @@ AtlasPage {
         }
         SectionRow {
             title: qsTr("Power Draw")
-            value: page.gpu.powerLimit > 0 && page.gpu.power > 0 ? qsTr("%1 of %2").arg(Format.watts(page.gpu.power)).arg(Format.watts(page.gpu.powerLimit)) : Format.watts(page.gpu.power)
+            value: page.gpu.powerLimit > 0 && page.gpu.power > 0 ? Format.shareFormat.arg(Format.watts(page.gpu.power)).arg(Format.watts(page.gpu.powerLimit)) : Format.watts(page.gpu.power)
         }
         SectionRow {
             title: page.gpu.integrated ? qsTr("Reserved Memory Used") : qsTr("Video Memory Used")

@@ -210,6 +210,13 @@ impl CpuSampler {
         )
     }
 
+    /// Load and temperature, for the Overview, which shows no clock: a
+    /// clock file per core is most of what the full sampler reads.
+    pub fn without_clock() -> Self {
+        let temp = find_temperature(Path::new(HWMON_DIR));
+        Self::open(Path::new("/proc/stat"), None, temp.as_deref())
+    }
+
     /// Load alone, for the sidebar: no clock or temperature files.
     pub fn load_only() -> Self {
         Self::open(Path::new("/proc/stat"), None, None)
@@ -560,5 +567,20 @@ mod tests {
         if let Some(mhz) = got.frequency_mhz {
             assert!(mhz > 0.0);
         }
+    }
+
+    /// The Overview's sampler reads the load and temperature, never a clock.
+    #[test]
+    fn live_without_clock_reads_no_clock() {
+        let mut full = CpuSampler::new();
+        let mut s = CpuSampler::without_clock();
+        assert!(s.freq.is_empty());
+        let got = s.sample().clone();
+        assert_eq!(got.frequency_mhz, None);
+        assert_eq!(got.cores.len(), full.sample().cores.len());
+        assert_eq!(
+            got.temperature.is_some(),
+            full.sample().temperature.is_some()
+        );
     }
 }

@@ -9,6 +9,16 @@ QtObject {
     // Qt.locale() builds a new object each call; the tables format every
     // cell each second.
     readonly property var locale: Qt.locale()
+    // The units, translated once: a qsTr call looks the string up each
+    // time, and the pages format their figures every second.
+    readonly property string ghzFormat: qsTr("%1 GHz")
+    readonly property string mhzFormat: qsTr("%1 MHz")
+    readonly property string celsiusFormat: qsTr("%1 °C")
+    readonly property string wattsFormat: qsTr("%1 W")
+    readonly property string hoursMinutesFormat: qsTr("%1h %2m")
+    readonly property string minutesFormat: qsTr("%1m")
+    readonly property string whFormat: qsTr("%1 Wh")
+    readonly property string shareFormat: qsTr("%1 of %2")
 
     function percent(v) {
         return isNaN(v) ? dash : Math.round(v) + "%";
@@ -20,13 +30,13 @@ QtObject {
             return dash;
         }
         if (v >= 1000) {
-            return qsTr("%1 GHz").arg(Number(v / 1000).toLocaleString(locale, "f", 2));
+            return ghzFormat.arg(Number(v / 1000).toLocaleString(locale, "f", 2));
         }
-        return qsTr("%1 MHz").arg(Math.round(v));
+        return mhzFormat.arg(Math.round(v));
     }
 
     function celsius(v) {
-        return isNaN(v) ? dash : qsTr("%1 °C").arg(Math.round(v));
+        return isNaN(v) ? dash : celsiusFormat.arg(Math.round(v));
     }
 
     // Binary units as the Go version writes them: "10.71 GiB", "512.3 MiB",
@@ -63,7 +73,7 @@ QtObject {
             return dash;
         }
         // Decimals by the rounded figure, so 9.96 is "10 W", not "10.0 W".
-        return qsTr("%1 W").arg(Number(v).toLocaleString(locale, "f", Math.round(v * 10) / 10 < 10 ? 1 : 0));
+        return wattsFormat.arg(Number(v).toLocaleString(locale, "f", Math.round(v * 10) / 10 < 10 ? 1 : 0));
     }
 
     // Seconds as the Go version writes them: "2h 15m", "40m"; -1 is a dash.
@@ -73,12 +83,12 @@ QtObject {
         }
         const h = Math.floor(s / 3600);
         const m = Math.floor(s / 60) % 60;
-        return h > 0 ? qsTr("%1h %2m").arg(h).arg(m) : qsTr("%1m").arg(m);
+        return h > 0 ? hoursMinutesFormat.arg(h).arg(m) : minutesFormat.arg(m);
     }
 
     // Watt-hours, one decimal.
     function wh(v) {
-        return isNaN(v) || v <= 0 ? dash : qsTr("%1 Wh").arg(Number(v).toLocaleString(locale, "f", 1));
+        return isNaN(v) || v <= 0 ? dash : whFormat.arg(Number(v).toLocaleString(locale, "f", 1));
     }
 
     // A count the device may not report (-1).
@@ -88,7 +98,7 @@ QtObject {
 
     // "x of y", for a part of a whole.
     function share(part, whole) {
-        return whole > 0 ? qsTr("%1 of %2").arg(size(part)).arg(scaled(whole, "")) : dash;
+        return whole > 0 ? shareFormat.arg(size(part)).arg(scaled(whole, "")) : dash;
     }
 
     // How long a drive has been powered on.
