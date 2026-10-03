@@ -12,6 +12,10 @@
 //!   thing, the sidebar shows the page's figure, so the two agree.
 //!   A graphics card is read for the sidebar only if that can't keep it
 //!   awake ([`Card::stays_awake`]).
+//! - The health check (the Overview's card, and the sidebar's alert badge
+//!   on every other page) runs every tick on the Overview and every 5th
+//!   elsewhere, with the page's figures where it has them and otherwise
+//!   the sidebar's, plus the processor's and awake cards' temperatures.
 //! - `statvfs` (disk space) and the address dump run on a page's first tick
 //!   and every 5th after. SMART and failed services are D-Bus questions on
 //!   slower timers of their own, asked on a second thread so a slow or hung
@@ -34,7 +38,7 @@ use atlas_sysinfo::process::{Proc, ProcessSampler, Wanted};
 use atlas_sysinfo::sensors::{self, Device, Sensors};
 use atlas_sysinfo::services::{Service, ServiceReader, Status};
 use atlas_sysinfo::smart::{self, SmartReader};
-use atlas_sysinfo::stats::cpu::{self, CpuInfo, CpuSample, CpuSampler};
+use atlas_sysinfo::stats::cpu::{self, CpuInfo, CpuSample, CpuSampler, TemperatureReader};
 use atlas_sysinfo::stats::disk::{self, Disk, DiskIo, DiskSampler, Space};
 use atlas_sysinfo::stats::memory::{Memory, MemorySampler};
 use atlas_sysinfo::stats::net::{self, Addresses, NetInterface, NetIo, NetSampler};
@@ -177,7 +181,7 @@ pub struct Tick {
     pub disk: Option<DiskTick>,
     pub net: Option<NetTick>,
     pub sensors: Option<Vec<Device>>,
-    /// What is wrong, for the Overview.
+    /// What is wrong, for the Overview and the sidebar's badge.
     pub health: Option<Vec<Alert>>,
     pub apps: Option<AppsTick>,
     /// The Services page's list when a read has come in since the last
@@ -217,6 +221,8 @@ pub struct Worker {
     /// Per card, in the order of `cards`: the load, for a card reading
     /// can't keep awake.
     side_gpus: Vec<Option<GpuSampler>>,
+    /// For the health check off the processor's pages.
+    side_temperature: TemperatureReader,
 
     // Read for the page on screen; `None` on other pages.
     cpu: Option<CpuSampler>,
@@ -288,6 +294,7 @@ impl Worker {
             side_cpu: CpuSampler::load_only(),
             side_memory: MemorySampler::new(),
             side_gpus: Vec::new(),
+            side_temperature: TemperatureReader::new(),
             cpu: None,
             memory: None,
             gpus: None,
@@ -470,12 +477,9 @@ impl Worker {
         // figure is never an average over a page that read the same thing.
         let side_cpu = self.side_cpu.sample().usage;
         devices.cpu_usage = Some(cpu.as_ref().map_or(side_cpu, |c| c.sample.usage));
-        devices.memory_usage = memory.as_ref().map(Memory::usage_percent).or_else(|| {
-            self.side_memory
-                .sample()
-                .as_ref()
-                .map(Memory::usage_percent)
-        });
+        // The page's figure where it has one, so the badge and the page agree.
+        let memory_now = memory.or_else(|| self.side_memory.sample());
+        devices.memory_usage = memory_now.as_ref().map(Memory::usage_percent);
         devices.gpu_usages = self
             .cards
             .iter()
@@ -503,7 +507,7 @@ impl Worker {
         match self.page.clone() {
             Page::Overview => {
                 if slow {
-                    self.read_space(None);
+                    self.read_space();
                     self.ask(Ask::Failed);
                 }
                 let names: Vec<String> = self
@@ -515,11 +519,14 @@ impl Worker {
                 for name in names {
                     self.ask_drive(name);
                 }
-                tick.health = Some(self.check(&tick));
+                let graphics = Self::page_graphics(&tick);
+                let temperature = tick.cpu.as_ref().and_then(|c| c.sample.temperature);
+                tick.health = Some(self.check(temperature, &graphics, tick.memory));
             }
             Page::Disk(name) => {
                 if slow {
-                    self.read_space(Some(&name));
+                    // Every disk's: the badge checks them all.
+                    self.read_space();
                 }
                 let index = self.disks.iter().position(|d| d.name == name);
                 self.ask_drive(name.clone());
@@ -559,6 +566,48 @@ impl Worker {
                 tick.services = self.services_news.take();
             }
             _ => {}
+        }
+        // The sidebar's badge, off the Overview: everything the Overview
+        // checks, every 5th tick. The Disk page has read every disk's space.
+        if slow && self.page != Page::Overview {
+            if !matches!(self.page, Page::Disk(_)) {
+                self.read_space();
+            }
+            self.ask(Ask::Failed);
+            let names: Vec<String> = self
+                .disks
+                .iter()
+                .filter(|d| !d.is_swap)
+                .map(|d| d.name.clone())
+                .collect();
+            for name in names {
+                self.ask_drive(name);
+            }
+            let temperature = match &tick.cpu {
+                Some(c) => c.sample.temperature,
+                None => self.side_temperature.read(),
+            };
+            // The page's card as the page read it; the others only if the
+            // sidebar reads them, since a card that is asleep stays asleep,
+            // and isn't hot.
+            let shown = Self::page_graphics(&tick);
+            let graphics = self
+                .cards
+                .iter()
+                .zip(&mut self.side_gpus)
+                .filter_map(|(card, side)| {
+                    let on_page = tick
+                        .gpus
+                        .iter()
+                        .flatten()
+                        .position(|t| t.card.node == card.node);
+                    match on_page {
+                        Some(i) => Some(shown[i].clone()),
+                        None => Some((card.name.clone(), side.as_mut()?.temperature())),
+                    }
+                })
+                .collect::<Vec<_>>();
+            tick.health = Some(self.check(temperature, &graphics, memory_now));
         }
         tick
     }
@@ -606,10 +655,10 @@ impl Worker {
         self.disks = now;
     }
 
-    /// `statvfs` for one disk, or for every disk.
-    fn read_space(&mut self, only: Option<&str>) {
+    /// `statvfs` for every disk.
+    fn read_space(&mut self) {
         for (d, space) in self.disks.iter().zip(&mut self.space) {
-            if only.is_none_or(|n| n == d.name) && !d.is_swap {
+            if !d.is_swap {
                 *space = disk::space(&d.mounts);
             }
         }
@@ -721,14 +770,26 @@ impl Worker {
         }
     }
 
-    fn check(&self, tick: &Tick) -> Vec<Alert> {
-        let graphics: Vec<Graphics> = tick
-            .gpus
+    /// The page's cards and their temperatures.
+    fn page_graphics(tick: &Tick) -> Vec<(String, Option<f64>)> {
+        tick.gpus
             .iter()
             .flatten()
-            .map(|g| Graphics {
-                name: &g.card.name,
-                temperature: g.reading.temperature,
+            .map(|g| (g.card.name.clone(), g.reading.temperature))
+            .collect()
+    }
+
+    fn check(
+        &self,
+        cpu_temperature: Option<f64>,
+        graphics: &[(String, Option<f64>)],
+        memory: Option<Memory>,
+    ) -> Vec<Alert> {
+        let graphics: Vec<Graphics> = graphics
+            .iter()
+            .map(|(name, temperature)| Graphics {
+                name,
+                temperature: *temperature,
             })
             .collect();
         let disks: Vec<DiskSpace> = self
@@ -749,9 +810,9 @@ impl Worker {
             })
             .collect();
         health::check(&Machine {
-            cpu_temperature: tick.cpu.as_ref().and_then(|c| c.sample.temperature),
+            cpu_temperature,
             graphics: &graphics,
-            memory: tick.memory,
+            memory,
             disks: &disks,
             drives: &drives,
             failed_services: &self.failed,
@@ -1005,7 +1066,7 @@ mod tests {
         w.set_page(Page::Memory);
         let t = w.tick();
         assert!(t.fresh);
-        assert!(t.cpu.is_none() && t.gpus.is_none() && t.health.is_none());
+        assert!(t.cpu.is_none() && t.gpus.is_none());
         assert!(t.sensors.is_none() && t.disk.is_none());
         // /proc/meminfo is there wherever the tests run.
         assert!(t.memory.is_some_and(|m| m.total > 0));
@@ -1075,6 +1136,23 @@ mod tests {
         let alerts = t.health.unwrap();
         assert!(alerts.windows(2).all(|p| p[0].level >= p[1].level));
         assert!(t.memory.is_some() && t.cpu.is_some() && t.gpus.is_some());
+    }
+
+    #[test]
+    fn every_page_says_what_is_wrong_now_and_then() {
+        let mut w = Worker::new();
+        for page in [Page::Memory, Page::Cpu, Page::Apps, Page::Other] {
+            w.set_page(page.clone());
+            // For the badge: on a page's first tick, then every 5th.
+            for i in 0..SLOW_EVERY + 1 {
+                let t = w.tick();
+                let alerts = t.health;
+                assert_eq!(alerts.is_some(), i % SLOW_EVERY == 0, "{page:?} tick {i}");
+                if let Some(a) = alerts {
+                    assert!(a.windows(2).all(|p| p[0].level >= p[1].level));
+                }
+            }
+        }
     }
 
     #[test]

@@ -140,6 +140,15 @@ impl Nvml {
         (unsafe { f(self.device, &mut u) } == 0).then(|| f64::from(u.gpu).min(100.0))
     }
 
+    /// The core temperature alone, °C.
+    pub fn temperature(&mut self) -> Option<f64> {
+        let f = self.temperature?;
+        let mut v: c_uint = 0;
+        // SAFETY: a live handle from `open`, and an out-pointer to the
+        // documented type.
+        (unsafe { f(self.device, TEMPERATURE_GPU, &mut v) } == 0).then(|| f64::from(v))
+    }
+
     /// Fills in what NVML reports.
     pub fn read(&mut self, g: &mut Gpu) {
         g.usage = self.usage();
@@ -162,7 +171,7 @@ impl Nvml {
             let mut v: c_uint = 0;
             (unsafe { f?(d, which, &mut v) } == 0).then_some(v)
         };
-        g.temperature = uint_of(self.temperature, TEMPERATURE_GPU).map(f64::from);
+        g.temperature = self.temperature();
         g.fan_percent = uint(self.fan).map(|p| f64::from(p).min(100.0));
         g.power = uint(self.power).map(|mw| f64::from(mw) / 1000.0);
         g.core_clock = uint_of(self.clock, CLOCK_GRAPHICS).map(f64::from);

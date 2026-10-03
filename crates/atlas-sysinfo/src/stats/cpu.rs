@@ -161,6 +161,28 @@ struct Times {
     total: u64,
 }
 
+/// The processor's package temperature alone, from a held file: for the
+/// health check on pages that don't read the processor.
+#[derive(Debug)]
+pub struct TemperatureReader(Option<HeldFile>);
+
+impl TemperatureReader {
+    pub fn new() -> Self {
+        Self(find_temperature(Path::new(HWMON_DIR)).and_then(HeldFile::open))
+    }
+
+    /// °C, or `None` without a coretemp/k10temp sensor.
+    pub fn read(&mut self) -> Option<f64> {
+        Some(self.0.as_mut()?.uint()? as f64 / 1000.0)
+    }
+}
+
+impl Default for TemperatureReader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Samples processor load, clock and temperature from held files.
 #[derive(Debug)]
 pub struct CpuSampler {

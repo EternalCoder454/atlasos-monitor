@@ -410,6 +410,8 @@ impl GpuSampler {
         let node = card.device.parent().unwrap_or(&card.device);
         if self.load_only {
             self.load = Self::own_figure(card, node).unwrap_or(Load::None);
+            // For `temperature`; `sample` leaves it alone.
+            self.hwmon = hwmon::Hwmon::open(&card.device);
             return;
         }
         self.memory_used = HeldFile::open(dev("mem_info_vram_used"));
@@ -486,6 +488,9 @@ impl GpuSampler {
             return g;
         }
         g.usage = self.load.sample();
+        if self.load_only {
+            return g;
+        }
         let uint = |f: &mut Option<HeldFile>| f.as_mut().and_then(HeldFile::uint);
         g.memory_used = uint(&mut self.memory_used);
         g.gtt_used = uint(&mut self.gtt_used);
@@ -494,6 +499,19 @@ impl GpuSampler {
             g.core_clock = uint(&mut self.clock).map(|mhz| mhz as f64);
         }
         g
+    }
+
+    /// The card's temperature alone, °C: for the health check on pages
+    /// that don't show the card, read on a slower timer than the load.
+    /// `None` while it sleeps or before it has been read awake.
+    pub fn temperature(&mut self) -> Option<f64> {
+        if !self.ready || self.asleep() {
+            return None;
+        }
+        match &mut self.load {
+            Load::Nvml(n) => n.temperature(),
+            _ => self.hwmon.temperature(),
+        }
     }
 
     /// Whether the kernel has the card suspended. Read every tick: one

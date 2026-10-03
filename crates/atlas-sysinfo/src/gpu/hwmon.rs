@@ -108,6 +108,11 @@ impl Hwmon {
         g.memory_clock = mhz(&mut self.memory_clock);
     }
 
+    /// The card's temperature alone, °C.
+    pub fn temperature(&mut self) -> Option<f64> {
+        Some(self.temperature.as_mut()?.uint()? as f64 / 1000.0)
+    }
+
     /// Forgets the energy baseline: the card slept, and power over the
     /// whole nap would read as a low figure for a card just woken.
     pub fn rest(&mut self) {

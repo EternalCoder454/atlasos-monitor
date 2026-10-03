@@ -159,7 +159,7 @@ QQC2.ApplicationWindow {
         compact: root.compact
         selected: root.currentPage === page
         QQC2.ToolTip.visible: compact && hovered
-        QQC2.ToolTip.text: text
+        QQC2.ToolTip.text: badge.length > 0 ? qsTr("%1 · %2").arg(text).arg(badgeText) : text
         QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
         onClicked: root.showPage(page)
     }
@@ -197,10 +197,14 @@ QQC2.ApplicationWindow {
 
                 // Energy Saver, Startup and Services join System with their
                 // pages; see docs/DESIGN.md.
+                // The badge stands in for Go's title-bar warning button: the
+                // Overview's list is a click away from any page.
                 NavItem {
                     page: "overview"
                     text: qsTr("Overview")
                     icon.name: "speedometer"
+                    badge: root.health.level === 2 ? "dialog-error" : root.health.level === 1 ? "dialog-warning" : ""
+                    badgeText: root.health.titles.length === 1 ? root.health.titles[0] : qsTr("%1 things need attention").arg(root.health.titles.length)
                 }
                 NavHeading {
                     text: qsTr("Hardware")
