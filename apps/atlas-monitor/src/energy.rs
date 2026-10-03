@@ -282,6 +282,19 @@ fn listed(c: &Controller, resolver: &mut Resolver) -> Vec<Row> {
         .collect()
 }
 
+/// Clears the page's `busy` when the controller's thread ends. On a
+/// normal close the object is already gone and the queue refuses it.
+struct Ended(CxxQtThread<qobject::EnergySaver>);
+
+impl Drop for Ended {
+    fn drop(&mut self) {
+        let _ = self.0.queue(|mut o| {
+            o.as_mut().rust_mut().pending = 0;
+            o.set_busy(false);
+        });
+    }
+}
+
 /// The controller's thread: a tick every [`ease::TICK_EVERY`], the page's
 /// commands between, and the rows posted after each.
 fn run(
@@ -291,8 +304,10 @@ fn run(
     theme: String,
     done: Sender<()>,
 ) {
-    // Dropped on every way out, a panic included: Runner stops waiting.
+    // Dropped on every way out, a panic included: Runner stops waiting,
+    // and the page stops waiting for answers that won't come.
     let _done = done;
+    let _ended = Ended(qt.clone());
     let mut c = match ease_system::open(ease_system::state_file()) {
         Ok(c) => c,
         Err(u) => {
@@ -409,7 +424,10 @@ impl qobject::EnergySaver {
         self.as_mut().rust_mut().pending += 1;
         self.as_mut().set_busy(true);
         if !self.send(command) {
-            self.as_mut().answered();
+            // The thread is gone, and with it every answer still owed,
+            // this one's and any it died before giving.
+            self.as_mut().rust_mut().pending = 0;
+            self.as_mut().set_busy(false);
             let name = self
                 .rust()
                 .rows
