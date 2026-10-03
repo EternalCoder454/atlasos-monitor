@@ -26,6 +26,53 @@ QQC2.ApplicationWindow {
     required property var services
     required property var details
     required property var energy
+    required property var themeIcons
+
+    // Each page's icon, all from one set so they match. Dracula (AtlasOS's
+    // theme) draws the usual names in a mix of outline, solid and colour, and
+    // the ones it also has in colour (system-run, help-about) come out in
+    // colour at the sidebar's size, so a theme with this whole solid set gets it.
+    // Others get Breeze's monochrome names. Breeze's chip is named for GPU
+    // effects, and it has no graphics card, so the GPU gets the display.
+    readonly property var icons: {
+        const solid = {
+            overview: "gpm-monitor",
+            cpu: "cpu-frequency-indicator",
+            memory: "indicator-sensors-memory",
+            disk: "indicator-sensors-disk",
+            wired: "knemo-network-idle",
+            wireless: "network-wireless-signal-excellent",
+            gpu: "indicator-sensors-gpu",
+            battery: "battery-good",
+            sensors: "indicator-sensors-fan",
+            apps: "view-process-all",
+            energy: "system-devices-panel",
+            startup: "media-playback-start",
+            services: "view-process-system",
+            settings: "configure",
+            about: "hb-activity"
+        };
+        if (Object.values(solid).every(name => themeIcons.has(name))) {
+            return solid;
+        }
+        return {
+            overview: "dashboard-show",
+            cpu: "show-gpu-effects-symbolic",
+            memory: "media-flash-memory-stick-symbolic",
+            disk: "drive-harddisk-symbolic",
+            wired: "network-wired-symbolic",
+            wireless: "network-wireless-symbolic",
+            gpu: "computer-symbolic",
+            battery: "battery-good-symbolic",
+            sensors: "temperature-normal",
+            apps: "view-process-all",
+            energy: "battery-profile-powersave-symbolic",
+            startup: "system-run-symbolic",
+            services: "network-server-symbolic",
+            settings: "configure",
+            about: "help-about-symbolic"
+        };
+    }
 
     title: qsTr("Atlas Monitor")
     // As it was left (backend.rs reads it once); the window's minimum
@@ -217,7 +264,7 @@ QQC2.ApplicationWindow {
                 NavItem {
                     page: "overview"
                     text: qsTr("Overview")
-                    icon.name: "speedometer"
+                    icon.name: root.icons.overview
                     badge: root.health.level === 2 ? "dialog-error" : root.health.level === 1 ? "dialog-warning" : ""
                     badgeText: root.health.titles.length === 1 ? root.health.titles[0] : root.health.titles.length > 1 ? qsTr("%1 things need attention").arg(root.health.titles.length) : qsTr("Something needs attention")
                 }
@@ -228,18 +275,18 @@ QQC2.ApplicationWindow {
                     page: "cpu"
                     text: qsTr("Processor")
                     value: root.load(root.devices.cpuUsage)
-                    icon.name: "cpu-frequency-indicator"
+                    icon.name: root.icons.cpu
                 }
                 NavItem {
                     page: "memory"
                     text: qsTr("Memory")
                     value: root.load(root.devices.memoryUsage)
-                    icon.name: "media-flash-memory-stick-symbolic"
+                    icon.name: root.icons.memory
                 }
                 DeviceGroup {
                     kind: "disk"
                     text: qsTr("Disk")
-                    iconName: "drive-harddisk-symbolic"
+                    iconName: root.icons.disk
                     names: root.devices.diskNames
                     labels: root.devices.diskLabels
                     rates: root.devices.diskRates
@@ -247,7 +294,7 @@ QQC2.ApplicationWindow {
                 DeviceGroup {
                     kind: "network"
                     text: qsTr("Network")
-                    iconName: root.devices.routeWireless ? "network-wireless-symbolic" : "network-wired-symbolic"
+                    iconName: root.devices.routeWireless ? root.icons.wireless : root.icons.wired
                     names: root.devices.netNames
                     labels: root.devices.netLabels
                     rates: root.devices.netRates
@@ -258,13 +305,13 @@ QQC2.ApplicationWindow {
                     page: "gpu:" + (root.gpu.cardNames[0] ?? "")
                     text: qsTr("Graphics")
                     value: root.load(root.devices.gpuUsages[0] ?? NaN)
-                    icon.name: "show-gpu-effects"
+                    icon.name: root.icons.gpu
                 }
                 DeviceGroup {
                     visible: names.length > 1
                     kind: "gpu"
                     text: qsTr("Graphics")
-                    iconName: "show-gpu-effects"
+                    iconName: root.icons.gpu
                     names: root.gpu.cardNames
                     labels: root.gpu.cardLabels
                     loads: root.devices.gpuUsages
@@ -274,13 +321,13 @@ QQC2.ApplicationWindow {
                     page: "battery:" + (root.battery.packNames[0] ?? "")
                     text: qsTr("Battery")
                     value: Format.percent(root.battery.packPercents[0] ?? NaN)
-                    icon.name: "battery-symbolic"
+                    icon.name: root.icons.battery
                 }
                 DeviceGroup {
                     visible: names.length > 1
                     kind: "battery"
                     text: qsTr("Battery")
-                    iconName: "battery-symbolic"
+                    iconName: root.icons.battery
                     names: root.battery.packNames
                     labels: root.battery.packLabels
                     percents: root.battery.packPercents
@@ -289,7 +336,7 @@ QQC2.ApplicationWindow {
                     visible: root.sensors.available
                     page: "sensors"
                     text: qsTr("Sensors")
-                    icon.name: "temperature-normal"
+                    icon.name: root.icons.sensors
                 }
                 NavHeading {
                     text: qsTr("System")
@@ -297,22 +344,22 @@ QQC2.ApplicationWindow {
                 NavItem {
                     page: "apps"
                     text: qsTr("Apps")
-                    icon.name: "view-process-all"
+                    icon.name: root.icons.apps
                 }
                 NavItem {
                     page: "energy"
                     text: qsTr("Energy Saver")
-                    icon.name: "battery-profile-powersave-symbolic"
+                    icon.name: root.icons.energy
                 }
                 NavItem {
                     page: "startup"
                     text: qsTr("Startup")
-                    icon.name: "system-run-symbolic"
+                    icon.name: root.icons.startup
                 }
                 NavItem {
                     page: "services"
                     text: qsTr("Services")
-                    icon.name: "services"
+                    icon.name: root.icons.services
                 }
                 Item {
                     Layout.fillHeight: true
@@ -320,12 +367,12 @@ QQC2.ApplicationWindow {
                 NavItem {
                     page: "settings"
                     text: qsTr("Settings")
-                    icon.name: "configure"
+                    icon.name: root.icons.settings
                 }
                 NavItem {
                     page: "about"
                     text: qsTr("About")
-                    icon.name: "help-about-symbolic"
+                    icon.name: root.icons.about
                 }
             }
         }
@@ -467,6 +514,7 @@ QQC2.ApplicationWindow {
             devices: root.devices
             gpu: root.gpu
             battery: root.battery
+            icons: root.icons
             onOpenPage: name => root.showPage(name)
         }
     }

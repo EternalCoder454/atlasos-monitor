@@ -14,6 +14,8 @@ AtlasPage {
     required property var devices
     required property var gpu
     required property var battery
+    // The sidebar's icons (Main.qml).
+    required property var icons
 
     // A row asks for its page ("cpu", "disk:nvme0n1").
     signal openPage(string name)
@@ -61,7 +63,7 @@ AtlasPage {
 
     Section {
         SectionRow {
-            iconName: "cpu-frequency-indicator"
+            iconName: page.icons.cpu
             chevron: true
             onClicked: page.openPage("cpu")
             title: qsTr("Processor")
@@ -69,7 +71,7 @@ AtlasPage {
             value: page.measured ? page.percent(page.cpu.usage) : ""
         }
         SectionRow {
-            iconName: "media-flash-memory-stick-symbolic"
+            iconName: page.icons.memory
             chevron: true
             onClicked: page.openPage("memory")
             title: qsTr("Memory")
@@ -80,7 +82,7 @@ AtlasPage {
             model: page.devices.diskNames.length
             SectionRow {
                 required property int index
-                iconName: "drive-harddisk-symbolic"
+                iconName: page.icons.disk
                 chevron: true
                 onClicked: page.openPage("disk:" + page.devices.diskNames[index])
                 title: page.devices.diskLabels[index] ?? ""
@@ -91,7 +93,7 @@ AtlasPage {
             model: page.devices.netNames.length
             SectionRow {
                 required property int index
-                iconName: "network-wired-symbolic"
+                iconName: page.icons.wired
                 chevron: true
                 onClicked: page.openPage("network:" + page.devices.netNames[index])
                 title: page.devices.netLabels[index] ?? ""
@@ -103,7 +105,7 @@ AtlasPage {
             SectionRow {
                 required property int index
                 readonly property real temperature: page.gpu.cardTemperatures[index] ?? NaN
-                iconName: "show-gpu-effects"
+                iconName: page.icons.gpu
                 chevron: true
                 onClicked: page.openPage("gpu:" + page.gpu.cardNames[index])
                 title: page.gpu.cardLabels[index] ?? ""
@@ -115,7 +117,7 @@ AtlasPage {
         // packs are a click away.
         SectionRow {
             visible: page.battery.packNames.length > 0
-            iconName: "battery-symbolic"
+            iconName: page.icons.battery
             chevron: true
             onClicked: page.openPage("battery:" + page.battery.packNames[0])
             title: qsTr("Battery")

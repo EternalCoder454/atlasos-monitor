@@ -130,6 +130,19 @@ static void closeOnQuitSignals(QQuickWindow *window)
     }
 }
 
+// Whether the icon theme has an icon, for QML to pick its set of icons by
+// (Main.qml, icons).
+class ThemeIcons : public QObject
+{
+    Q_OBJECT
+public:
+    using QObject::QObject;
+    Q_INVOKABLE bool has(const QString &name) const
+    {
+        return QIcon::hasThemeIcon(name);
+    }
+};
+
 static QtMessageHandler s_previousHandler = nullptr;
 
 static void messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
@@ -230,7 +243,10 @@ int main(int argc, char *argv[])
         {"details", made.details},
         {"energy", made.energy},
     };
+    ThemeIcons themeIcons;
+    QQmlEngine::setObjectOwnership(&themeIcons, QQmlEngine::CppOwnership);
     QVariantMap initial;
+    initial.insert(QStringLiteral("themeIcons"), QVariant::fromValue(static_cast<QObject *>(&themeIcons)));
     for (const auto &[name, object] : objects) {
         auto *o = static_cast<QObject *>(object);
         QQmlEngine::setObjectOwnership(o, QQmlEngine::CppOwnership);
@@ -267,3 +283,5 @@ int main(int argc, char *argv[])
     }
     return rc;
 }
+
+#include "main.moc"
