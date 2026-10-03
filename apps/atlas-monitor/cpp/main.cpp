@@ -12,8 +12,13 @@
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QSGRendererInterface>
+#include <QSocketNotifier>
 
+#include <cerrno>
+#include <csignal>
 #include <cstdio>
+#include <fcntl.h>
+#include <unistd.h>
 #include <utility>
 
 // Rust, see src/lib.rs, src/crash.rs, src/logging.rs and src/settings.rs.
@@ -82,6 +87,48 @@ private:
     QObject *m_sampler;
     bool m_unseen = false;
 };
+
+// Asked to quit by a signal (SIGTERM from kill or systemd, SIGINT, SIGHUP):
+// close the window as the user would, so its state is saved and Energy Saver
+// puts back what it eased. Left to the default, the process just dies, and
+// the eases wait for the next start. The handler only writes to a pipe; the
+// event loop does the rest. A second signal kills as before (SA_RESETHAND),
+// in case quitting itself hangs.
+static int s_quitPipe[2] = {-1, -1};
+
+static void onQuitSignal(int)
+{
+    const int saved = errno;
+    const char b = 1;
+    [[maybe_unused]] const ssize_t n = ::write(s_quitPipe[1], &b, 1);
+    errno = saved;
+}
+
+static void closeOnQuitSignals(QQuickWindow *window)
+{
+    if (::pipe2(s_quitPipe, O_CLOEXEC | O_NONBLOCK) != 0) {
+        return;
+    }
+    auto *notifier = new QSocketNotifier(s_quitPipe[0], QSocketNotifier::Read, window);
+    QObject::connect(notifier, &QSocketNotifier::activated, window, [window] {
+        char buf[16];
+        while (::read(s_quitPipe[0], buf, sizeof buf) > 0) {
+        }
+        // close() does nothing to a window that isn't shown.
+        if (window->isVisible()) {
+            window->close();
+        } else {
+            QCoreApplication::quit();
+        }
+    });
+    struct sigaction sa = {};
+    sa.sa_handler = onQuitSignal;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART | SA_RESETHAND;
+    for (int sig : {SIGTERM, SIGINT, SIGHUP}) {
+        sigaction(sig, &sa, nullptr);
+    }
+}
 
 static QtMessageHandler s_previousHandler = nullptr;
 
@@ -200,6 +247,7 @@ int main(int argc, char *argv[])
         QPointer<QQuickWindow> window = qobject_cast<QQuickWindow *>(engine.rootObjects().value(0));
         if (window) {
             new PauseWhenUnseen(window, static_cast<QObject *>(made.sampler));
+            closeOnQuitSignals(window);
             QObject::connect(&service, &KDBusService::activateRequested, window, [window](const QStringList &, const QString &) {
                 // KDBusService put the second launch's activation token in the
                 // environment; on Wayland, KWin only lets a window take focus
