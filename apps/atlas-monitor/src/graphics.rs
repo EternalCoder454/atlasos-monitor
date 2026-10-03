@@ -159,9 +159,19 @@ fn size(v: Option<u64>) -> i64 {
     v.map_or(-1, |v| i64::try_from(v).unwrap_or(i64::MAX))
 }
 
+/// A per-card list's `i`th value, NaN past its end.
+fn nth(list: &QList<f64>, i: usize) -> f64 {
+    isize::try_from(i)
+        .ok()
+        .and_then(|i| list.get(i))
+        .copied()
+        .unwrap_or(f64::NAN)
+}
+
 impl qobject::GpuStats {
     /// The card list, from a fresh tick. Unchanged lists are left alone,
-    /// so the sidebar doesn't rebuild on every page change.
+    /// so the sidebar doesn't rebuild on every page change. Changed, the
+    /// Overview's figures follow their cards to the new places.
     pub fn set_cards(mut self: Pin<&mut Self>, cards: &[Card]) {
         let mut names = QStringList::default();
         let mut labels = QStringList::default();
@@ -170,9 +180,25 @@ impl qobject::GpuStats {
             labels.append(QString::from(&c.name));
         }
         if names != *self.card_names() || labels != *self.card_labels() {
+            let usages = self.carried(&names, |o| o.card_usages());
+            let temperatures = self.carried(&names, |o| o.card_temperatures());
+            self.as_mut().set_card_usages(usages);
+            self.as_mut().set_card_temperatures(temperatures);
             self.as_mut().set_card_labels(labels);
             self.as_mut().set_card_names(names);
         }
+    }
+
+    /// A per-card list laid out for `names`: each card's last value, NaN
+    /// for a card not listed before.
+    fn carried(&self, names: &QStringList, values: impl Fn(&Self) -> &QList<f64>) -> QList<f64> {
+        let old = values(self);
+        let mut list = QList::default();
+        for name in names.iter() {
+            let at = self.card_names().iter().position(|n| n == name);
+            list.append(at.map_or(f64::NAN, |i| nth(old, i)));
+        }
+        list
     }
 
     pub fn show(mut self: Pin<&mut Self>, name: &QString, label: &QString) {
@@ -209,20 +235,30 @@ impl qobject::GpuStats {
     }
 
     /// Every card's load and temperature, in the sidebar's order. A card
-    /// without a reading (not sampled on this page) is NaN.
+    /// this tick didn't read (a GPU page reads only its own) keeps its last
+    /// figures, so the Overview doesn't open on dashes.
     pub fn set_loads(mut self: Pin<&mut Self>, ticks: &[GpuTick]) {
         let mut usages = QList::default();
         let mut temperatures = QList::default();
-        for name in self.card_names().iter() {
-            let t = ticks.iter().find(|t| QString::from(&t.card.node) == *name);
-            let g = t.map(|t| &t.reading);
-            usages.append(g.and_then(|g| g.usage).unwrap_or(f64::NAN));
-            // Asleep, the temperature wasn't read: no figure beats an old one.
-            temperatures.append(
-                g.filter(|g| !g.asleep)
-                    .and_then(|g| g.temperature)
-                    .unwrap_or(f64::NAN),
-            );
+        for (i, name) in self.card_names().iter().enumerate() {
+            match ticks.iter().find(|t| QString::from(&t.card.node) == *name) {
+                Some(t) => {
+                    let g = &t.reading;
+                    usages.append(g.usage.unwrap_or(f64::NAN));
+                    // Asleep, the temperature wasn't read: no figure beats
+                    // an old one.
+                    temperatures.append(
+                        Some(g)
+                            .filter(|g| !g.asleep)
+                            .and_then(|g| g.temperature)
+                            .unwrap_or(f64::NAN),
+                    );
+                }
+                None => {
+                    usages.append(nth(self.card_usages(), i));
+                    temperatures.append(nth(self.card_temperatures(), i));
+                }
+            }
         }
         self.as_mut().set_card_usages(usages);
         self.as_mut().set_card_temperatures(temperatures);

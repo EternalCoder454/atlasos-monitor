@@ -173,10 +173,11 @@ impl qobject::DeviceList {
     pub fn apply(mut self: Pin<&mut Self>, d: Devices) {
         if let Some(disks) = &d.disks {
             let names = strings(disks.iter().map(|d| d.name.as_str()));
+            // Labels before names: a row is made per name and reads its label.
             if names != *self.disk_names() {
-                self.as_mut().set_disk_names(names);
                 self.as_mut()
                     .set_disk_labels(strings(disks.iter().map(Disk::label)));
+                self.as_mut().set_disk_names(names);
             }
         }
         if let Some(interfaces) = &d.interfaces {
@@ -185,9 +186,9 @@ impl qobject::DeviceList {
             if names != *self.net_names() {
                 self.as_mut().rust_mut().interfaces =
                     listed.iter().map(|(n, _)| n.clone()).collect();
-                self.as_mut().set_net_names(names);
                 self.as_mut()
                     .set_net_labels(strings(listed.iter().map(|(_, l)| l.as_str())));
+                self.as_mut().set_net_names(names);
             }
         }
         // Rates every tick: the disks' come in the list's order.

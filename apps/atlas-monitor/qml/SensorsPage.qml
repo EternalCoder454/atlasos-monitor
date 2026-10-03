@@ -54,6 +54,8 @@ AtlasPage {
             readonly property int count: page.s.counts[index] ?? 0
             readonly property bool folds: page.s.folded.slice(first, first + count).includes(true)
             property bool expanded: false
+            // A delegate reused for another device starts folded.
+            onTitleChanged: expanded = false
 
             title: page.s.names[index] ?? ""
             // The kernel's name for it: what a search for the chip finds.

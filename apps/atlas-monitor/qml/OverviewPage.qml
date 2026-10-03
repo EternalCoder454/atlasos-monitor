@@ -101,7 +101,8 @@ AtlasPage {
                 value: Format.percent(page.gpu.cardUsages[index] ?? NaN)
             }
         }
-        // The batteries together; a group's packs are a click away.
+        // The batteries together (the first entry is the total); a group's
+        // packs are a click away.
         SectionRow {
             visible: page.battery.packNames.length > 0
             iconName: "battery"
