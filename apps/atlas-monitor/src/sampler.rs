@@ -42,6 +42,7 @@ use cxx_qt::{CxxQtThread, CxxQtType};
 use cxx_qt_lib::QString;
 
 use crate::devices::qobject::{DeviceList, DiskStats, NetStats};
+use crate::graphics::qobject::GpuStats;
 use crate::sampling::{Loop, Page, Tick};
 use crate::stats::qobject::{CpuStats, HealthStatus, MemoryStats};
 
@@ -87,6 +88,7 @@ pub struct Sink {
     pub devices: CxxQtThread<DeviceList>,
     pub disk: CxxQtThread<DiskStats>,
     pub net: CxxQtThread<NetStats>,
+    pub gpu: CxxQtThread<GpuStats>,
 }
 
 impl Sink {
@@ -111,7 +113,13 @@ impl Sink {
         if let Some(n) = tick.net {
             let _ = self.net.queue(move |o| o.apply(n, fresh));
         }
-        let devices = tick.devices;
+        let mut devices = tick.devices;
+        if let Some(cards) = devices.cards.take() {
+            let _ = self.gpu.queue(move |o| o.set_cards(&cards));
+        }
+        if let Some(g) = tick.gpus {
+            let _ = self.gpu.queue(move |o| o.apply(g, fresh));
+        }
         let _ = self.devices.queue(move |o| o.apply(devices));
     }
 }

@@ -53,6 +53,11 @@ QtObject {
         return isNaN(v) || v < 0 ? dash : scaled(v, "/s");
     }
 
+    // Watts; a card that doesn't say reads NaN or 0.
+    function watts(v) {
+        return isNaN(v) || v <= 0 ? dash : qsTr("%1 W").arg(Math.round(v));
+    }
+
     // A count the device may not report (-1).
     function count(v) {
         return v < 0 ? dash : Number(v).toLocaleString(Qt.locale(), "f", 0);

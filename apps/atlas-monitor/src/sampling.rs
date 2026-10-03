@@ -50,7 +50,8 @@ pub enum Page {
     Memory,
     Disk(String),
     Network(String),
-    Gpu,
+    /// A card by its DRM node; every card is read, for the sidebar's list.
+    Gpu(String),
     Battery(String),
     Sensors,
     #[default]
@@ -67,7 +68,7 @@ impl Page {
             "memory" => Self::Memory,
             "disk" if !device.is_empty() => Self::Disk(device),
             "network" if !device.is_empty() => Self::Network(device),
-            "gpu" => Self::Gpu,
+            "gpu" if !device.is_empty() => Self::Gpu(device),
             "battery" if !device.is_empty() => Self::Battery(device),
             "sensors" => Self::Sensors,
             _ => Self::Other,
@@ -80,8 +81,12 @@ impl Page {
 pub struct Devices {
     /// Whole disks, root first, swap last. Sent with a fresh tick only.
     pub disks: Option<Vec<Disk>>,
-    /// Network interfaces. Sent with a fresh tick only.
+    /// Network interfaces. Sent with a fresh tick, and with a slow one that
+    /// finds an adapter plugged in or out.
     pub interfaces: Option<Vec<NetInterface>>,
+    /// Graphics cards, the one most worth showing first. Sent with a fresh
+    /// tick only.
+    pub cards: Option<Vec<Card>>,
     /// Throughput per disk, in the order of the list.
     pub disk_io: Vec<DiskIo>,
     /// Throughput per interface present now.
@@ -107,6 +112,8 @@ pub struct CpuTick {
 pub struct GpuTick {
     pub card: Card,
     pub reading: Gpu,
+    /// Watts; `None` until the card has been awake.
+    pub power_limit: Option<f64>,
 }
 
 /// The Disk page's drive.
@@ -177,7 +184,7 @@ pub struct Worker {
 
     // Read once, kept.
     cpu_info: Option<CpuInfo>,
-    cards: Option<Vec<Card>>,
+    cards: Vec<Card>,
 
     // Slow figures, kept between their reads.
     space: Vec<Option<Space>>,
@@ -219,7 +226,7 @@ impl Worker {
             gpus: None,
             sensors: None,
             cpu_info: None,
-            cards: None,
+            cards: gpu::cards(),
             questions: None,
             asked: HashMap::new(),
             drives: HashMap::new(),
@@ -239,11 +246,10 @@ impl Worker {
     pub fn set_page(&mut self, page: Page) {
         self.cpu = matches!(page, Page::Overview | Page::Cpu).then(CpuSampler::new);
         self.memory = matches!(page, Page::Overview | Page::Memory).then(MemorySampler::new);
-        self.gpus = matches!(page, Page::Overview | Page::Gpu).then(|| {
-            let cards = self.cards.get_or_insert_with(gpu::cards);
-            cards
+        self.gpus = matches!(page, Page::Overview | Page::Gpu(_)).then(|| {
+            self.cards
                 .iter()
-                .map(|c| (c.clone(), GpuSampler::new(c, cards)))
+                .map(|c| (c.clone(), GpuSampler::new(c, &self.cards)))
                 .collect()
         });
         self.sensors = (page == Page::Sensors && sensors::available()).then(Sensors::new);
@@ -262,9 +268,24 @@ impl Worker {
         self.ticks += 1;
         self.take_answers();
 
+        // A USB adapter plugged in or out joins or leaves the sidebar within
+        // a slow tick.
+        let mut plugged = false;
+        if slow {
+            let now = net::interfaces();
+            plugged = now
+                .iter()
+                .map(|i| &i.name)
+                .ne(self.interfaces.iter().map(|i| &i.name));
+            if plugged {
+                self.interfaces = now;
+            }
+        }
+
         let devices = Devices {
             disks: fresh.then(|| self.disks.clone()),
-            interfaces: fresh.then(|| self.interfaces.clone()),
+            interfaces: (fresh || plugged).then(|| self.interfaces.clone()),
+            cards: fresh.then(|| self.cards.clone()),
             disk_io: self.disk_io.sample().to_vec(),
             net_io: self.net_io.sample().to_vec(),
             default_route: self.net_io.default_route().map(str::to_owned),
@@ -282,6 +303,7 @@ impl Worker {
                 .map(|(card, s)| GpuTick {
                     card: card.clone(),
                     reading: s.sample(),
+                    power_limit: s.power_limit(),
                 })
                 .collect()
         });
@@ -646,6 +668,8 @@ mod tests {
             Page::Network("wlp4s0".into())
         );
         assert_eq!(Page::parse("battery:BAT0"), Page::Battery("BAT0".into()));
+        assert_eq!(Page::parse("gpu:card1"), Page::Gpu("card1".into()));
+        assert_eq!(Page::parse("gpu"), Page::Other);
         // A device page needs its device.
         assert_eq!(Page::parse("disk:"), Page::Other);
         assert_eq!(Page::parse("disk"), Page::Other);
@@ -665,9 +689,11 @@ mod tests {
         assert!(t.memory.is_some_and(|m| m.total > 0));
         // The device lists come with the first tick only.
         assert!(t.devices.disks.is_some() && t.devices.interfaces.is_some());
+        assert!(t.devices.cards.is_some());
         let t = w.tick();
         assert!(!t.fresh);
         assert!(t.devices.disks.is_none() && t.devices.interfaces.is_none());
+        assert!(t.devices.cards.is_none());
 
         w.set_page(Page::Other);
         let t = w.tick();

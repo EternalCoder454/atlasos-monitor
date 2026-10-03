@@ -299,8 +299,6 @@ impl qobject::DiskStats {
             rust.reads = Series::default();
             rust.writes = Series::default();
         }
-        self.as_mut().set_name(name.clone());
-        self.as_mut().set_label(label.clone());
         self.as_mut().set_swap(d.swap);
         self.as_mut().set_size(d.size);
         self.as_mut().set_mounted(d.mounted);
@@ -313,6 +311,9 @@ impl qobject::DiskStats {
         self.as_mut().set_read_history(d.read_history);
         self.as_mut().set_write_history(d.write_history);
         self.as_mut().set_health(None);
+        // Last: the title follows the figures already cleared.
+        self.as_mut().set_name(name.clone());
+        self.as_mut().set_label(label.clone());
     }
 
     pub fn apply(mut self: Pin<&mut Self>, t: DiskTick, fresh: bool) {
@@ -351,14 +352,15 @@ impl qobject::DiskStats {
             rust.writes.push(write);
         }
         let (reads, writes) = (self.rust().reads.to_qlist(), self.rust().writes.to_qlist());
+        // Histories first, so the chart and its caption change together.
+        self.as_mut().set_read_history(reads);
+        self.as_mut().set_write_history(writes);
         self.as_mut().set_read_rate(read);
         self.as_mut().set_write_rate(write);
         self.as_mut()
             .set_read_total(size(t.io.as_ref().map(|io| io.read_total)));
         self.as_mut()
             .set_write_total(size(t.io.as_ref().map(|io| io.write_total)));
-        self.as_mut().set_read_history(reads);
-        self.as_mut().set_write_history(writes);
         if let Some(health) = t.health {
             self.as_mut().set_health(health.as_ref());
         }
@@ -369,7 +371,8 @@ impl qobject::DiskStats {
             .set_warning(QString::from(&h.map(drive_warning).unwrap_or_default()));
         self.as_mut().set_life(
             h.and_then(|h| h.wear)
-                .map_or(f64::NAN, |w| 100.0 - f64::from(w)),
+                // NVMe counts past 100% used on a drive run beyond its rating.
+                .map_or(f64::NAN, |w| (100.0 - f64::from(w)).clamp(0.0, 100.0)),
         );
         self.as_mut()
             .set_temperature(h.and_then(|h| h.temperature).unwrap_or(f64::NAN));
@@ -438,8 +441,6 @@ impl qobject::NetStats {
             rust.rx = Series::default();
             rust.tx = Series::default();
         }
-        self.as_mut().set_name(name.clone());
-        self.as_mut().set_label(label.clone());
         self.as_mut().set_mac(d.mac);
         self.as_mut().set_speed(d.speed);
         self.as_mut().set_wireless(d.wireless);
@@ -452,6 +453,9 @@ impl qobject::NetStats {
         self.as_mut().set_tx_history(d.tx_history);
         self.as_mut().set_ipv4(d.ipv4);
         self.as_mut().set_ipv6(d.ipv6);
+        // Last: the title follows the figures already cleared.
+        self.as_mut().set_name(name.clone());
+        self.as_mut().set_label(label.clone());
     }
 
     pub fn apply(mut self: Pin<&mut Self>, t: NetTick, fresh: bool) {
@@ -497,14 +501,15 @@ impl qobject::NetStats {
         }
         let (rxh, txh) = (self.rust().rx.to_qlist(), self.rust().tx.to_qlist());
         self.as_mut().set_present(t.io.is_some());
+        // Histories first, so the chart and its caption change together.
+        self.as_mut().set_rx_history(rxh);
+        self.as_mut().set_tx_history(txh);
         self.as_mut().set_rx_rate(rx);
         self.as_mut().set_tx_rate(tx);
         self.as_mut()
             .set_rx_total(size(t.io.as_ref().map(|io| io.rx_total)));
         self.as_mut()
             .set_tx_total(size(t.io.as_ref().map(|io| io.tx_total)));
-        self.as_mut().set_rx_history(rxh);
-        self.as_mut().set_tx_history(txh);
     }
 }
 

@@ -5,6 +5,7 @@
 mod backend;
 mod crash;
 mod devices;
+mod graphics;
 mod logging;
 mod rc;
 mod sampler;
@@ -33,6 +34,7 @@ pub struct AtlasObjects {
     pub devices: *mut c_void,
     pub disk: *mut c_void,
     pub net: *mut c_void,
+    pub gpu: *mut c_void,
 }
 
 /// Called once from `main.cpp`. Makes every QObject and starts the sampling
@@ -48,6 +50,7 @@ pub extern "C" fn atlas_objects_new() -> AtlasObjects {
     let mut devices = devices::qobject::device_list_make_unique();
     let mut disk = devices::qobject::disk_stats_make_unique();
     let mut net = devices::qobject::net_stats_make_unique();
+    let mut gpu = graphics::qobject::gpu_stats_make_unique();
 
     let sink = sampler::Sink {
         cpu: cpu.pin_mut().qt_thread(),
@@ -56,6 +59,7 @@ pub extern "C" fn atlas_objects_new() -> AtlasObjects {
         devices: devices.pin_mut().qt_thread(),
         disk: disk.pin_mut().qt_thread(),
         net: net.pin_mut().qt_thread(),
+        gpu: gpu.pin_mut().qt_thread(),
     };
     sampler.pin_mut().start(*backend.refresh_interval(), sink);
 
@@ -68,5 +72,6 @@ pub extern "C" fn atlas_objects_new() -> AtlasObjects {
         devices: devices.into_raw().cast(),
         disk: disk.into_raw().cast(),
         net: net.into_raw().cast(),
+        gpu: gpu.into_raw().cast(),
     }
 }

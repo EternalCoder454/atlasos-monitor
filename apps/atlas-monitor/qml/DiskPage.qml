@@ -70,7 +70,7 @@ AtlasPage {
         SectionRow {
             visible: !isNaN(page.disk.life)
             title: qsTr("Life Remaining")
-            value: Format.percent(page.disk.life)
+            value: page.disk.life <= 10 ? qsTr("%1 · replace it").arg(Format.percent(page.disk.life)) : page.disk.life <= 30 ? qsTr("%1 · wearing out").arg(Format.percent(page.disk.life)) : Format.percent(page.disk.life)
         }
         SectionRow {
             visible: !isNaN(page.disk.temperature)
@@ -78,27 +78,29 @@ AtlasPage {
             value: Format.celsius(page.disk.temperature)
         }
         SectionRow {
-            visible: page.disk.powerOnHours >= 0
+            // As the Go version: a drive that reports 0 says nothing yet.
+            visible: page.disk.powerOnHours > 0
             title: qsTr("Powered On")
             value: Format.hours(page.disk.powerOnHours)
         }
         SectionRow {
-            visible: page.disk.written >= 0
+            visible: page.disk.written > 0
             title: qsTr("Written in Total")
             value: Format.size(page.disk.written)
         }
         SectionRow {
-            visible: page.disk.powerCycles >= 0
+            visible: page.disk.powerCycles > 0
             title: qsTr("Power Cycles")
             value: Format.count(page.disk.powerCycles)
         }
         SectionRow {
-            visible: page.disk.unsafeShutdowns >= 0
+            // Every drive reports 0 of these until something goes wrong.
+            visible: page.disk.unsafeShutdowns > 0
             title: qsTr("Unsafe Shutdowns")
             value: Format.count(page.disk.unsafeShutdowns)
         }
         SectionRow {
-            visible: page.disk.mediaErrors >= 0
+            visible: page.disk.mediaErrors > 0
             title: qsTr("Media Errors")
             value: Format.count(page.disk.mediaErrors)
         }

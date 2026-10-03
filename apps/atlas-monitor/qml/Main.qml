@@ -18,6 +18,7 @@ QQC2.ApplicationWindow {
     required property var devices
     required property var disk
     required property var net
+    required property var gpu
 
     title: qsTr("Atlas Monitor")
     width: Kirigami.Units.gridUnit * 56
@@ -40,6 +41,7 @@ QQC2.ApplicationWindow {
             "memory": memoryPage,
             "disk": diskPage,
             "network": networkPage,
+            "gpu": gpuPage,
             "settings": settingsPage,
             "about": aboutPage
         })
@@ -49,8 +51,11 @@ QQC2.ApplicationWindow {
         if (name === currentPage) {
             return;
         }
-        const [kind, device] = name.split(":");
-        const known = pages[kind] !== undefined && (device !== undefined) === (kind === "disk" || kind === "network") && device !== "";
+        // Split at the first colon only: an alias interface is "eth0:1".
+        const colon = name.indexOf(":");
+        const kind = colon < 0 ? name : name.slice(0, colon);
+        const device = colon < 0 ? undefined : name.slice(colon + 1);
+        const known = pages[kind] !== undefined && (device !== undefined) === ["disk", "network", "gpu"].includes(kind) && device !== "";
         var c = known ? pages[kind] : overviewPage;
         currentPage = known ? name : "overview";
         // Only the page on screen is sampled.
@@ -61,6 +66,8 @@ QQC2.ApplicationWindow {
             disk.show(device, devices.diskLabels[devices.diskNames.indexOf(device)] ?? device);
         } else if (known && kind === "network") {
             net.show(device, devices.netLabels[devices.netNames.indexOf(device)] ?? device);
+        } else if (known && kind === "gpu") {
+            gpu.show(device, gpu.cardLabels[gpu.cardNames.indexOf(device)] ?? device);
         }
         if (stack.depth === 0) {
             stack.push(c, {}, QQC2.StackView.Immediate);
@@ -81,7 +88,8 @@ QQC2.ApplicationWindow {
         elide: Text.ElideRight
     }
 
-    // Disk and Network: a group with an entry and its live rate per device.
+    // Disk and Network: a group with an entry and its live rate per device;
+    // graphics cards, with no rates, when there are two or more.
     // Compact, the group is one icon that opens the first device.
     component DeviceGroup: SidebarGroup {
         id: group
@@ -102,7 +110,7 @@ QQC2.ApplicationWindow {
                 Layout.fillWidth: true
                 sub: true
                 text: group.labels[index] ?? ""
-                value: Format.rate(group.rates[index] ?? NaN)
+                value: group.rates.length > 0 ? Format.rate(group.rates[index] ?? NaN) : ""
                 selected: root.currentPage === page
                 onClicked: root.showPage(page)
             }
@@ -151,7 +159,7 @@ QQC2.ApplicationWindow {
                 anchors.topMargin: Kirigami.Units.gridUnit
                 spacing: 2
 
-                // Disk, Network, GPU, Battery and Sensors join Hardware, and
+                // Battery and Sensors join Hardware, and
                 // System (Apps, Energy Saver, Startup, Services) comes, with
                 // their pages; see docs/DESIGN.md.
                 NavItem {
@@ -187,6 +195,21 @@ QQC2.ApplicationWindow {
                     names: root.devices.netNames
                     labels: root.devices.netLabels
                     rates: root.devices.netRates
+                }
+                // One card is one entry; two or more are a group.
+                NavItem {
+                    visible: root.gpu.cardNames.length === 1
+                    page: "gpu:" + (root.gpu.cardNames[0] ?? "")
+                    text: qsTr("Graphics")
+                    icon.name: "show-gpu-effects"
+                }
+                DeviceGroup {
+                    visible: names.length > 1
+                    kind: "gpu"
+                    text: qsTr("Graphics")
+                    iconName: "show-gpu-effects"
+                    names: root.gpu.cardNames
+                    labels: root.gpu.cardLabels
                 }
                 Item {
                     Layout.fillHeight: true
@@ -280,6 +303,13 @@ QQC2.ApplicationWindow {
         id: networkPage
         NetworkPage {
             net: root.net
+            interval: root.backend.refreshInterval
+        }
+    }
+    Component {
+        id: gpuPage
+        GpuPage {
+            gpu: root.gpu
             interval: root.backend.refreshInterval
         }
     }
