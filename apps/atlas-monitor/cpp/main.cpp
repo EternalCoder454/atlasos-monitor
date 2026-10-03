@@ -4,6 +4,7 @@
 #include <KWindowSystem>
 
 #include <QApplication>
+#include <QEvent>
 #include <QIcon>
 #include <QPointer>
 #include <QQmlApplicationEngine>
@@ -40,6 +41,47 @@ extern "C" void atlas_log_init();
 extern "C" void atlas_crash_install();
 extern "C" void atlas_crash_fatal(const char *msg);
 extern "C" bool atlas_settings_gpu_rendering();
+
+// Tells the sampler when the window can't be seen: minimized, hidden, or
+// not exposed (KWin suspends a minimized window, or one on another desktop,
+// and Qt then takes it as unexposed). Nothing is read meanwhile.
+class PauseWhenUnseen : public QObject
+{
+public:
+    PauseWhenUnseen(QQuickWindow *window, QObject *sampler)
+        : QObject(window)
+        , m_window(window)
+        , m_sampler(sampler)
+    {
+        window->installEventFilter(this);
+        connect(window, &QWindow::visibilityChanged, this, &PauseWhenUnseen::update);
+    }
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override
+    {
+        // isExposed() already holds the new state when the event arrives.
+        if (event->type() == QEvent::Expose) {
+            update();
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    void update()
+    {
+        const auto v = m_window->visibility();
+        const bool unseen = !m_window->isExposed() || v == QWindow::Minimized || v == QWindow::Hidden;
+        if (unseen != m_unseen) {
+            m_unseen = unseen;
+            QMetaObject::invokeMethod(m_sampler, "setPaused", Q_ARG(bool, unseen));
+        }
+    }
+
+    QQuickWindow *m_window;
+    QObject *m_sampler;
+    bool m_unseen = false;
+};
 
 static QtMessageHandler s_previousHandler = nullptr;
 
@@ -149,6 +191,7 @@ int main(int argc, char *argv[])
 
         QPointer<QQuickWindow> window = qobject_cast<QQuickWindow *>(engine.rootObjects().value(0));
         if (window) {
+            new PauseWhenUnseen(window, static_cast<QObject *>(made.sampler));
             QObject::connect(&service, &KDBusService::activateRequested, window, [window](const QStringList &, const QString &) {
                 // KDBusService put the second launch's activation token in the
                 // environment; on Wayland, KWin only lets a window take focus

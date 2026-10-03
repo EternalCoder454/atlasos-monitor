@@ -775,6 +775,7 @@ enum Command {
     IconTheme(String),
     KernelThreads(bool),
     ServicesChanged,
+    Paused(bool),
 }
 
 /// The running loop. Dropping it stops the thread and waits for the tick in
@@ -820,6 +821,12 @@ impl Loop {
         self.send(Command::ServicesChanged);
     }
 
+    /// Stops ticking while the window can't be seen, and starts again with
+    /// a fresh tick.
+    pub fn set_paused(&self, paused: bool) {
+        self.send(Command::Paused(paused));
+    }
+
     fn send(&self, command: Command) {
         if let Some(tx) = &self.commands {
             // The thread only ends when this is dropped, or by a panic,
@@ -842,6 +849,7 @@ impl Drop for Loop {
 fn run(rx: Receiver<Command>, mut interval: Duration, mut sink: impl FnMut(Tick)) {
     let mut worker: Option<Worker> = None;
     let mut next: Option<Instant> = None;
+    let mut paused = false;
     loop {
         let command = match next {
             Some(at) => rx.recv_timeout(at.saturating_duration_since(Instant::now())),
@@ -852,7 +860,9 @@ fn run(rx: Receiver<Command>, mut interval: Duration, mut sink: impl FnMut(Tick)
                 let w = worker.get_or_insert_with(Worker::new);
                 if *w.page() != page || next.is_none() {
                     w.set_page(page);
-                    next = Some(Instant::now() + interval.min(FIRST_TICK));
+                    if !paused {
+                        next = Some(Instant::now() + interval.min(FIRST_TICK));
+                    }
                 }
             }
             Ok(Command::IconTheme(theme)) => {
@@ -868,6 +878,13 @@ fn run(rx: Receiver<Command>, mut interval: Duration, mut sink: impl FnMut(Tick)
             Ok(Command::ServicesChanged) => {
                 worker.get_or_insert_with(Worker::new).services_changed();
             }
+            Ok(Command::Paused(p)) if p != paused => {
+                paused = p;
+                // Back on screen, a tick at once: its rates are averages
+                // over the pause, as after any slow tick.
+                next = (!paused && worker.is_some()).then(Instant::now);
+            }
+            Ok(Command::Paused(_)) => {}
             Ok(Command::Interval(d)) => {
                 interval = d;
                 if let Some(at) = &mut next {
@@ -1048,6 +1065,27 @@ mod tests {
         let switch = ticks.iter().position(|t| t.1 == Page::Other).unwrap();
         assert!(ticks[switch].0, "the new page's first tick is fresh");
         assert_eq!(ticks.iter().filter(|t| t.0).count(), 2);
+    }
+
+    #[test]
+    fn a_paused_loop_reads_nothing_and_resumes_at_once() {
+        let ticks = Arc::new(Mutex::new(Vec::new()));
+        let seen = Arc::clone(&ticks);
+        let l = Loop::start(Duration::from_secs(60), move |t| {
+            seen.lock().unwrap().push(t.page);
+        })
+        .unwrap();
+        l.set_paused(true);
+        // A page opened while hidden waits for the window to show.
+        l.set_page(Page::Memory);
+        std::thread::sleep(Duration::from_millis(100));
+        assert!(ticks.lock().unwrap().is_empty());
+
+        // Shown again: a tick now, not a minute away.
+        l.set_paused(false);
+        std::thread::sleep(Duration::from_millis(200));
+        assert_eq!(*ticks.lock().unwrap(), [Page::Memory]);
+        drop(l);
     }
 
     #[test]

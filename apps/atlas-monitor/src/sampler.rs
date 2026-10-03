@@ -29,6 +29,12 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "showKernelThreads"]
         fn show_kernel_threads(self: &Sampler, on: bool);
+
+        /// The window can't be seen (minimized, hidden, or suspended by
+        /// the compositor): nothing is read until it can again.
+        #[qinvokable]
+        #[cxx_name = "setPaused"]
+        fn set_paused(self: &Sampler, paused: bool);
     }
 
     impl cxx_qt::Threading for Sampler {}
@@ -79,6 +85,12 @@ impl qobject::Sampler {
     pub fn show_kernel_threads(&self, on: bool) {
         if let Some(l) = &self.running {
             l.set_kernel_threads(on);
+        }
+    }
+
+    pub fn set_paused(&self, paused: bool) {
+        if let Some(l) = &self.running {
+            l.set_paused(paused);
         }
     }
 
