@@ -217,6 +217,24 @@ fn exited_processes_leave_the_table() {
     assert!(find(s.sample(), pid).is_none());
 }
 
+/// A process that appears is read for its unit again on the next tick (its
+/// launcher may not have moved it into its own yet); one already running at
+/// the baseline isn't.
+#[test]
+fn new_processes_have_their_unit_read_twice() {
+    let mut s = ProcessSampler::default();
+    let unsure =
+        |s: &ProcessSampler, pid| s.prev.iter().find(|p| p.pid == pid).map(|p| p.unit_unsure);
+    assert_eq!(unsure(&s, std::process::id()), Some(false));
+    let child = Command::new("sleep").arg("30").spawn().unwrap();
+    let pid = child.id();
+    s.sample();
+    assert_eq!(unsure(&s, pid), Some(true));
+    s.sample();
+    assert_eq!(unsure(&s, pid), Some(false));
+    kill(child);
+}
+
 /// What isn't wanted isn't collected, and reads as unknown.
 #[test]
 fn unwanted_figures_are_not_collected() {
@@ -277,6 +295,7 @@ fn network_is_shared_by_socket_count() {
         name: Arc::from(""),
         unit: None,
         container: None,
+        unit_unsure: false,
         jiffies: 0,
         faults: 0,
         rss: 0,

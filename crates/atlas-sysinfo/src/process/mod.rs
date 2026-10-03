@@ -179,6 +179,9 @@ struct Prev {
     name: Arc<str>,
     unit: Option<Arc<str>>,
     container: Option<Arc<str>>,
+    /// Its unit is to be read once more on the next tick: it appeared on
+    /// this one, maybe before its launcher moved it into its own unit.
+    unit_unsure: bool,
     jiffies: u64,
     faults: u64,
     rss: u64,
@@ -357,12 +360,13 @@ impl ProcessSampler {
             // would otherwise leave it cut, and apart from its siblings).
             let cut = stat.name.len() == parse::COMM_MAX && !kernel;
             let rescan = (tick + u64::from(pid)).is_multiple_of(UNIT_RESCAN_TICKS);
+            let unit_again = rescan || prev.as_ref().is_some_and(|p| p.unit_unsure);
             let prev_name = prev.as_ref().map(|p| &p.name);
             let name = match prev_name {
                 Some(p)
                     if p.as_bytes().starts_with(stat.name)
                         && (p.len() == stat.name.len() || cut)
-                        && !(cut && rescan) =>
+                        && !(cut && unit_again) =>
                 {
                     Arc::clone(p)
                 }
@@ -377,14 +381,19 @@ impl ProcessSampler {
                 _ => reuse(prev_name, stat.name),
             };
 
-            // Read when the process first appears and on the occasional
-            // rescan, not every tick: one more file per process per tick
-            // would be a third more opens.
+            // Read when the process first appears, again on the next tick,
+            // and on the occasional rescan, not every tick: one more file per
+            // process per tick would be a third more opens. A launcher
+            // (`systemd-run --scope`, Plasma's) starts the program and then
+            // moves it into the application's unit, and a read in between
+            // would file it under the launcher's for half a minute. Those in
+            // the baseline scan were running before the page opened: settled.
             let prev_unit = prev.as_ref().and_then(|p| p.unit.as_ref());
             let prev_container = prev.as_ref().and_then(|p| p.container.as_ref());
+            let unit_unsure = prev.is_none() && tick > 0;
             let (unit, container) = if kernel {
                 (None, None)
-            } else if prev.is_none() || rescan {
+            } else if prev.is_none() || unit_again {
                 match dir.read(pid, b"/cgroup", b"") {
                     Ok(b) => (
                         parse::unit_from_cgroup(b).map(|u| reuse(prev_unit, u)),
@@ -533,6 +542,7 @@ impl ProcessSampler {
                 name: Arc::clone(&name),
                 unit: unit.clone(),
                 container: container.clone(),
+                unit_unsure,
                 jiffies,
                 faults,
                 rss,
