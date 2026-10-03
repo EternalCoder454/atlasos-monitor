@@ -131,17 +131,21 @@ impl Nvml {
         }
     }
 
+    /// The load alone, percent.
+    pub fn usage(&mut self) -> Option<f64> {
+        let f = self.utilization?;
+        let mut u = Utilization::default();
+        // SAFETY: a live handle from `open`, and an out-pointer to the
+        // documented type.
+        (unsafe { f(self.device, &mut u) } == 0).then(|| f64::from(u.gpu).min(100.0))
+    }
+
     /// Fills in what NVML reports.
     pub fn read(&mut self, g: &mut Gpu) {
+        g.usage = self.usage();
         let d = self.device;
         // SAFETY (every call below): a live handle from `open`, and
         // out-pointers to values of the documented types.
-        if let Some(f) = self.utilization {
-            let mut u = Utilization::default();
-            if unsafe { f(d, &mut u) } == 0 {
-                g.usage = Some(f64::from(u.gpu).min(100.0));
-            }
-        }
         if let Some(f) = self.memory {
             let mut m = Memory::default();
             if unsafe { f(d, &mut m) } == 0 {

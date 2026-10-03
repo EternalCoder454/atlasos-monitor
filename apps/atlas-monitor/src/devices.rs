@@ -254,12 +254,26 @@ impl qobject::DeviceList {
                 .map_or(f64::NAN, |io| io.rx_rate + io.tx_rate)
         }));
         self.as_mut().set_net_rates(net);
-        self.as_mut().set_cpu_usage(d.cpu_usage.unwrap_or(f64::NAN));
-        self.as_mut()
-            .set_memory_usage(d.memory_usage.unwrap_or(f64::NAN));
-        self.as_mut()
-            .set_gpu_usages(rates(d.gpu_usages.iter().map(|u| u.unwrap_or(f64::NAN))));
+        let cpu = d.cpu_usage.unwrap_or(f64::NAN);
+        if !same(*self.cpu_usage(), cpu) {
+            self.as_mut().set_cpu_usage(cpu);
+        }
+        let memory = d.memory_usage.unwrap_or(f64::NAN);
+        if !same(*self.memory_usage(), memory) {
+            self.as_mut().set_memory_usage(memory);
+        }
+        let gpus: Vec<f64> = d.gpu_usages.iter().map(|u| u.unwrap_or(f64::NAN)).collect();
+        let old = self.gpu_usages();
+        if old.iter().count() != gpus.len() || old.iter().zip(&gpus).any(|(a, b)| !same(*a, *b)) {
+            self.as_mut().set_gpu_usages(rates(gpus.into_iter()));
+        }
     }
+}
+
+/// Equal, NaN to NaN too: the setters' own check counts NaN as a change
+/// every time, so a card left unread would signal every tick.
+fn same(a: f64, b: f64) -> bool {
+    a == b || (a.is_nan() && b.is_nan())
 }
 
 pub struct DiskStatsRust {

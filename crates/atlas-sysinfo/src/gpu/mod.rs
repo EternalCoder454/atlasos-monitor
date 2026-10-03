@@ -123,14 +123,24 @@ impl Card {
     }
 
     /// Whether reading the card every second costs it no sleep: runtime
-    /// power management is off for it, or a display is connected to it,
-    /// which keeps it awake anyway. A laptop's discrete GPU with no screen
-    /// on it is neither, and reading it while it's awake restarts its
-    /// autosuspend timer (amdgpu counts a read as use), so it never sleeps.
-    /// Reads only what the kernel answers without the card.
+    /// power management is turned off for it, or it is awake and showing a
+    /// screen, which keeps it awake anyway. A laptop's discrete GPU with no
+    /// screen on it is neither, and reading it while it's awake restarts
+    /// its autosuspend timer (amdgpu counts a read as use), so it would
+    /// never sleep. A card that can't be told apart is left alone.
+    ///
+    /// Reads only what the kernel keeps without the card: a connector's
+    /// `enabled` (a screen is driven from it), never its `status`, whose
+    /// read can probe the port and wake the card.
     pub fn stays_awake(&self) -> bool {
-        if sysfs::read_string(self.device.join("power/control")).as_deref() != Some("auto") {
-            return true;
+        let power = |name: &str| sysfs::read_string(self.device.join("power").join(name));
+        match power("control").as_deref() {
+            Some("on") => return true,
+            Some("auto") => {}
+            _ => return false,
+        }
+        if power("runtime_status").as_deref() != Some("active") {
+            return false;
         }
         // Connectors are `card1-DP-1` beside `device`.
         let Some(dir) = self.device.parent() else {
@@ -146,7 +156,7 @@ impl Card {
                     .to_str()
                     .is_some_and(|n| n.starts_with(&prefix))
             })
-            .any(|e| sysfs::read_string(e.path().join("status")).as_deref() == Some("connected"))
+            .any(|e| sysfs::read_string(e.path().join("enabled")).as_deref() == Some("enabled"))
     }
 }
 
@@ -463,7 +473,11 @@ impl GpuSampler {
             return g;
         }
         if let Load::Nvml(n) = &mut self.load {
-            n.read(&mut g);
+            if self.load_only {
+                g.usage = n.usage();
+            } else {
+                n.read(&mut g);
+            }
             return g;
         }
         g.usage = self.load.sample();
