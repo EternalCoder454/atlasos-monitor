@@ -312,6 +312,8 @@ impl Worker {
     pub fn services_changed(&mut self) {
         self.services_stale = true;
         self.services_outdated = self.waiting_services;
+        // An answer taken in but not passed on yet is from before it too.
+        self.services_news = None;
     }
 
     fn wanted(&self) -> Wanted {
