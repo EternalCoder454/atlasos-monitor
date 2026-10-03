@@ -9,6 +9,8 @@ AtlasPage {
     id: page
 
     required property var cpu
+    // The app's settings object: which sections are folded.
+    required property var backend
     // The refresh interval in ms, for the chart's time caption.
     required property int interval
 
@@ -34,13 +36,20 @@ AtlasPage {
     }
 
     Section {
+        id: cores
         title: qsTr("Each Processor")
         visible: page.cpu.coreUsage.length > 0
+        // On a 32-thread machine the bars are the page's biggest drawing.
+        // Folded, they aren't drawn, and their binding stops reading the
+        // loads (it reads `folded` first).
+        foldable: true
+        folded: page.backend.foldedSections.includes("cpu.cores")
+        onFoldRequested: fold => page.backend.setFolded("cpu.cores", fold)
 
         MiniBars {
             Layout.fillWidth: true
             Layout.margins: Kirigami.Units.largeSpacing
-            values: page.cpu.coreUsage
+            values: cores.folded ? [] : page.cpu.coreUsage
             maximum: 100
         }
     }

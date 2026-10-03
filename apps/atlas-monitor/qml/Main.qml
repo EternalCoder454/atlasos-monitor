@@ -472,6 +472,7 @@ QQC2.ApplicationWindow {
         id: cpuPage
         CpuPage {
             cpu: root.cpu
+            backend: root.backend
             interval: root.backend.refreshInterval
         }
     }

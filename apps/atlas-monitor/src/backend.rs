@@ -8,6 +8,8 @@ pub mod qobject {
     unsafe extern "C++" {
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
+        include!("cxx-qt-lib/qstringlist.h");
+        type QStringList = cxx_qt_lib::QStringList;
     }
 
     extern "RustQt" {
@@ -26,6 +28,9 @@ pub mod qobject {
         #[qproperty(i32, window_height, cxx_name = "windowHeight")]
         #[qproperty(bool, window_maximized, cxx_name = "windowMaximized")]
         #[qproperty(QString, last_page, cxx_name = "lastPage")]
+        /// The ids of the sections folded shut (`cpu.cores`), kept between
+        /// runs.
+        #[qproperty(QStringList, folded_sections, cxx_name = "foldedSections")]
         #[namespace = "atlas_monitor"]
         type Backend = super::BackendRust;
 
@@ -65,6 +70,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "savePage"]
         fn save_page(self: &Backend, page: &QString);
+
+        /// Folds the section `id` shut, or opens it, and saves that.
+        #[qinvokable]
+        #[cxx_name = "setFolded"]
+        fn set_folded(self: Pin<&mut Backend>, id: &QString, fold: bool);
     }
 
     impl cxx_qt::Threading for Backend {}
@@ -84,8 +94,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use atlas_sysinfo::sysmem;
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::QString;
+use cxx_qt_lib::{QString, QStringList};
 
+use crate::processes::string_list;
 use crate::settings::{self, Settings, WindowState};
 
 pub struct BackendRust {
@@ -97,6 +108,8 @@ pub struct BackendRust {
     window_height: i32,
     window_maximized: bool,
     last_page: QString,
+    folded_sections: QStringList,
+    folded: Vec<String>,
     /// A memory read is running; a second request waits for it.
     reading_memory: Arc<AtomicBool>,
     /// Something changed while a read was under way: read again after it.
@@ -107,7 +120,10 @@ impl Default for BackendRust {
     fn default() -> Self {
         let s = Settings::load();
         let w = WindowState::load();
+        let folded = WindowState::load_folded();
         Self {
+            folded_sections: string_list(&folded),
+            folded,
             window_width: w.width,
             window_height: w.height,
             window_maximized: w.maximized,
@@ -163,6 +179,24 @@ impl qobject::Backend {
         if let Err(e) = WindowState::save_page(&page.to_string()) {
             log::warn!("saving the page on screen: {e}");
         }
+    }
+
+    pub fn set_folded(mut self: Pin<&mut Self>, id: &QString, fold: bool) {
+        let id = id.to_string();
+        // An id goes in a comma-separated list.
+        if id.is_empty() || id.contains(',') {
+            return;
+        }
+        let folded = settings::with_folded(&self.rust().folded, &id, fold);
+        if folded == self.rust().folded {
+            return;
+        }
+        // A save that fails still folds it for this run.
+        if let Err(e) = WindowState::save_folded(&folded) {
+            log::warn!("saving the folded sections: {e}");
+        }
+        self.as_mut().set_folded_sections(string_list(&folded));
+        self.as_mut().rust_mut().folded = folded;
     }
 
     pub fn release_idle_memory(self: Pin<&mut Self>) {

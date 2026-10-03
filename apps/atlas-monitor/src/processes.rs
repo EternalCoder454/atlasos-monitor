@@ -280,7 +280,7 @@ const HIDEABLE: [&str; 9] = [
     "netOut",
 ];
 
-fn string_list(v: &[String]) -> QStringList {
+pub(crate) fn string_list(v: &[String]) -> QStringList {
     let mut l = QList::<QString>::default();
     for s in v {
         l.append(QString::from(s));

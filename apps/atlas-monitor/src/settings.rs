@@ -13,6 +13,13 @@
 //! GroupByApp=true
 //! KernelThreads=false
 //! HiddenColumns=diskRead,diskWrite
+//!
+//! [Window]
+//! Width=1100
+//! Height=800
+//! Maximized=false
+//! Page=cpu
+//! FoldedSections=cpu.cores
 //! ```
 //!
 //! Missing or unparseable values fall back to the defaults; an interval that
@@ -37,6 +44,7 @@ const KEY_WIDTH: &str = "Width";
 const KEY_HEIGHT: &str = "Height";
 const KEY_MAXIMIZED: &str = "Maximized";
 const KEY_PAGE: &str = "Page";
+const KEY_FOLDED: &str = "FoldedSections";
 
 /// The Apps columns hidden until the user shows them, by role.
 pub const DEFAULT_HIDDEN: [&str; 2] = ["diskRead", "diskWrite"];
@@ -241,6 +249,25 @@ impl WindowState {
     pub fn save_page(page: &str) -> io::Result<()> {
         rc::set(WINDOW, KEY_PAGE, Some(page))
     }
+
+    /// The sections folded shut, by their ids (`cpu.cores`).
+    pub fn load_folded() -> Vec<String> {
+        rc::get(WINDOW, KEY_FOLDED).map_or_else(Vec::new, |v| list(&v))
+    }
+
+    pub fn save_folded(ids: &[String]) -> io::Result<()> {
+        rc::set(WINDOW, KEY_FOLDED, Some(&ids.join(",")))
+    }
+}
+
+/// `folded` with `id` folded or not, as a sorted list without repeats.
+pub fn with_folded(folded: &[String], id: &str, fold: bool) -> Vec<String> {
+    let mut out: Vec<String> = folded.iter().filter(|f| *f != id).cloned().collect();
+    if fold {
+        out.push(id.to_owned());
+    }
+    out.sort();
+    out
 }
 
 /// A comma-separated list, trimmed, sorted, without repeats or blanks.
@@ -341,6 +368,18 @@ mod tests {
         assert_eq!(got.page, "disk:sda");
         let bad = WindowState::from_values(s("-4"), s("huge"), s("no"), None);
         assert_eq!((bad.width, bad.height, bad.maximized), (0, 0, false));
+    }
+
+    #[test]
+    fn folding_adds_and_takes_out_once() {
+        let folded = with_folded(&[], "cpu.cores", true);
+        assert_eq!(folded, ["cpu.cores"]);
+        let folded = with_folded(&folded, "cpu.cores", true);
+        assert_eq!(folded, ["cpu.cores"]);
+        let folded = with_folded(&folded, "a.b", true);
+        assert_eq!(folded, ["a.b", "cpu.cores"]);
+        assert_eq!(with_folded(&folded, "cpu.cores", false), ["a.b"]);
+        assert_eq!(list(" cpu.cores ,,a.b"), ["a.b", "cpu.cores"]);
     }
 
     #[test]
