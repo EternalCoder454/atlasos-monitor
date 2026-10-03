@@ -459,6 +459,15 @@ impl GpuSampler {
         self.power_limit
     }
 
+    /// Whether the load is the driver's figure of the moment (a busy file,
+    /// NVML), with no baseline here that a skipped reading would stretch.
+    /// Then a reader can skip a tick another reader read the card: on
+    /// amdgpu each read of `gpu_busy_percent` asks the card's firmware,
+    /// a few hundred microseconds.
+    pub fn load_is_momentary(&self) -> bool {
+        matches!(self.load, Load::Busy(_) | Load::Nvml(_))
+    }
+
     /// Reads the card.
     pub fn sample(&mut self) -> Gpu {
         let mut g = Gpu {

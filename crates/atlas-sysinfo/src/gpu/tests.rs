@@ -152,6 +152,8 @@ fn samples_amdgpu() {
     let mut s = GpuSampler::new(&cards[0], &cards);
     assert!(s.ready);
     assert!(matches!(s.load, Load::Busy(_)));
+    assert!(s.load_is_momentary());
+    assert!(GpuSampler::load_only(&cards[0], &cards).load_is_momentary());
     assert_eq!(s.power_limit(), Some(327.0));
 
     let g = s.sample();
@@ -275,6 +277,8 @@ fn samples_idle_residency() {
     let cards = cards_in(&sys.drm());
     let mut s = GpuSampler::new(&cards[0], &cards);
     assert!(matches!(s.load, Load::Idle(..)));
+    // A reading skipped would stretch the next one's window.
+    assert!(!s.load_is_momentary());
     // Idle the whole time (and then some: the clamp).
     std::thread::sleep(std::time::Duration::from_millis(20));
     fs::write(&rc6, "100000\n").unwrap();

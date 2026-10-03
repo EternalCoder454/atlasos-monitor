@@ -274,6 +274,17 @@ impl CpuSampler {
         &self.sample
     }
 
+    /// Takes `other`'s latest load and counters instead of reading
+    /// `/proc/stat` again: the kernel builds the whole file for every read,
+    /// interrupt counts and all. The next [`Self::sample`] then measures
+    /// from where `other` last did, as if this had read it too.
+    pub fn follow(&mut self, other: &Self) {
+        self.prev_all = other.prev_all;
+        self.prev_cores.clone_from(&other.prev_cores);
+        self.sample.usage = other.sample.usage;
+        self.sample.cores.clone_from(&other.sample.cores);
+    }
+
     fn read_load(&mut self) {
         let Some(data) = self.stat.as_mut().and_then(HeldFile::bytes) else {
             return;
@@ -567,6 +578,37 @@ mod tests {
         if let Some(mhz) = got.frequency_mhz {
             assert!(mhz > 0.0);
         }
+    }
+
+    /// A sampler that follows another reports its load, and measures on
+    /// from its counters.
+    #[test]
+    fn follows_another_sampler() {
+        let dir = tempfile::tempdir().unwrap();
+        let stat = dir.path().join("stat");
+        fs::write(
+            &stat,
+            "cpu  100 0 100 800 0 0 0 0 0 0\ncpu0 100 0 100 800 0 0 0 0 0 0\n",
+        )
+        .unwrap();
+        let mut page = CpuSampler::open(&stat, None, None);
+        let mut side = CpuSampler::open(&stat, None, None);
+        fs::write(
+            &stat,
+            "cpu  150 0 150 900 0 0 0 0 0 0\ncpu0 150 0 150 900 0 0 0 0 0 0\n",
+        )
+        .unwrap();
+        assert_eq!(page.sample().usage, 50.0);
+        side.follow(&page);
+        assert_eq!(side.sample.usage, 50.0);
+        assert_eq!(side.sample.cores, vec![50.0]);
+        // From the page's last counters, not the side's first.
+        fs::write(
+            &stat,
+            "cpu  150 0 150 1000 0 0 0 0 0 0\ncpu0 150 0 150 1000 0 0 0 0 0 0\n",
+        )
+        .unwrap();
+        assert_eq!(side.sample().usage, 0.0);
     }
 
     /// The Overview's sampler reads the load and temperature, never a clock.

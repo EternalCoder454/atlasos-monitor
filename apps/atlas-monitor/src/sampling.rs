@@ -211,11 +211,16 @@ pub struct Worker {
     disk_io: DiskSampler,
     interfaces: Vec<NetInterface>,
     net_io: NetSampler,
+    /// The interface the default route leaves by, read on slow ticks with
+    /// the interfaces.
+    route: Option<String>,
     power: Option<PowerSampler>,
     /// The sidebar's own readers, kept for the whole run (one made as a
     /// page closes would measure its first load over a moment) and read
-    /// every tick. Where the page reads the same thing, its figure is shown,
-    /// so the sidebar and the page agree.
+    /// every tick, or kept up with the page's reader of the same thing
+    /// (`CpuSampler::follow`, `GpuSampler::load_is_momentary`). Where the
+    /// page reads the same thing, its figure is shown, so the sidebar and
+    /// the page agree.
     side_cpu: CpuSampler,
     side_memory: MemorySampler,
     /// Per card, in the order of `cards`: the load, for a card reading
@@ -290,6 +295,7 @@ impl Worker {
             disk_io,
             interfaces: net::interfaces(),
             net_io: NetSampler::new(),
+            route: None,
             power: power::available().then(PowerSampler::new),
             side_cpu: CpuSampler::load_only(),
             side_memory: MemorySampler::new(),
@@ -427,6 +433,7 @@ impl Worker {
             if plugged {
                 self.interfaces = now;
             }
+            self.route = self.net_io.default_route().map(str::to_owned);
         }
 
         // A drive plugged in or out, or a filesystem mounted on one, likewise.
@@ -455,7 +462,7 @@ impl Worker {
             cards: fresh.then(|| self.cards.clone()),
             disk_io: self.disk_io.sample().to_vec(),
             net_io: self.net_io.sample().to_vec(),
-            default_route: self.net_io.default_route().map(str::to_owned),
+            default_route: self.route.clone(),
             power: self.power.as_mut().map(|p| p.sample().clone()),
             ..Devices::default()
         };
@@ -479,8 +486,15 @@ impl Worker {
         let mut devices = devices;
         // The sidebar's own readers are read every tick, so their next
         // figure is never an average over a page that read the same thing.
-        let side_cpu = self.side_cpu.sample().usage;
-        devices.cpu_usage = Some(cpu.as_ref().map_or(side_cpu, |c| c.sample.usage));
+        // Where the page reads /proc/stat, the sidebar's reader takes its
+        // counters rather than read it again.
+        devices.cpu_usage = Some(match (&self.cpu, &cpu) {
+            (Some(page), Some(tick)) => {
+                self.side_cpu.follow(page);
+                tick.sample.usage
+            }
+            _ => self.side_cpu.sample().usage,
+        });
         // The page's figure where it has one, so the badge and the page agree.
         let memory_now = memory.or_else(|| self.side_memory.sample());
         devices.memory_usage = memory_now.as_ref().map(Memory::usage_percent);
@@ -492,8 +506,15 @@ impl Worker {
                 let on_page = gpus
                     .as_ref()
                     .and_then(|g: &Vec<GpuTick>| g.iter().find(|t| t.card.node == card.node));
-                let side = side.as_mut().and_then(|s| s.sample().usage);
-                on_page.map_or(side, |t| t.reading.usage)
+                match (on_page, side) {
+                    // Not read twice where the figure has no baseline to
+                    // keep current: amdgpu's costs a firmware query.
+                    (Some(t), Some(s)) if s.load_is_momentary() => t.reading.usage,
+                    (on_page, side) => {
+                        let side = side.as_mut().and_then(|s| s.sample().usage);
+                        on_page.map_or(side, |t| t.reading.usage)
+                    }
+                }
             })
             .collect();
 
