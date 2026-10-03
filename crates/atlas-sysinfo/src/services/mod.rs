@@ -1,6 +1,8 @@
 //! The system's services from systemd over the system bus: the list with
 //! each unit's state and whether it starts at boot, one unit's details, and
-//! Start, Stop, Restart, Enable and Disable.
+//! Start, Stop, Restart, Enable and Disable. Sockets, timers, paths, mounts,
+//! automounts, swaps and targets come with them (see [`KINDS`]); the page
+//! shows them when asked to.
 //!
 //! Reading needs no privilege. The actions go to systemd as the user, with
 //! the message flagged to allow interactive authorization, so systemd asks
@@ -63,7 +65,29 @@ const PROPS_IF: &str = "org.freedesktop.DBus.Properties";
 const PEER_IF: &str = "org.freedesktop.DBus.Peer";
 const BUS: Option<&str> = Some("org.freedesktop.DBus");
 const BUS_PATH: &str = "/org/freedesktop/DBus";
-const PATTERN: &[&str] = &["*.service"];
+/// The kinds of unit listed: the ones that can be started, stopped or
+/// switched on at boot. Devices, slices and scopes are left out: systemd
+/// makes and drops them itself, and nothing is done to them by hand.
+const KINDS: &[&str] = &[
+    "service",
+    "socket",
+    "timer",
+    "path",
+    "mount",
+    "automount",
+    "swap",
+    "target",
+];
+const PATTERN: &[&str] = &[
+    "*.service",
+    "*.socket",
+    "*.timer",
+    "*.path",
+    "*.mount",
+    "*.automount",
+    "*.swap",
+    "*.target",
+];
 /// Longest a read call may take. systemd answers in milliseconds; this is
 /// for a PID 1 that is busy (a long daemon-reload), so the sampling thread
 /// doesn't wait D-Bus's default 25 s.
@@ -386,7 +410,7 @@ impl State {
                 let Ok((id, _)) = msg.body().deserialize::<(String, OwnedObjectPath)>() else {
                     return;
                 };
-                if !id.ends_with(".service") {
+                if kind(&id).is_none() {
                     return;
                 }
                 let new = member == "UnitNew";
@@ -504,8 +528,8 @@ impl ServiceReader {
         self.read(async |live, state| failed(live, state).await)
     }
 
-    /// One service's details. `None` for a name that isn't a service
-    /// (see [`valid_name`]), one systemd doesn't know, and when systemd
+    /// One unit's details. `None` for a name that isn't one of the listed
+    /// kinds (see [`valid_name`]), one systemd doesn't know, and when systemd
     /// doesn't answer.
     pub fn details(&mut self, name: &str) -> Option<Details> {
         if !valid_name(name) {
@@ -873,7 +897,9 @@ async fn failed(live: &mut Live, state: &mut State) -> zbus::Result<Vec<String>>
     let mut names: Vec<String> = units(live, state)
         .await?
         .into_iter()
-        .filter(|u| u.active == "failed")
+        // Services only: a failed mount or socket is shown on the page
+        // with every unit type, and isn't a failed service.
+        .filter(|u| u.active == "failed" && kind(&u.name) == Some("service"))
         .map(|u| u.name)
         .collect();
     names.sort_by(|a, b| by_name(a, b));
@@ -905,10 +931,14 @@ async fn details(live: &mut Live, state: &mut State, name: &str) -> zbus::Result
         .call(state, unit.as_str(), PROPS_IF, "GetAll", &(UNIT_IF,))
         .await?
         .unwrap_or_default();
-    let service_props: Props = live
-        .call(state, unit.as_str(), PROPS_IF, "GetAll", &(SERVICE_IF,))
-        .await?
-        .unwrap_or_default();
+    // Only a service has the Service interface; systemd refuses the rest.
+    let service_props: Props = if kind(name) == Some("service") {
+        live.call(state, unit.as_str(), PROPS_IF, "GetAll", &(SERVICE_IF,))
+            .await?
+            .unwrap_or_default()
+    } else {
+        Props::default()
+    };
     if unit_props.is_empty() {
         return Ok(None);
     }
@@ -1158,11 +1188,11 @@ pub(crate) fn parse_description(text: &str) -> Option<String> {
     found.filter(|d| !d.is_empty())
 }
 
-/// Whether `name` is a service unit name: what [`act`] and
-/// [`ServiceReader::details`] accept. Paths are refused: `EnableUnitFiles`
-/// would link a file from anywhere.
+/// Whether `name` is the name of a unit of one of the listed kinds (see
+/// [`KINDS`]): what [`act`] and [`ServiceReader::details`] accept. Paths
+/// are refused: `EnableUnitFiles` would link a file from anywhere.
 pub fn valid_name(name: &str) -> bool {
-    let Some(stem) = name.strip_suffix(".service") else {
+    let Some((stem, _)) = name.rsplit_once('.').filter(|_| kind(name).is_some()) else {
         return false;
     };
     name.len() <= 255
@@ -1173,8 +1203,16 @@ pub fn valid_name(name: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || b":-_.\\@".contains(&b))
 }
 
+/// A unit name's kind, `service` for `sshd.service`, when it is one of
+/// [`KINDS`].
+pub fn kind(name: &str) -> Option<&'static str> {
+    let (_, suffix) = name.rsplit_once('.')?;
+    KINDS.iter().copied().find(|k| *k == suffix)
+}
+
 fn is_template(name: &str) -> bool {
-    name.ends_with("@.service")
+    name.rsplit_once('.')
+        .is_some_and(|(stem, _)| stem.ends_with('@'))
 }
 
 fn is_instance(name: &str) -> bool {
@@ -1226,7 +1264,7 @@ pub enum JobResult {
 /// Why an action wasn't done.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ActionError {
-    /// Not a service name (see [`valid_name`]).
+    /// Not the name of a unit of a listed kind (see [`valid_name`]).
     InvalidName,
     /// polkit said no: the password dialog was cancelled, or the user may
     /// not manage services.

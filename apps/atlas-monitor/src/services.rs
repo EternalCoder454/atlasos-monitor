@@ -1,5 +1,6 @@
 //! The Services table: the system's services from the sampling loop's
-//! reader, searched, filtered to the failed ones and sorted here, and
+//! reader (with All Unit Types, its sockets, timers, mounts and the rest
+//! too), searched, filtered to the failed ones and sorted here, and
 //! changed by row diffs (`rows.rs`). Start, Stop, Restart, Enable and
 //! Disable go to systemd on a thread of their own, since polkit may ask for
 //! a password first: the GUI thread never waits on it.
@@ -31,7 +32,8 @@ pub mod qobject {
         /// systemd answered the last read: without it the list is the last
         /// one it gave, if any.
         #[qproperty(bool, available)]
-        /// Failed services, shown or not.
+        /// Failed units of the kinds shown (services, or every kind with
+        /// all unit types on), whether the search shows them or not.
         #[qproperty(i32, failed, cxx_name = "failedCount")]
         /// An action is under way; another waits for it.
         #[qproperty(bool, busy)]
@@ -54,6 +56,12 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "setProblemsOnly"]
         fn set_problems_only(self: Pin<&mut ServiceModel>, on: bool);
+
+        /// Sockets, timers, mounts and the other kinds that can be
+        /// started too, not just services.
+        #[qinvokable]
+        #[cxx_name = "setAllTypes"]
+        fn set_all_types(self: Pin<&mut ServiceModel>, on: bool);
 
         /// A row's unit name: the key a menu keeps, so what it acts on is
         /// the service it was opened for, wherever its row has gone.
@@ -197,6 +205,7 @@ struct View {
     /// Lowercased.
     search: String,
     problems_only: bool,
+    all_types: bool,
 }
 
 impl Default for View {
@@ -206,6 +215,7 @@ impl Default for View {
             descending: true,
             search: String::new(),
             problems_only: false,
+            all_types: false,
         }
     }
 }
@@ -305,13 +315,28 @@ fn fold_cmp(a: &str, b: &str) -> Ordering {
         .cmp(b.chars().flat_map(char::to_lowercase))
 }
 
+/// Whether the unit is of a kind shown: services, or every kind.
+fn kind_shown(s: &Service, view: &View) -> bool {
+    view.all_types || services::kind(&s.name) == Some("service")
+}
+
 fn matches(s: &Service, view: &View) -> bool {
-    if view.problems_only && s.status() != Status::Failed {
+    if !kind_shown(s, view) || view.problems_only && s.status() != Status::Failed {
         return false;
     }
     view.search.is_empty()
         || s.name.to_lowercase().contains(&view.search)
         || s.description.to_lowercase().contains(&view.search)
+}
+
+/// The failed units of the kinds shown, by name, as the rows are.
+fn failed_count(services: &[Service], view: &View) -> i32 {
+    int(services
+        .iter()
+        .filter(|s| kind_shown(s, view) && s.status() == Status::Failed)
+        .map(|s| &s.name)
+        .collect::<HashSet<_>>()
+        .len())
 }
 
 /// The rows to show: the matching services, sorted, ties by name.
@@ -380,27 +405,23 @@ impl qobject::ServiceModel {
             self.as_mut().set_loaded(true);
             return;
         };
-        // By name, as the rows are.
-        let failed = int(list
-            .iter()
-            .filter(|s| s.status() == Status::Failed)
-            .map(|s| &s.name)
-            .collect::<HashSet<_>>()
-            .len());
         self.as_mut().rust_mut().services = list;
         self.as_mut().relayout();
-        if failed != *self.failed() {
-            self.as_mut().set_failed(failed);
-        }
         self.as_mut().set_loaded(true);
     }
 
     fn relayout(mut self: Pin<&mut Self>) {
-        let new = {
+        let (new, failed) = {
             let r = self.rust();
-            layout(&r.services, &r.view)
+            (
+                layout(&r.services, &r.view),
+                failed_count(&r.services, &r.view),
+            )
         };
         self.as_mut().replace_rows(new);
+        if failed != *self.failed() {
+            self.as_mut().set_failed(failed);
+        }
     }
 
     pub fn sort_by(mut self: Pin<&mut Self>, role: &QString, descending: bool) {
@@ -426,6 +447,11 @@ impl qobject::ServiceModel {
 
     pub fn set_problems_only(mut self: Pin<&mut Self>, on: bool) {
         self.as_mut().rust_mut().view.problems_only = on;
+        self.relayout();
+    }
+
+    pub fn set_all_types(mut self: Pin<&mut Self>, on: bool) {
+        self.as_mut().rust_mut().view.all_types = on;
         self.relayout();
     }
 
@@ -575,6 +601,29 @@ mod tests {
         view.search = "bee".into();
         view.problems_only = true;
         assert!(layout(&list, &view).is_empty());
+    }
+
+    #[test]
+    fn other_unit_types_only_when_asked() {
+        let list = vec![
+            service("a.service", "", ActiveState::Active, "running"),
+            service("b.socket", "", ActiveState::Failed, "failed"),
+            service("c.timer", "", ActiveState::Active, "waiting"),
+            service("d.service", "", ActiveState::Failed, "failed"),
+        ];
+        let mut view = View {
+            column: Column::Name,
+            descending: false,
+            ..View::default()
+        };
+        assert_eq!(names(&layout(&list, &view)), ["a.service", "d.service"]);
+        assert_eq!(failed_count(&list, &view), 1);
+        view.all_types = true;
+        assert_eq!(
+            names(&layout(&list, &view)),
+            ["a.service", "b.socket", "c.timer", "d.service"]
+        );
+        assert_eq!(failed_count(&list, &view), 2);
     }
 
     #[test]

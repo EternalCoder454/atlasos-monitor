@@ -363,13 +363,25 @@ fn valid_names() {
         "getty@.service",
         r"systemd-fsck@dev-disk-by\x2duuid-8186\x2dCBAC.service",
         "dbus-:1.3-org.freedesktop.problems@0.service",
+        "sshd.socket",
+        "fstrim.timer",
+        "-.mount",
+        r"dev-disk-by\x2duuid-1234.swap",
+        "proc-sys-fs-binfmt_misc.automount",
+        "cups.path",
+        "multi-user.target",
     ] {
         assert!(valid_name(name), "{name}");
     }
     for name in [
         "",
         ".service",
-        "x.socket",
+        ".socket",
+        "x.device",
+        "x.slice",
+        "x.scope",
+        "x.servicex",
+        "service",
         "x.service.d",
         "/etc/systemd/system/x.service",
         "../x.service",
@@ -384,6 +396,20 @@ fn valid_names() {
     assert_eq!(long.len(), 255);
     assert!(valid_name(&long));
     assert!(!valid_name(&format!("a{long}")));
+}
+
+#[test]
+fn kinds_and_templates() {
+    assert_eq!(kind("sshd.service"), Some("service"));
+    assert_eq!(kind("dbus-org.freedesktop.socket"), Some("socket"));
+    assert_eq!(kind("-.mount"), Some("mount"));
+    assert_eq!(kind("dev-sda.device"), None);
+    assert_eq!(kind("service"), None);
+    assert!(is_template("getty@.service"));
+    assert!(is_template("sshd@.socket"));
+    assert!(!is_template("getty@tty1.service"));
+    assert!(is_instance("sshd@0-1.2.3.4:22.socket"));
+    assert!(!is_instance("sshd.socket"));
 }
 
 #[test]
@@ -531,7 +557,7 @@ fn act_refuses_a_path_before_the_bus() {
         Err(ActionError::InvalidName)
     );
     assert_eq!(
-        act("x.socket", Action::Start),
+        act("x.device", Action::Start),
         Err(ActionError::InvalidName)
     );
 }

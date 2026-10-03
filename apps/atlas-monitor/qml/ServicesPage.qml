@@ -169,6 +169,16 @@ Item {
                 Accessible.role: Accessible.Heading
             }
             QQC2.Label {
+                text: qsTr("All Unit Types")
+            }
+            AtlasSwitch {
+                id: allTypes
+                // Sockets, timers, mounts, paths, swaps and targets too.
+                onToggled: page.services.setAllTypes(checked)
+                Accessible.name: qsTr("All Unit Types")
+                Accessible.description: qsTr("Show sockets, timers, mounts and targets as well as services")
+            }
+            QQC2.Label {
                 text: page.services.failedCount > 0 ? qsTr("Failed Only (%1)").arg(page.services.failedCount) : qsTr("Failed Only")
                 opacity: failedOnly.enabled ? 1 : 0.5
             }
@@ -226,7 +236,7 @@ Item {
             Accessible.name: qsTr("Services")
             model: page.services
             sortRole: "status"
-            placeholderText: !page.services.loaded ? qsTr("Reading services…") : !page.services.available ? qsTr("systemd didn't answer, so services can't be listed.") : search.query.length > 0 ? qsTr("No Services Match") : failedOnly.checked ? qsTr("No Service Has Failed") : ""
+            placeholderText: !page.services.loaded ? qsTr("Reading services…") : !page.services.available ? qsTr("systemd didn't answer, so services can't be listed.") : search.query.length > 0 ? (allTypes.checked ? qsTr("No Units Match") : qsTr("No Services Match")) : failedOnly.checked ? (allTypes.checked ? qsTr("No Unit Has Failed") : qsTr("No Service Has Failed")) : ""
             columns: [
                 {
                     title: qsTr("Status"),
@@ -235,7 +245,7 @@ Item {
                     cell: statusCell
                 },
                 {
-                    title: qsTr("Service"),
+                    title: allTypes.checked ? qsTr("Unit") : qsTr("Service"),
                     role: "name",
                     width: 14
                 },
