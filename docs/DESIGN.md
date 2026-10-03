@@ -332,6 +332,32 @@ The readers the loop drives (`atlas-sysinfo`):
   Other devices are read even when their bus sleeps: the SMBus controller
   the memory sensors sit behind suspends between transfers. To see it:
   `--example sensors`.
+- `power`: `PowerSampler` finds the batteries and adapters in
+  `/sys/class/power_supply` and holds their files open: a few `pread`s per
+  supply a tick, and the directory listed again every 10 ticks for a pack
+  pulled from its bay or a dock, or at once when a held pack stops reading
+  (ACPI removes a pulled pack's supply). The cycle count and charge limit
+  are read every 10 ticks: on a ThinkPad each read runs an ACPI method. A battery's charge in µAh is turned into
+  watt-hours at its design voltage (`voltage_min_design`), so capacity and
+  health don't move with the load, and the time estimate takes the rate
+  at that voltage too (charge over current). The rate is read as a magnitude, since
+  some drivers count discharge as negative. The percentage is the
+  firmware's `capacity` (what Plasma's applet shows) before energy over
+  full. Time left is the driver's `time_to_empty_now`/`time_to_full_now`
+  where it has them, else the energy left at a rate averaged over about
+  30 s on the boot clock, reset when the status changes or after a
+  suspend. Charging, it counts to the charge limit
+  (`charge_control_end_threshold`) when one is set, and then the driver's
+  time to full (which counts to 100%) is not used. `Supplies::total`
+  sums the packs; `packs` keeps each, since two packs drain one after the
+  other. An idle pack with no rate adds 0 W to the sum; a charging or
+  discharging one without a rate leaves it unknown. A peripheral's battery (`scope=Device`: a mouse, a controller) is
+  left out, and so is an empty bay (`present=0`). Adapters are named "AC
+  Adapter", "USB-C Port", "USB Charger" and "Wireless Charger", and are
+  online at `online` 1 or 2 (a programmable PPS source). A USB-C port
+  online gives the charger's highest offer (`voltage_max` ×
+  `current_max`, up to 240 W). To see it:
+  `--example power`.
 - History is not kept here: the app's `Series` holds it.
 
 ## Privilege
