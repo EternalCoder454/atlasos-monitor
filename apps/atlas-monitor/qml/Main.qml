@@ -61,18 +61,25 @@ QQC2.ApplicationWindow {
             "about": aboutPage
         })
 
+    // Its own keys only: "constructor" is no page.
+    function isPage(kind) {
+        return Object.prototype.hasOwnProperty.call(pages, kind);
+    }
+
     // `name` is a page ("cpu"), or a kind and a device ("disk:nvme0n1").
     function showPage(name) {
+        // A page picked before a device's page came back wins over it.
+        pendingPage = "";
+        forgetPending.stop();
         if (name === currentPage) {
             return;
         }
         gone.stop();
-        pendingPage = "";
         // Split at the first colon only: an alias interface is "eth0:1".
         const colon = name.indexOf(":");
         const kind = colon < 0 ? name : name.slice(0, colon);
         const device = colon < 0 ? undefined : name.slice(colon + 1);
-        const known = pages[kind] !== undefined && (device !== undefined) === ["disk", "network", "gpu", "battery"].includes(kind) && device !== "";
+        const known = isPage(kind) && (device !== undefined) === ["disk", "network", "gpu", "battery"].includes(kind) && device !== "";
         var c = known ? pages[kind] : overviewPage;
         currentPage = known ? name : "overview";
         // Only the page on screen is sampled.
@@ -511,16 +518,74 @@ QQC2.ApplicationWindow {
         }
     }
 
+    // Pages are saved as they change, from when the last one is back.
+    property bool started: false
+    onCurrentPageChanged: {
+        if (started) {
+            backend.savePage(currentPage);
+        }
+    }
+
+    // A device's page waits for its list, which comes with the first tick.
+    // A list that comes back without it, or not at all, leaves Overview.
+    Timer {
+        id: forgetPending
+        interval: root.backend.refreshInterval * 2 + 1000
+        onTriggered: root.pendingPage = ""
+    }
+
     Component.onCompleted: {
         if (backend.windowMaximized) {
             showMaximized();
         }
         const last = backend.lastPage;
-        const device = last.includes(":");
-        showPage(device || pages[last] === undefined ? "overview" : last);
-        // A device's page waits for its list, which comes with the first tick.
-        if (device) {
-            pendingPage = last;
+        const colon = last.indexOf(":");
+        const lists = {
+            "disk": devices.diskNames,
+            "network": devices.netNames,
+            "gpu": gpu.cardNames,
+            "battery": battery.packNames
+        };
+        const kind = colon < 0 ? last : last.slice(0, colon);
+        const names = colon < 0 ? undefined : lists[kind];
+        if (names !== undefined && names.includes(last.slice(colon + 1))) {
+            showPage(last);
+        } else {
+            showPage(colon < 0 && isPage(last) ? last : "overview");
+            if (names !== undefined && names.length === 0) {
+                pendingPage = last;
+                forgetPending.start();
+            }
+        }
+        started = true;
+    }
+
+    // Size and maximized state are saved once a change settles: maximizing
+    // can resize the window before it says it's maximized. Minimized or
+    // full screen, the last of them stands.
+    Timer {
+        id: settle
+        interval: 500
+        onTriggered: {
+            if (root.visibility === Window.Windowed || root.visibility === Window.Maximized) {
+                root.backend.saveWindowSize(root.width, root.height, root.visibility === Window.Maximized);
+            }
+        }
+    }
+    onWidthChanged: settle.restart()
+    onHeightChanged: settle.restart()
+    onVisibilityChanged: settle.restart()
+
+    function flushState() {
+        if (settle.running) {
+            settle.stop();
+            settle.triggered();
+        }
+    }
+    Connections {
+        target: Qt.application
+        function onAboutToQuit() {
+            root.flushState();
         }
     }
 
@@ -529,8 +594,5 @@ QQC2.ApplicationWindow {
         onActivated: root.close()
     }
 
-    onClosing: {
-        backend.saveWindowSize(width, height, visibility === Window.Maximized);
-        backend.savePage(currentPage);
-    }
+    onClosing: flushState()
 }
