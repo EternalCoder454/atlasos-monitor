@@ -8,6 +8,7 @@ fn main() {
         .file("src/devices.rs")
         .file("src/graphics.rs")
         .file("src/processes.rs")
+        .file("src/startup.rs")
         .file("src/battery.rs")
         .file("src/sensors.rs")
         .file("src/sampler.rs")

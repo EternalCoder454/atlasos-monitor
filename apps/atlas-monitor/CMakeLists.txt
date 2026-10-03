@@ -63,7 +63,7 @@ qt_add_qml_module(atlas-monitor-app
     NO_IMPORT_SCAN
     QML_FILES
         qml/Main.qml qml/Format.qml qml/OverviewPage.qml qml/CpuPage.qml qml/MemoryPage.qml
-        qml/DiskPage.qml qml/NetworkPage.qml qml/GpuPage.qml qml/BatteryPage.qml qml/SensorsPage.qml qml/AppsPage.qml
+        qml/DiskPage.qml qml/NetworkPage.qml qml/GpuPage.qml qml/BatteryPage.qml qml/SensorsPage.qml qml/AppsPage.qml qml/StartupPage.qml
         qml/SettingsPage.qml qml/AboutPage.qml
 )
 

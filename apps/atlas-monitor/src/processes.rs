@@ -31,6 +31,9 @@ pub mod qobject {
         #[qproperty(i32, count)]
         /// One row per application, with its processes under it.
         #[qproperty(bool, grouped)]
+        /// The pinned row's name, and how many processes it stands for.
+        #[qproperty(QString, pinned_name, cxx_name = "pinnedName")]
+        #[qproperty(i32, pinned_count, cxx_name = "pinnedCount")]
         #[namespace = "atlas_monitor"]
         type ProcessModel = super::ProcessModelRust;
     }
@@ -59,20 +62,17 @@ pub mod qobject {
         #[qinvokable]
         fn toggle(self: Pin<&mut ProcessModel>, row: i32);
 
-        /// End Task (0), Kill (1), Stop (2) or Continue (3) for a row: every
-        /// process of an application's. "" when done, else "gone" (it had
-        /// exited), "denied" (another user's) or "failed".
+        /// Takes the row a menu or a confirmation is about: its name and
+        /// the processes it is now, so what is acted on later is what the
+        /// user saw, wherever the row has gone since. False for no row.
         #[qinvokable]
-        fn act(self: &ProcessModel, row: i32, action: i32) -> QString;
+        fn pin(self: Pin<&mut ProcessModel>, row: i32) -> bool;
 
-        /// A row's name and how many processes it stands for, for the
-        /// confirmations.
+        /// End Task (0), Kill (1), Stop (2) or Continue (3) for the pinned
+        /// row's processes. "" when done, else "gone" (they had exited),
+        /// "denied" (another user's) or "failed".
         #[qinvokable]
-        #[cxx_name = "nameAt"]
-        fn name_at(self: &ProcessModel, row: i32) -> QString;
-        #[qinvokable]
-        #[cxx_name = "countAt"]
-        fn count_at(self: &ProcessModel, row: i32) -> i32;
+        fn act(self: &ProcessModel, action: i32) -> QString;
 
         #[inherit]
         #[cxx_name = "beginInsertRows"]
@@ -109,6 +109,12 @@ pub mod qobject {
         #[inherit]
         #[cxx_name = "endMoveRows"]
         fn end_move_rows(self: Pin<&mut ProcessModel>);
+        #[inherit]
+        #[cxx_name = "beginResetModel"]
+        fn begin_reset_model(self: Pin<&mut ProcessModel>);
+        #[inherit]
+        #[cxx_name = "endResetModel"]
+        fn end_reset_model(self: Pin<&mut ProcessModel>);
         #[inherit]
         fn index(self: &ProcessModel, row: i32, column: i32, parent: &QModelIndex) -> QModelIndex;
         #[inherit]
@@ -204,9 +210,13 @@ impl Default for View {
 pub struct ProcessModelRust {
     count: i32,
     grouped: bool,
+    pinned_name: QString,
+    pinned_count: i32,
     rows: Vec<Row>,
     data: AppsTick,
     view: View,
+    /// The pinned row's processes, by pid and start time.
+    pinned: Vec<(u32, u64)>,
 }
 
 impl Default for ProcessModelRust {
@@ -214,9 +224,12 @@ impl Default for ProcessModelRust {
         Self {
             count: 0,
             grouped: true,
+            pinned_name: QString::default(),
+            pinned_count: 0,
             rows: Vec::new(),
             data: AppsTick::default(),
             view: View::default(),
+            pinned: Vec::new(),
         }
     }
 }
@@ -295,8 +308,10 @@ fn layout(data: &AppsTick, view: &View, shown: &HashMap<RowKey, usize>) -> Vec<R
         let idx = (0..procs.len())
             .filter(|&i| view.search.matches(&procs[i], data.apps[i].as_deref()))
             .collect();
+        let mut seen = HashSet::new();
         return ordered(procs, idx, proc_key, shown, view)
             .into_iter()
+            .filter(|&i| seen.insert(proc_key(i)))
             .map(|i| proc_row(i, icon_of(data.apps[i].as_deref()), 0))
             .collect();
     }
@@ -324,7 +339,13 @@ fn layout(data: &AppsTick, view: &View, shown: &HashMap<RowKey, usize>) -> Vec<R
         })
         .collect();
     let mut rows = Vec::new();
+    // A key shows once: the model's steps from one layout to the next are
+    // planned by key.
+    let mut seen = HashSet::new();
     for g in ordered(groups, idx, group_key, shown, view) {
+        if !seen.insert(group_key(g)) {
+            continue;
+        }
         let group = &groups[g];
         let icon = icon_of(group.app.as_deref());
         let expanded = group.count > 1 && view.expanded.contains(&group.key);
@@ -337,8 +358,15 @@ fn layout(data: &AppsTick, view: &View, shown: &HashMap<RowKey, usize>) -> Vec<R
             expanded,
         });
         if expanded {
-            for i in ordered(procs, members[g].clone(), proc_key, shown, view) {
-                rows.push(proc_row(i, icon.clone(), 1));
+            // Found by a member: only the members that match show.
+            let mut shown_members = members[g].clone();
+            if !view.search.matches_group(group) {
+                shown_members.retain(|&i| view.search.matches(&procs[i], data.apps[i].as_deref()));
+            }
+            for i in ordered(procs, shown_members, proc_key, shown, view) {
+                if seen.insert(proc_key(i)) {
+                    rows.push(proc_row(i, icon.clone(), 1));
+                }
             }
         }
     }
@@ -350,14 +378,42 @@ fn layout(data: &AppsTick, view: &View, shown: &HashMap<RowKey, usize>) -> Vec<R
 enum Op {
     /// Rows `first..=last` go.
     Remove(usize, usize),
-    /// The row at `from` moves up to `to`.
+    /// The row at `from` moves to `to` (its index once moved).
     Move(usize, usize),
     /// `n` new rows from `at`.
     Insert(usize, usize),
 }
 
+/// Indices into `seq` of a longest strictly increasing run of its values.
+fn increasing(seq: &[usize]) -> Vec<usize> {
+    // tails[l]: the index ending the best run of length l + 1 found so far.
+    let mut tails: Vec<usize> = Vec::new();
+    let mut prev = vec![usize::MAX; seq.len()];
+    for (i, &v) in seq.iter().enumerate() {
+        let l = tails.partition_point(|&t| seq[t] < v);
+        if l > 0 {
+            prev[i] = tails[l - 1];
+        }
+        if l == tails.len() {
+            tails.push(i);
+        } else {
+            tails[l] = i;
+        }
+    }
+    let mut run = Vec::with_capacity(tails.len());
+    let mut at = tails.last().copied().unwrap_or(usize::MAX);
+    while at != usize::MAX {
+        run.push(at);
+        at = prev[at];
+    }
+    run.reverse();
+    run
+}
+
 /// The steps that turn `old` into `new`: removals from the bottom up, then
-/// each place filled in order by a row moved up or a new one.
+/// moves, then the new rows. The longest run of rows already in order stays
+/// put and every other row moves once, so one row jumping is one step, not
+/// a step for every row it passes.
 fn plan(old: &[RowKey], new: &[RowKey]) -> Vec<Op> {
     let wanted: HashSet<&RowKey> = new.iter().collect();
     let mut ops = Vec::new();
@@ -374,15 +430,36 @@ fn plan(old: &[RowKey], new: &[RowKey]) -> Vec<Op> {
             cur.drain(i..=last);
         }
     }
-    for (i, k) in new.iter().enumerate() {
-        if cur.get(i) == Some(&k) {
+    let place: HashMap<&RowKey, usize> = new.iter().enumerate().map(|(i, k)| (k, i)).collect();
+    let places: Vec<usize> = cur.iter().map(|k| place[k]).collect();
+    let still: HashSet<&RowKey> = increasing(&places).into_iter().map(|i| cur[i]).collect();
+    // Every other row that stays moves once, in the new order, to just
+    // after the row it follows there (or to the top): then the rows that
+    // stay are in the new order, short only of the new ones.
+    let staying: HashSet<&RowKey> = cur.iter().copied().collect();
+    let mut before: Option<&RowKey> = None;
+    for k in new {
+        if !staying.contains(k) {
             continue;
         }
-        if let Some(j) = cur[i..].iter().position(|c| *c == k).map(|j| j + i) {
-            ops.push(Op::Move(j, i));
-            let moved = cur.remove(j);
-            cur.insert(i, moved);
-        } else {
+        if !still.contains(k) {
+            let from = cur.iter().position(|c| *c == k).unwrap_or_default();
+            let after = before.and_then(|b| cur.iter().position(|c| *c == b));
+            let to = match after {
+                None => 0,
+                Some(a) if a < from => a + 1,
+                Some(a) => a,
+            };
+            if to != from {
+                ops.push(Op::Move(from, to));
+                let moved = cur.remove(from);
+                cur.insert(to, moved);
+            }
+        }
+        before = Some(k);
+    }
+    for (i, k) in new.iter().enumerate() {
+        if cur.get(i) != Some(&k) {
             match ops.last_mut() {
                 Some(Op::Insert(at, n)) if *at + *n == i => *n += 1,
                 _ => ops.push(Op::Insert(i, 1)),
@@ -404,7 +481,13 @@ fn opt(v: Option<f64>) -> f64 {
 impl qobject::ProcessModel {
     /// A tick from the sampling thread.
     pub fn apply(mut self: Pin<&mut Self>, data: AppsTick) {
-        self.as_mut().rust_mut().data = data;
+        {
+            let mut r = self.as_mut().rust_mut();
+            // Applications that have gone are forgotten as open.
+            let alive: HashSet<&GroupKey> = data.groups.iter().map(|g| &g.key).collect();
+            r.view.expanded.retain(|k| alive.contains(k));
+            r.data = data;
+        }
         self.relayout();
     }
 
@@ -432,16 +515,26 @@ impl qobject::ProcessModel {
                     self.as_mut().end_remove_rows();
                 }
                 Op::Move(from, to) => {
-                    // `to` is above `from`, so Qt's destination is `to`.
-                    if self
+                    // Qt's destination is the row it goes before, counted
+                    // with it still in place.
+                    let dest = if to > from { to + 1 } else { to };
+                    if !self
                         .as_mut()
-                        .begin_move_rows(&root, int(from), int(from), &root, int(to))
+                        .begin_move_rows(&root, int(from), int(from), &root, int(dest))
                     {
-                        let rows = &mut self.as_mut().rust_mut().rows;
-                        let row = rows.remove(from);
-                        rows.insert(to, row);
-                        self.as_mut().end_move_rows();
+                        // Can't happen for a real move; if Qt refuses one
+                        // anyway, start the view over rather than drift.
+                        log::error!("the Apps model refused a move from {from} to {to}");
+                        self.as_mut().begin_reset_model();
+                        self.as_mut().rust_mut().rows = new;
+                        self.as_mut().end_reset_model();
+                        self.as_mut().update_count();
+                        return;
                     }
+                    let rows = &mut self.as_mut().rust_mut().rows;
+                    let row = rows.remove(from);
+                    rows.insert(to, row);
+                    self.as_mut().end_move_rows();
                 }
                 Op::Insert(at, n) => {
                     self.as_mut()
@@ -470,9 +563,13 @@ impl qobject::ProcessModel {
             let bottom = self.index(int(b), 0, &root);
             self.as_mut().data_changed(&top, &bottom, &QList::default());
         }
+        self.update_count();
+    }
+
+    fn update_count(self: Pin<&mut Self>) {
         let count = int(self.rust().rows.len());
         if count != *self.count() {
-            self.as_mut().set_count(count);
+            self.set_count(count);
         }
     }
 
@@ -538,26 +635,9 @@ impl qobject::ProcessModel {
         self.rust().rows.get(usize::try_from(row).ok()?)
     }
 
-    pub fn name_at(&self, row: i32) -> QString {
-        self.row(row)
-            .map(|r| QString::from(&*r.proc.name))
-            .unwrap_or_default()
-    }
-
-    pub fn count_at(&self, row: i32) -> i32 {
-        self.row(row).map_or(0, |r| int(r.count as usize))
-    }
-
-    pub fn act(&self, row: i32, action: i32) -> QString {
-        let action = match action {
-            0 => Action::End,
-            1 => Action::Kill,
-            2 => Action::Stop,
-            3 => Action::Continue,
-            _ => return QString::from("failed"),
-        };
-        let Some(row) = self.row(row) else {
-            return QString::from("gone");
+    pub fn pin(mut self: Pin<&mut Self>, row: i32) -> bool {
+        let Some(row) = self.row(row).cloned() else {
+            return false;
         };
         let data = &self.rust().data;
         let targets: Vec<(u32, u64)> = match &row.key {
@@ -570,11 +650,28 @@ impl qobject::ProcessModel {
                 .map(|(p, _)| (p.pid, p.start_time))
                 .collect(),
         };
+        let count = int(targets.len());
+        self.as_mut().rust_mut().pinned = targets;
+        self.as_mut()
+            .set_pinned_name(QString::from(&*row.proc.name));
+        self.as_mut().set_pinned_count(count);
+        true
+    }
+
+    pub fn act(&self, action: i32) -> QString {
+        let action = match action {
+            0 => Action::End,
+            1 => Action::Kill,
+            2 => Action::Stop,
+            3 => Action::Continue,
+            _ => return QString::from("failed"),
+        };
         // Every member is tried; the worst answer is the one reported. A
-        // member that exited in the meantime was what was wanted anyway.
+        // member that exited in the meantime was what was wanted anyway; a
+        // pid reused since fails the start-time check and is left alone.
         let mut done = 0;
         let mut worst = "";
-        for (pid, start) in targets {
+        for &(pid, start) in &self.rust().pinned {
             match process::act(pid, start, action) {
                 Ok(()) => done += 1,
                 Err(ActionError::Gone) => {}
@@ -664,7 +761,7 @@ mod tests {
                     cur.drain(a..=b);
                 }
                 Op::Move(from, to) => {
-                    assert!(to < from, "rows only move up");
+                    assert_ne!(to, from);
                     let r = cur.remove(from);
                     cur.insert(to, r);
                 }
@@ -694,6 +791,63 @@ mod tests {
             let new: Vec<_> = new.iter().map(|&n| k(n)).collect();
             assert_eq!(play(&old, &new), new, "{old:?} -> {new:?}");
         }
+    }
+
+    #[test]
+    fn one_row_moving_is_one_step() {
+        let old: Vec<_> = (1..=50).map(k).collect();
+        let mut new = old.clone();
+        let top = new.remove(0);
+        new.push(top);
+        assert_eq!(plan(&old, &new), vec![Op::Move(0, 49)]);
+        assert_eq!(plan(&new, &old), vec![Op::Move(49, 0)]);
+        let mut new = old.clone();
+        new.swap(10, 30);
+        assert_eq!(play(&old, &new), new);
+        assert_eq!(plan(&old, &new).len(), 2);
+    }
+
+    #[test]
+    fn random_plans_reach_the_new_rows_moving_each_row_at_most_once() {
+        let mut seed: u64 = 0x2545_f491_4f6c_dd1d;
+        let mut next = |n: u64| {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed % n
+        };
+        for _ in 0..500 {
+            let old: Vec<RowKey> = (0..next(30)).map(|n| k(n as u32)).collect();
+            let mut new: Vec<RowKey> = old.iter().filter(|_| next(4) != 0).cloned().collect();
+            for j in (1..new.len()).rev() {
+                if next(3) == 0 {
+                    new.swap(j, next(j as u64 + 1) as usize);
+                }
+            }
+            for n in 100..100 + next(5) {
+                new.insert(next(new.len() as u64 + 1) as usize, k(n as u32));
+            }
+            assert_eq!(play(&old, &new), new, "{old:?} -> {new:?}");
+            let moves = plan(&old, &new)
+                .iter()
+                .filter(|o| matches!(o, Op::Move(..)))
+                .count();
+            assert!(moves <= old.len(), "{old:?} -> {new:?}");
+        }
+    }
+
+    #[test]
+    fn a_search_shows_only_the_members_it_finds() {
+        let data = tick(vec![proc(1, "sh", 1.0), proc(2, "sh", 2.0)]);
+        let mut view = View::default();
+        view.expanded.insert(GroupKey::Process("sh".into()));
+        // Found by name, the whole group shows; by one pid, that member.
+        view.search = Search::new("sh");
+        assert_eq!(layout(&data, &view, &HashMap::new()).len(), 3);
+        view.search = Search::new("2");
+        let rows = layout(&data, &view, &HashMap::new());
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[1].key, RowKey::Proc(2, 0));
     }
 
     #[test]

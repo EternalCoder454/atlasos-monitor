@@ -24,17 +24,15 @@ Item {
             stop: 2,
             resume: 3
         })
-    // The row the menu or a confirmation acts on, and its name.
-    property int target: -1
-    property string targetName
-
     function percent(v) {
         return Number(v).toLocaleString(Qt.locale(), "f", 1) + "%";
     }
 
-    // Does `action` to the row now, and says why if it couldn't.
-    function act(row, action, name) {
-        const result = page.apps.act(row, action);
+    // Does `action` to the pinned row's processes (the model's `pin`), and
+    // says why if it couldn't.
+    function act(action) {
+        const name = page.apps.pinnedName;
+        const result = page.apps.act(action);
         if (result === "denied") {
             notice.show(qsTr("%1 belongs to another user or to the system, so Atlas Monitor isn't allowed to do that.").arg(name));
         } else if (result === "gone") {
@@ -46,23 +44,21 @@ Item {
 
     // End Task asks first only for an application of several processes:
     // one process asked to close can still save its work.
-    function endTask(row) {
-        page.target = row;
-        page.targetName = page.apps.nameAt(row);
-        if (page.apps.countAt(row) > 1) {
+    function endTask() {
+        if (page.apps.pinnedCount > 1) {
             endDialog.open();
         } else {
-            page.act(row, page.actions.end, page.targetName);
+            page.act(page.actions.end);
         }
     }
 
-    function kill(row) {
-        page.target = row;
-        page.targetName = page.apps.nameAt(row);
-        killDialog.open();
+    // Sorts once a header click has set both its column and order.
+    function resort() {
+        page.apps.sortBy(table.sortRole, table.sortOrder === Qt.DescendingOrder);
     }
 
     Shortcut {
+        enabled: page.visible
         sequence: StandardKey.Find
         onActivated: search.forceActiveFocus()
     }
@@ -203,14 +199,20 @@ Item {
                 }
             ])
 
-            onSortRoleChanged: page.apps.sortBy(sortRole, sortOrder === Qt.DescendingOrder)
-            onSortOrderChanged: page.apps.sortBy(sortRole, sortOrder === Qt.DescendingOrder)
+            onSortRoleChanged: Qt.callLater(page.resort)
+            onSortOrderChanged: Qt.callLater(page.resort)
             onToggleRequested: row => page.apps.toggle(row)
-            onDeleteRequested: row => page.endTask(row)
+            onDeleteRequested: row => {
+                if (page.apps.pin(row)) {
+                    page.endTask();
+                }
+            }
+            // The row is pinned as the menu opens: whatever the list does
+            // while the menu or a question is up, the answer goes to it.
             onContextMenuRequested: (row, x, y) => {
-                page.target = row;
-                page.targetName = page.apps.nameAt(row);
-                rowMenu.popup(table, x, y);
+                if (page.apps.pin(row)) {
+                    rowMenu.popup(table, x, y);
+                }
             }
 
             // Rows hold still under the pointer, and while a menu or a
@@ -220,17 +222,28 @@ Item {
         }
     }
 
+    // The selected row going (its process exited) leaves nothing selected,
+    // rather than the row that slides into its place: Delete would end that.
+    Connections {
+        target: page.apps
+        function onRowsAboutToBeRemoved(parent, first, last) {
+            if (table.currentIndex >= first && table.currentIndex <= last) {
+                table.currentIndex = -1;
+            }
+        }
+    }
+
     ContextMenu {
         id: rowMenu
         ContextMenuItem {
             text: qsTr("Stop")
             icon.name: "media-playback-pause"
-            onTriggered: page.act(page.target, page.actions.stop, page.targetName)
+            onTriggered: page.act(page.actions.stop)
         }
         ContextMenuItem {
             text: qsTr("Continue")
             icon.name: "media-playback-start"
-            onTriggered: page.act(page.target, page.actions.resume, page.targetName)
+            onTriggered: page.act(page.actions.resume)
         }
         ContextMenuSeparator {}
         ContextMenuItem {
@@ -238,39 +251,42 @@ Item {
             icon.name: "process-stop"
             shortcutText: qsTr("Del")
             destructive: true
-            onTriggered: page.endTask(page.target)
+            onTriggered: page.endTask()
         }
         ContextMenuItem {
             text: qsTr("Kill")
             icon.name: "edit-bomb"
             destructive: true
-            onTriggered: page.kill(page.target)
+            onTriggered: killDialog.open()
         }
     }
 
     ConfirmDialog {
         id: endDialog
-        title: qsTr("End %1?").arg(page.targetName)
-        text: qsTr("Each of its %1 processes is asked to close. Anything it hasn't saved may be lost.").arg(page.apps.countAt(page.target))
+        title: qsTr("End %1?").arg(page.apps.pinnedName)
+        text: qsTr("Each of its %1 processes is asked to close. Anything it hasn't saved may be lost.").arg(page.apps.pinnedCount)
         acceptText: qsTr("End Task")
         focusReject: true
-        onAccepted: page.act(page.target, page.actions.end, page.targetName)
+        onAccepted: page.act(page.actions.end)
     }
 
     ConfirmDialog {
         id: killDialog
-        title: qsTr("Kill %1?").arg(page.targetName)
+        title: qsTr("Kill %1?").arg(page.apps.pinnedName)
         text: qsTr("It stops at once, with no chance to save. Use this only for something that doesn't respond to End Task.")
         acceptText: qsTr("Kill")
         focusReject: true
-        onAccepted: page.act(page.target, page.actions.kill, page.targetName)
+        onAccepted: page.act(page.actions.kill)
     }
 
     Component.onCompleted: {
         // Kernel threads are left out each time the page opens; the menu
         // starts unticked to match.
         page.sampler.showKernelThreads(false);
-        page.apps.sortBy(table.sortRole, table.sortOrder === Qt.DescendingOrder);
+        // A hold left over from a page closed under the pointer.
+        page.apps.setHeld(false);
+        page.resort();
         page.apps.setSearch(search.query);
     }
+    Component.onDestruction: page.apps.setHeld(false)
 }

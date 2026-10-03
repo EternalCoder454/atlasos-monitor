@@ -15,6 +15,7 @@ mod sampling;
 mod sensors;
 mod series;
 mod settings;
+mod startup;
 mod stats;
 
 use std::ffi::{CStr, CString, c_char, c_void};
@@ -42,6 +43,7 @@ pub struct AtlasObjects {
     pub battery: *mut c_void,
     pub sensors: *mut c_void,
     pub apps: *mut c_void,
+    pub startup: *mut c_void,
 }
 
 /// Called once from `main.cpp`. Makes every QObject and starts the sampling
@@ -68,6 +70,7 @@ pub unsafe extern "C" fn atlas_objects_new(icon_theme: *const c_char) -> AtlasOb
     let mut battery = battery::qobject::battery_stats_make_unique();
     let mut sensors = sensors::qobject::sensor_list_make_unique();
     let mut apps = processes::qobject::process_model_make_unique();
+    let startup = startup::qobject::startup_list_make_unique();
     sensors
         .pin_mut()
         .set_available(atlas_sysinfo::sensors::available());
@@ -101,6 +104,7 @@ pub unsafe extern "C" fn atlas_objects_new(icon_theme: *const c_char) -> AtlasOb
         battery: battery.into_raw().cast(),
         sensors: sensors.into_raw().cast(),
         apps: apps.into_raw().cast(),
+        startup: startup.into_raw().cast(),
     }
 }
 
@@ -131,9 +135,11 @@ pub unsafe extern "C" fn atlas_icon_search_paths(icon_theme: *const c_char) -> *
     let theme = unsafe { text(icon_theme) };
     PATHS
         .get_or_init(|| {
-            let paths: Vec<String> = atlas_sysinfo::apps::Resolver::for_session(&theme)
-                .icon_search_paths()
-                .iter()
+            // The lookup alone: it reads nothing until asked for an icon,
+            // so the window isn't kept waiting on a scan.
+            let dirs = atlas_sysinfo::apps::desktop::data_dirs();
+            let paths: Vec<String> = atlas_sysinfo::apps::IconLookup::new(&theme, &dirs)
+                .search_paths()
                 .map(|p| p.to_string_lossy().into_owned())
                 .collect();
             CString::new(paths.join("\n")).unwrap_or_default()
