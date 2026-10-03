@@ -32,6 +32,14 @@ AtlasPage {
         tint: page.health.level === 2 ? Kirigami.Theme.negativeTextColor : page.health.level === 1 ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
         headline: !page.measured ? "" : page.health.level === 0 ? qsTr("Everything Looks Fine") : page.health.titles[0]
         subtitle: !page.measured ? "" : page.health.level === 0 ? qsTr("Nothing on this computer needs your attention.") : page.health.details[0]
+
+        // The one thing to do about the worst problem.
+        SecondaryButton {
+            readonly property string target: page.health.level > 0 ? (page.health.pages[0] ?? "") : ""
+            visible: page.measured && target.length > 0
+            text: target === "services" ? qsTr("Open Services") : qsTr("Open Apps")
+            onClicked: page.openPage(target)
+        }
     }
 
     // With more than one thing wrong, the rest are listed.
@@ -43,8 +51,10 @@ AtlasPage {
             SectionRow {
                 required property int index
                 iconName: page.health.levels[index + 1] === 2 ? "dialog-error" : "dialog-warning"
-                title: page.health.titles[index + 1]
-                subtitle: page.health.details[index + 1]
+                // The lists change one after another: a new row can read
+                // the next list before it has its entry.
+                title: page.health.titles[index + 1] ?? ""
+                subtitle: page.health.details[index + 1] ?? ""
             }
         }
     }

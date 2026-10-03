@@ -59,12 +59,14 @@ pub mod qobject {
 
         #[qobject]
         /// What is wrong with the machine, worst first, for the Overview.
-        /// The three lists are parallel.
+        /// The four lists are parallel.
         /// 0 when all is well, 1 for a warning, 2 when something is critical.
         #[qproperty(i32, level)]
         #[qproperty(QStringList, titles)]
         #[qproperty(QStringList, details)]
         #[qproperty(QList_i32, levels)]
+        /// The page that helps with each, "apps" or "services", or "".
+        #[qproperty(QStringList, pages)]
         #[namespace = "atlas_monitor"]
         type HealthStatus = super::HealthStatusRust;
     }
@@ -88,7 +90,7 @@ pub mod qobject {
 
 use core::pin::Pin;
 
-use atlas_sysinfo::health::{Alert, Level, worst};
+use atlas_sysinfo::health::{Alert, Level, Problem, worst};
 use atlas_sysinfo::stats::memory::Memory;
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::{QList, QString, QStringList};
@@ -246,6 +248,7 @@ pub struct HealthStatusRust {
     titles: QStringList,
     details: QStringList,
     levels: QList<i32>,
+    pages: QStringList,
     /// What was last published, so an unchanged list sends no signals.
     shown: Vec<Alert>,
 }
@@ -258,6 +261,24 @@ fn level_number(level: Option<Level>) -> i32 {
     }
 }
 
+/// Where the Overview's button takes the user for a problem: what is
+/// heating the processor or filling memory is on Apps, failed services on
+/// Services. The disk and drive alerts name a drive as people know it,
+/// not the device a page is keyed by, so they have none yet.
+fn page_for(p: &Problem) -> &'static str {
+    match p {
+        Problem::HotProcessor { .. }
+        | Problem::HotGraphics { .. }
+        | Problem::LowMemory { .. }
+        | Problem::HeavySwap { .. } => "apps",
+        Problem::ServicesFailed { .. } => "services",
+        Problem::DiskNearlyFull { .. }
+        | Problem::DriveFailing { .. }
+        | Problem::DriveOutOfSpares { .. }
+        | Problem::DriveWorn { .. } => "",
+    }
+}
+
 impl qobject::HealthStatus {
     pub fn apply(mut self: Pin<&mut Self>, alerts: Vec<Alert>) {
         if alerts == self.rust().shown {
@@ -265,6 +286,10 @@ impl qobject::HealthStatus {
         }
         let titles: QStringList = alerts.iter().map(|a| QString::from(&a.title())).collect();
         let details: QStringList = alerts.iter().map(|a| QString::from(&a.detail())).collect();
+        let pages: QStringList = alerts
+            .iter()
+            .map(|a| QString::from(page_for(&a.problem)))
+            .collect();
         let mut levels = QList::default();
         for a in &alerts {
             levels.append(level_number(Some(a.level)));
@@ -275,6 +300,7 @@ impl qobject::HealthStatus {
         self.as_mut().set_titles(titles);
         self.as_mut().set_details(details);
         self.as_mut().set_levels(levels);
+        self.as_mut().set_pages(pages);
         self.as_mut().set_level(level);
     }
 }
