@@ -87,6 +87,7 @@ pub unsafe extern "C" fn atlas_objects_new(icon_theme: *const c_char) -> AtlasOb
 
     services.pin_mut().rust_mut().sampler = Some(Box::new(sampler.pin_mut().qt_thread()));
     apps.pin_mut().rust_mut().details = Some(Box::new(details.pin_mut().qt_thread()));
+    apps.pin_mut().rust_mut().sampler = Some(Box::new(sampler.pin_mut().qt_thread()));
 
     let sink = sampler::Sink {
         cpu: cpu.pin_mut().qt_thread(),
@@ -105,6 +106,8 @@ pub unsafe extern "C" fn atlas_objects_new(icon_theme: *const c_char) -> AtlasOb
     sampler
         .pin_mut()
         .start(*backend.refresh_interval(), icon_theme, sink);
+    // The saved choice; a first tick already under way lists without it.
+    sampler.show_kernel_threads(*apps.kernel_threads());
 
     AtlasObjects {
         backend: backend.into_raw().cast(),

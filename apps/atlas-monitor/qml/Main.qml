@@ -364,7 +364,6 @@ QQC2.ApplicationWindow {
         id: appsPage
         AppsPage {
             apps: root.apps
-            sampler: root.sampler
             details: root.details
             hasGpu: root.gpu.cardNames.length > 0
         }

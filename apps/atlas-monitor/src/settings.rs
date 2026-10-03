@@ -8,6 +8,11 @@
 //! [EnergySaver]
 //! Automatic=false
 //! Never=org.kde.kdenlive,com.obsproject.Studio
+//!
+//! [Apps]
+//! GroupByApp=true
+//! KernelThreads=false
+//! HiddenColumns=diskRead,diskWrite
 //! ```
 //!
 //! Missing or unparseable values fall back to the defaults; an interval that
@@ -23,6 +28,13 @@ const KEY_GPU: &str = "GpuRendering";
 const ENERGY: &str = "EnergySaver";
 const KEY_AUTOMATIC: &str = "Automatic";
 const KEY_NEVER: &str = "Never";
+const APPS: &str = "Apps";
+const KEY_GROUPED: &str = "GroupByApp";
+const KEY_KERNEL: &str = "KernelThreads";
+const KEY_HIDDEN: &str = "HiddenColumns";
+
+/// The Apps columns hidden until the user shows them, by role.
+pub const DEFAULT_HIDDEN: [&str; 2] = ["diskRead", "diskWrite"];
 
 /// The refresh intervals Settings offers, in milliseconds.
 pub const INTERVALS_MS: [i32; 4] = [500, 1000, 2000, 5000];
@@ -86,18 +98,9 @@ impl Energy {
     }
 
     fn from_values(automatic: Option<String>, never: Option<String>) -> Self {
-        let mut list: Vec<String> = never
-            .unwrap_or_default()
-            .split(',')
-            .map(str::trim)
-            .filter(|id| !id.is_empty())
-            .map(str::to_owned)
-            .collect();
-        list.sort();
-        list.dedup();
         Self {
             automatic: automatic.is_some_and(|v| parse_bool(&v)),
-            never: list,
+            never: list(&never.unwrap_or_default()),
         }
     }
 
@@ -118,6 +121,75 @@ impl Energy {
             (!value.is_empty()).then_some(value.as_str()),
         )
     }
+}
+
+/// The Apps page's View menu.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AppsView {
+    /// One row per application, its processes under it.
+    pub grouped: bool,
+    pub kernel_threads: bool,
+    /// Column roles not shown. Saved even when empty: a missing key is
+    /// the default, which hides some.
+    pub hidden: Vec<String>,
+}
+
+impl Default for AppsView {
+    fn default() -> Self {
+        Self {
+            grouped: true,
+            kernel_threads: false,
+            hidden: DEFAULT_HIDDEN.map(str::to_owned).to_vec(),
+        }
+    }
+}
+
+impl AppsView {
+    pub fn load() -> Self {
+        Self::from_values(
+            rc::get(APPS, KEY_GROUPED),
+            rc::get(APPS, KEY_KERNEL),
+            rc::get(APPS, KEY_HIDDEN),
+        )
+    }
+
+    fn from_values(
+        grouped: Option<String>,
+        kernel: Option<String>,
+        hidden: Option<String>,
+    ) -> Self {
+        let d = Self::default();
+        Self {
+            grouped: grouped.map_or(d.grouped, |v| parse_bool(&v)),
+            kernel_threads: kernel.map_or(d.kernel_threads, |v| parse_bool(&v)),
+            hidden: hidden.map_or(d.hidden, |v| list(&v)),
+        }
+    }
+
+    pub fn save_grouped(on: bool) -> io::Result<()> {
+        rc::set(APPS, KEY_GROUPED, Some(if on { "true" } else { "false" }))
+    }
+
+    pub fn save_kernel_threads(on: bool) -> io::Result<()> {
+        rc::set(APPS, KEY_KERNEL, Some(if on { "true" } else { "false" }))
+    }
+
+    pub fn save_hidden(roles: &[String]) -> io::Result<()> {
+        rc::set(APPS, KEY_HIDDEN, Some(&roles.join(",")))
+    }
+}
+
+/// A comma-separated list, trimmed, sorted, without repeats or blanks.
+fn list(v: &str) -> Vec<String> {
+    let mut out: Vec<String> = v
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .collect();
+    out.sort();
+    out.dedup();
+    out
 }
 
 /// KConfig writes `true`/`false`; accept what a person might type by hand too.
@@ -175,6 +247,23 @@ mod tests {
         let got = Energy::from_values(s("true"), s(" b.App, a.App,,b.App "));
         assert!(got.automatic);
         assert_eq!(got.never, ["a.App", "b.App"]);
+    }
+
+    #[test]
+    fn apps_view_reads_back() {
+        assert_eq!(AppsView::from_values(None, None, None), AppsView::default());
+        assert_eq!(AppsView::default().hidden, ["diskRead", "diskWrite"]);
+        let got = AppsView::from_values(s("false"), s("true"), s("pid, gpu"));
+        assert!(!got.grouped);
+        assert!(got.kernel_threads);
+        assert_eq!(got.hidden, ["gpu", "pid"]);
+        // Saved empty: every column shown, not the default.
+        assert!(AppsView::from_values(None, None, s("")).hidden.is_empty());
+        let text = crate::rc::set_in("", APPS, KEY_HIDDEN, Some(""));
+        assert_eq!(
+            crate::rc::get_in(&text, APPS, KEY_HIDDEN).as_deref(),
+            Some("")
+        );
     }
 
     #[test]

@@ -20,6 +20,8 @@ pub mod qobject {
         type QHash_i32_QByteArray = cxx_qt_lib::QHash<cxx_qt_lib::QHashPair_i32_QByteArray>;
         include!("cxx-qt-lib/qlist.h");
         type QList_i32 = cxx_qt_lib::QList<i32>;
+        include!("cxx-qt-lib/qstringlist.h");
+        type QStringList = cxx_qt_lib::QStringList;
         include!(<QtCore/QAbstractListModel>);
         type QAbstractListModel;
     }
@@ -31,6 +33,10 @@ pub mod qobject {
         #[qproperty(i32, count)]
         /// One row per application, with its processes under it.
         #[qproperty(bool, grouped)]
+        /// Kernel threads are listed (the sampler reads them).
+        #[qproperty(bool, kernel_threads, cxx_name = "kernelThreads")]
+        /// Column roles the table leaves out.
+        #[qproperty(QStringList, hidden_columns, cxx_name = "hiddenColumns")]
         /// The pinned row's name, and how many processes it stands for.
         #[qproperty(QString, pinned_name, cxx_name = "pinnedName")]
         #[qproperty(i32, pinned_count, cxx_name = "pinnedCount")]
@@ -52,6 +58,15 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "setGrouping"]
         fn set_grouping(self: Pin<&mut ProcessModel>, on: bool);
+
+        #[qinvokable]
+        #[cxx_name = "showKernelThreads"]
+        fn show_kernel_threads(self: Pin<&mut ProcessModel>, on: bool);
+
+        /// Shows or hides the column with this role.
+        #[qinvokable]
+        #[cxx_name = "setColumnShown"]
+        fn set_column_shown(self: Pin<&mut ProcessModel>, role: &QString, shown: bool);
 
         /// Keeps the rows in their places while the pointer is over them.
         #[qinvokable]
@@ -172,12 +187,16 @@ use atlas_sysinfo::apps::{self, Column, GroupKey, Search};
 use atlas_sysinfo::files::{self, Shown};
 use atlas_sysinfo::process::{self, Action, ActionError, Proc};
 use cxx_qt::{CxxQtThread, CxxQtType, Threading};
-use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
+use cxx_qt_lib::{
+    QByteArray, QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QStringList, QVariant,
+};
 
 use crate::details::qobject::ProcessDetails;
 use crate::details::{Member, Subject};
 use crate::rows::int;
+use crate::sampler::qobject::Sampler;
 use crate::sampling::AppsTick;
+use crate::settings::AppsView;
 
 /// What a row stands for: an application's (or a name's) group, or one
 /// process by pid and start time.
@@ -240,21 +259,61 @@ pub struct ProcessModelRust {
     pinned_subject: Option<Subject>,
     /// The Details dialog's object.
     pub details: Option<Box<CxxQtThread<ProcessDetails>>>,
+    kernel_threads: bool,
+    hidden_columns: QStringList,
+    /// Where Show Kernel Threads goes: the sampler reads the processes.
+    pub sampler: Option<Box<CxxQtThread<Sampler>>>,
+    /// The hidden columns as saved.
+    hidden: Vec<String>,
+}
+
+/// The columns View can hide: all but Name.
+const HIDEABLE: [&str; 9] = [
+    "pid",
+    "cpu",
+    "memory",
+    "diskRead",
+    "diskWrite",
+    "gpu",
+    "power",
+    "netIn",
+    "netOut",
+];
+
+fn string_list(v: &[String]) -> QStringList {
+    let mut l = QList::<QString>::default();
+    for s in v {
+        l.append(QString::from(s));
+    }
+    QStringList::from(&l)
 }
 
 impl Default for ProcessModelRust {
     fn default() -> Self {
+        let saved = AppsView::load();
+        let hidden: Vec<String> = saved
+            .hidden
+            .into_iter()
+            .filter(|r| HIDEABLE.contains(&r.as_str()))
+            .collect();
         Self {
             count: 0,
-            grouped: true,
+            grouped: saved.grouped,
             pinned_name: QString::default(),
             pinned_count: 0,
             rows: Vec::new(),
             data: AppsTick::default(),
-            view: View::default(),
+            view: View {
+                grouped: saved.grouped,
+                ..View::default()
+            },
             pinned: Vec::new(),
             pinned_subject: None,
             details: None,
+            kernel_threads: saved.kernel_threads,
+            hidden_columns: string_list(&hidden),
+            sampler: None,
+            hidden,
         }
     }
 }
@@ -505,9 +564,42 @@ impl qobject::ProcessModel {
     }
 
     pub fn set_grouping(mut self: Pin<&mut Self>, on: bool) {
+        if let Err(e) = AppsView::save_grouped(on) {
+            log::warn!("saving Group by App: {e}");
+        }
         self.as_mut().rust_mut().view.grouped = on;
         self.as_mut().set_grouped(on);
         self.relayout_unheld();
+    }
+
+    pub fn show_kernel_threads(mut self: Pin<&mut Self>, on: bool) {
+        if let Err(e) = AppsView::save_kernel_threads(on) {
+            log::warn!("saving Show Kernel Threads: {e}");
+        }
+        self.as_mut().set_kernel_threads(on);
+        if let Some(s) = self.rust().sampler.as_deref() {
+            let _ = s.queue(move |s| s.show_kernel_threads(on));
+        }
+    }
+
+    pub fn set_column_shown(mut self: Pin<&mut Self>, role: &QString, shown: bool) {
+        let role = role.to_string();
+        if !HIDEABLE.contains(&role.as_str()) {
+            return;
+        }
+        let list = {
+            let mut r = self.as_mut().rust_mut();
+            r.hidden.retain(|h| *h != role);
+            if !shown {
+                r.hidden.push(role);
+                r.hidden.sort();
+            }
+            r.hidden.clone()
+        };
+        if let Err(e) = AppsView::save_hidden(&list) {
+            log::warn!("saving the Apps columns: {e}");
+        }
+        self.set_hidden_columns(string_list(&list));
     }
 
     pub fn set_held(mut self: Pin<&mut Self>, held: bool) {

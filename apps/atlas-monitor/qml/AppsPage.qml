@@ -15,7 +15,6 @@ Item {
 
     required property var apps
     required property var details
-    required property var sampler
     // Whether the machine has a graphics card to show a GPU column for.
     required property bool hasGpu
 
@@ -51,6 +50,14 @@ Item {
         } else {
             page.act(page.actions.end);
         }
+    }
+
+    // One of View's Columns items: shows or hides the column `role`.
+    component ColumnItem: QQC2.MenuItem {
+        required property string role
+        checkable: true
+        checked: !page.apps.hiddenColumns.includes(role)
+        onTriggered: page.apps.setColumnShown(role, checked)
     }
 
     // Sorts once a header click has set both its column and order.
@@ -112,7 +119,52 @@ Item {
                 QQC2.MenuItem {
                     text: qsTr("Show Kernel Threads")
                     checkable: true
-                    onTriggered: page.sampler.showKernelThreads(checked)
+                    checked: page.apps.kernelThreads
+                    onTriggered: page.apps.showKernelThreads(checked)
+                }
+                QQC2.MenuSeparator {}
+                QQC2.Menu {
+                    title: qsTr("Columns")
+
+                    ColumnItem {
+                        role: "pid"
+                        text: qsTr("PID")
+                    }
+                    ColumnItem {
+                        role: "cpu"
+                        text: qsTr("CPU")
+                    }
+                    ColumnItem {
+                        role: "memory"
+                        text: qsTr("Memory")
+                    }
+                    ColumnItem {
+                        role: "diskRead"
+                        text: qsTr("Disk Read")
+                    }
+                    ColumnItem {
+                        role: "diskWrite"
+                        text: qsTr("Disk Write")
+                    }
+                    ColumnItem {
+                        role: "gpu"
+                        text: qsTr("GPU")
+                        // No card, no column to offer.
+                        visible: page.hasGpu
+                        height: visible ? implicitHeight : 0
+                    }
+                    ColumnItem {
+                        role: "power"
+                        text: qsTr("Power")
+                    }
+                    ColumnItem {
+                        role: "netIn"
+                        text: qsTr("Net In")
+                    }
+                    ColumnItem {
+                        role: "netOut"
+                        text: qsTr("Net Out")
+                    }
                 }
             }
         }
@@ -154,7 +206,8 @@ Item {
                     fill: true,
                     iconRole: "icon",
                     // An application's row says how many processes it is.
-                    text: (v, row) => row.count > 1 ? qsTr("%1 (%2)").arg(v).arg(row.count) : v
+                    // A row on its way out can lose its name for a moment.
+                    text: (v, row) => row.count > 1 ? qsTr("%1 (%2)").arg(v).arg(row.count) : (v ?? "")
                 },
                 {
                     title: qsTr("PID"),
@@ -177,6 +230,20 @@ Item {
                     width: 6,
                     align: Qt.AlignRight,
                     text: v => Format.size(v)
+                },
+                {
+                    title: qsTr("Disk Read"),
+                    role: "diskRead",
+                    width: 6,
+                    align: Qt.AlignRight,
+                    text: v => Format.rate(v)
+                },
+                {
+                    title: qsTr("Disk Write"),
+                    role: "diskWrite",
+                    width: 6,
+                    align: Qt.AlignRight,
+                    text: v => Format.rate(v)
                 },
             ].concat(page.hasGpu ? [
                 {
@@ -210,7 +277,7 @@ Item {
                     align: Qt.AlignRight,
                     text: v => Format.rate(v)
                 }
-            ])
+            ]).filter(c => c.role === "name" || !page.apps.hiddenColumns.includes(c.role))
 
             onSortRoleChanged: Qt.callLater(page.resort)
             onSortOrderChanged: Qt.callLater(page.resort)
@@ -238,6 +305,20 @@ Item {
             // question is up about one of them.
             readonly property bool held: pointerInside || rowMenu.opened || endDialog.opened || killDialog.opened || detailsDialog.visible
             onHeldChanged: page.apps.setHeld(held)
+        }
+    }
+
+    // Hiding the column the table is sorted by sorts by CPU, or by name
+    // when that is hidden too.
+    Connections {
+        target: page.apps
+        function onHiddenColumnsChanged() {
+            if (!page.apps.hiddenColumns.includes(table.sortRole)) {
+                return;
+            }
+            const cpu = !page.apps.hiddenColumns.includes("cpu");
+            table.sortOrder = cpu ? Qt.DescendingOrder : Qt.AscendingOrder;
+            table.sortRole = cpu ? "cpu" : "name";
         }
     }
 
@@ -333,9 +414,6 @@ Item {
     }
 
     Component.onCompleted: {
-        // Kernel threads are left out each time the page opens; the menu
-        // starts unticked to match.
-        page.sampler.showKernelThreads(false);
         // A hold left over from a page closed under the pointer.
         page.apps.setHeld(false);
         page.resort();
