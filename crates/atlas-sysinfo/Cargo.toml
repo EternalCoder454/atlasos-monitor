@@ -13,6 +13,8 @@ rust-version.workspace = true
 rustix = { version = "1.1", features = ["fs", "net", "param", "process"] }
 # getpwuid_r: user names through NSS (nss-altfiles, systemd userdb).
 libc = "0.2"
+# Warnings the app's logger prints (Energy Saver's state file).
+log = "0.4"
 # podman's container lists (containers.json), for a container's name.
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

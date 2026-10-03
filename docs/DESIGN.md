@@ -459,6 +459,29 @@ The readers the loop drives (`atlas-sysinfo`):
   the generator dropping a hidden entry's unit. To see it:
   `--example autostart` (`--bench`, and `--set <id> on|off` for the test
   VM).
+- `ease`: Energy Saver. `ease::open(state_file())` gives a `Controller`
+  (or `Unavailable`, the reason the page shows instead of a switch), owned
+  by the sampling thread, which calls `tick(&mut resolver)` every
+  `TICK_EVERY` (5 s) while the window is open, whatever page is showing,
+  and drops it when the window closes. `rows()` is the page's list,
+  `ease`/`restore` its per-app actions, `set_automatic`/`set_never` the
+  settings. An eased app's units get `CPUWeight=10` as a runtime property
+  through the user's manager (`app-*` units only). Automatic: 30 s above
+  50% of a core eases it, 60 s below 15% puts it back. Never eased:
+  anything playing or recording (pw-dump, checked before every ease; no
+  answer means no easing), terminals, Atlas Monitor, apps listed as never,
+  an app the user put back (while it runs), and any unit whose weight
+  someone else set. uresourced, which AtlasOS runs, raises the focused app
+  and apps playing sound to 300; a weight changed after Atlas set it is let
+  go and never restored over. Closing the window or turning automatic off
+  puts back the automatic eases; manual ones stay. Every ease is listed in
+  `$XDG_RUNTIME_DIR/net.eterneon.atlas.monitor/eased`, so after a crash
+  `open` puts back the automatic ones and takes up the manual ones again,
+  where the weight is still 10. A tick reads two held files per unit
+  (86 µs for 33 units); a sound check takes about 12 ms and runs only
+  while something is busy or eased. To see it: `--example ease` (watches,
+  changes nothing), `--bench`, and `--trial`, which eases throwaway
+  `app-atlastest*` scopes only, simulates a crash and recovers.
 - History is not kept here: the app's `Series` holds it.
 
 ## Privilege

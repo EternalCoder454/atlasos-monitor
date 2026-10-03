@@ -17,10 +17,12 @@
 //! - [`smart`]: drive health from udisks2.
 //! - [`services`]: systemd's services, their details and actions.
 //! - [`autostart`]: what starts at login, and switching it on or off.
+//! - [`ease`]: Energy Saver, easing off busy applications and putting them back.
 //! - [`sysmem`]: Atlas Monitor's own memory use, for Settings.
 
 pub mod apps;
 pub mod autostart;
+pub mod ease;
 pub mod gpu;
 pub mod power;
 pub mod process;

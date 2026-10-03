@@ -82,6 +82,7 @@ version = "0.1.0"
 dependencies = [
  "futures-core",
  "libc",
+ "log",
  "rustix",
  "serde",
  "serde_json",
