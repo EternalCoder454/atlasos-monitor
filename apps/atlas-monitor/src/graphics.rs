@@ -19,6 +19,10 @@ pub mod qobject {
         /// of DRM node (the page key) and name; then the GPU page's card.
         #[qproperty(QStringList, card_names, cxx_name = "cardNames")]
         #[qproperty(QStringList, card_labels, cxx_name = "cardLabels")]
+        /// Each card's load in percent and temperature in °C, parallel to
+        /// the names, for the Overview's rows; NaN where unread.
+        #[qproperty(QList_f64, card_usages, cxx_name = "cardUsages")]
+        #[qproperty(QList_f64, card_temperatures, cxx_name = "cardTemperatures")]
         #[qproperty(QString, name)]
         #[qproperty(QString, label)]
         #[qproperty(QString, driver)]
@@ -84,6 +88,8 @@ use crate::series::Series;
 pub struct GpuStatsRust {
     card_names: QStringList,
     card_labels: QStringList,
+    card_usages: QList<f64>,
+    card_temperatures: QList<f64>,
     name: QString,
     label: QString,
     driver: QString,
@@ -117,6 +123,8 @@ impl Default for GpuStatsRust {
         Self {
             card_names: QStringList::default(),
             card_labels: QStringList::default(),
+            card_usages: QList::default(),
+            card_temperatures: QList::default(),
             name: QString::default(),
             label: QString::default(),
             driver: QString::default(),
@@ -200,8 +208,27 @@ impl qobject::GpuStats {
         self.as_mut().set_label(label.clone());
     }
 
-    /// Takes the shown card's reading out of a tick's; the others are for
-    /// the Overview.
+    /// Every card's load and temperature, in the sidebar's order. A card
+    /// without a reading (not sampled on this page) is NaN.
+    pub fn set_loads(mut self: Pin<&mut Self>, ticks: &[GpuTick]) {
+        let mut usages = QList::default();
+        let mut temperatures = QList::default();
+        for name in self.card_names().iter() {
+            let t = ticks.iter().find(|t| QString::from(&t.card.node) == *name);
+            let g = t.map(|t| &t.reading);
+            usages.append(g.and_then(|g| g.usage).unwrap_or(f64::NAN));
+            // Asleep, the temperature wasn't read: no figure beats an old one.
+            temperatures.append(
+                g.filter(|g| !g.asleep)
+                    .and_then(|g| g.temperature)
+                    .unwrap_or(f64::NAN),
+            );
+        }
+        self.as_mut().set_card_usages(usages);
+        self.as_mut().set_card_temperatures(temperatures);
+    }
+
+    /// Takes the shown card's reading out of a tick's.
     pub fn apply(mut self: Pin<&mut Self>, ticks: Vec<GpuTick>, fresh: bool) {
         let Some(t) = ticks
             .into_iter()

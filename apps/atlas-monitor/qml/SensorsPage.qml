@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
@@ -57,6 +59,8 @@ AtlasPage {
             // The kernel's name for it: what a search for the chip finds.
             footer: (page.s.drivers[index] ?? "") + (page.s.asleep[index] ? " · " + qsTr("asleep, so not read") : "")
 
+            // The readings shown open; folded ones are made only while
+            // Cores is open, so a collapsed processor costs one row.
             Repeater {
                 model: device.count
                 Reading {
@@ -76,12 +80,12 @@ AtlasPage {
                 onClicked: device.expanded = !device.expanded
             }
             Repeater {
-                model: device.count
+                model: device.expanded ? device.count : 0
                 Reading {
                     required property int index
                     sensors: page.s
                     at: device.first + index
-                    visible: device.expanded && (page.s.folded[at] ?? false)
+                    visible: page.s.folded[at] ?? false
                 }
             }
         }

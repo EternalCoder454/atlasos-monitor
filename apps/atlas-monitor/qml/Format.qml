@@ -59,7 +59,8 @@ QtObject {
         if (isNaN(v) || v <= 0) {
             return dash;
         }
-        return qsTr("%1 W").arg(Number(v).toLocaleString(Qt.locale(), "f", v < 10 ? 1 : 0));
+        // Decimals by the rounded figure, so 9.96 is "10 W", not "10.0 W".
+        return qsTr("%1 W").arg(Number(v).toLocaleString(Qt.locale(), "f", Math.round(v * 10) / 10 < 10 ? 1 : 0));
     }
 
     // Seconds as the Go version writes them: "2h 15m", "40m"; -1 is a dash.

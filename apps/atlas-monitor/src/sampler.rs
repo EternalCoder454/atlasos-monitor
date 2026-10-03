@@ -124,9 +124,16 @@ impl Sink {
         if let Some(cards) = devices.cards.take() {
             let _ = self.gpu.queue(move |o| o.set_cards(&cards));
         }
-        // The Overview's readings are for its own row, not the GPU page.
-        if let (Some(g), Page::Gpu(_)) = (tick.gpus, &tick.page) {
-            let _ = self.gpu.queue(move |o| o.apply(g, fresh));
+        // Every reading feeds the Overview's rows; only the GPU page's
+        // card feeds the page.
+        if let Some(g) = tick.gpus {
+            let on_page = matches!(tick.page, Page::Gpu(_));
+            let _ = self.gpu.queue(move |mut o| {
+                o.as_mut().set_loads(&g);
+                if on_page {
+                    o.apply(g, fresh);
+                }
+            });
         }
         if let Some(p) = devices.power.take() {
             let on_page = matches!(tick.page, Page::Battery(_));

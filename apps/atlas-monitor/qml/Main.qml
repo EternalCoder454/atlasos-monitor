@@ -304,6 +304,9 @@ QQC2.ApplicationWindow {
             cpu: root.cpu
             memory: root.memory
             health: root.health
+            devices: root.devices
+            gpu: root.gpu
+            battery: root.battery
             onOpenPage: name => root.showPage(name)
         }
     }

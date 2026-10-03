@@ -54,7 +54,7 @@ pub mod qobject {
 
 use std::pin::Pin;
 
-use atlas_sysinfo::sensors::{Device, Kind, Reading};
+use atlas_sysinfo::sensors::{Device, Kind};
 use cxx_qt_lib::{QList, QString, QStringList};
 
 #[derive(Default)]
@@ -70,14 +70,6 @@ pub struct SensorListRust {
     folded: QList<bool>,
     values: QStringList,
     warmths: QList<i32>,
-}
-
-/// "52 °C", "0.692 V"; a dash, as the pages write one, when unread.
-fn value(r: &Reading) -> String {
-    match r.value {
-        Some(v) => format!("{v:.*} {}", r.kind.decimals(), r.kind.unit()),
-        None => "–".to_owned(),
-    }
 }
 
 /// The hottest folded core, "" when the device folds none or none read.
@@ -113,36 +105,43 @@ where
 impl qobject::SensorList {
     pub fn apply(mut self: Pin<&mut Self>, devices: Vec<Device>) {
         let all = || devices.iter().flat_map(|d| &d.readings);
-        let labels = strings(all().map(|r| r.label.as_str()));
-        let names = strings(devices.iter().map(|d| d.name.as_str()));
-        let values: Vec<String> = all().map(value).collect();
+        let values: Vec<String> = all().map(|r| r.display()).collect();
         let values = strings(values.iter().map(String::as_str));
         let warmths = list(all().map(|r| i32::from(r.warmth())));
-        if labels != *self.labels() || names != *self.names() {
-            let mut start = 0;
-            let first = list(devices.iter().map(|d| {
-                let at = start;
-                start += d.readings.len();
-                i32::try_from(at).unwrap_or(i32::MAX)
-            }));
-            // Values before the structure, so new rows find theirs.
-            self.as_mut().set_values(values);
-            self.as_mut().set_warmths(warmths);
-            self.as_mut().set_folded(list(all().map(|r| r.folded)));
+        // The structure: every list the page's rows are laid out from. A
+        // change in any (two devices trading a reading) republishes it all.
+        let labels = strings(all().map(|r| r.label.as_str()));
+        let names = strings(devices.iter().map(|d| d.name.as_str()));
+        let drivers = strings(devices.iter().map(|d| d.driver.as_str()));
+        let folded = list(all().map(|r| r.folded));
+        let counts = list(
+            devices
+                .iter()
+                .map(|d| i32::try_from(d.readings.len()).unwrap_or(i32::MAX)),
+        );
+        let mut start = 0;
+        let first = list(devices.iter().map(|d| {
+            let at = start;
+            start += d.readings.len();
+            i32::try_from(at).unwrap_or(i32::MAX)
+        }));
+        let changed = labels != *self.labels()
+            || names != *self.names()
+            || drivers != *self.drivers()
+            || folded != *self.folded()
+            || counts != *self.counts()
+            || first != *self.first();
+        // Values before the structure, so new rows find theirs.
+        self.as_mut().set_values(values);
+        self.as_mut().set_warmths(warmths);
+        if changed {
+            self.as_mut().set_folded(folded);
             self.as_mut().set_labels(labels);
-            self.as_mut()
-                .set_drivers(strings(devices.iter().map(|d| d.driver.as_str())));
+            self.as_mut().set_drivers(drivers);
             self.as_mut().set_first(first);
-            self.as_mut().set_counts(list(
-                devices
-                    .iter()
-                    .map(|d| i32::try_from(d.readings.len()).unwrap_or(i32::MAX)),
-            ));
+            self.as_mut().set_counts(counts);
             // Last: the page's devices are built from the name list.
             self.as_mut().set_names(names);
-        } else {
-            self.as_mut().set_values(values);
-            self.as_mut().set_warmths(warmths);
         }
         self.as_mut()
             .set_asleep(list(devices.iter().map(|d| d.asleep)));

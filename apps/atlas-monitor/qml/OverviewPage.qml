@@ -1,17 +1,21 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import org.kde.kirigami as Kirigami
 import Atlas.Ui
 
-// What is wrong with the machine, then a row per part. The rows gain charts
-// and open their pages as those land (docs/DESIGN.md).
+// What is wrong with the machine, then a row per part that opens its page.
 AtlasPage {
     id: page
 
     required property var cpu
     required property var memory
     required property var health
+    required property var devices
+    required property var gpu
+    required property var battery
 
-    // A row asks for its page ("cpu", "memory").
+    // A row asks for its page ("cpu", "disk:nvme0n1").
     signal openPage(string name)
 
     // Until the first tick, say nothing rather than "all is well".
@@ -61,6 +65,50 @@ AtlasPage {
             title: qsTr("Memory")
             subtitle: page.measured ? Format.share(page.memory.used, page.memory.total) : ""
             value: page.measured ? page.percent(page.memory.used / page.memory.total * 100) : ""
+        }
+        Repeater {
+            model: page.devices.diskNames.length
+            SectionRow {
+                required property int index
+                iconName: "drive-harddisk"
+                chevron: true
+                onClicked: page.openPage("disk:" + page.devices.diskNames[index])
+                title: page.devices.diskLabels[index] ?? ""
+                value: Format.rate(page.devices.diskRates[index] ?? NaN)
+            }
+        }
+        Repeater {
+            model: page.devices.netNames.length
+            SectionRow {
+                required property int index
+                iconName: "network-wired"
+                chevron: true
+                onClicked: page.openPage("network:" + page.devices.netNames[index])
+                title: page.devices.netLabels[index] ?? ""
+                value: Format.rate(page.devices.netRates[index] ?? NaN)
+            }
+        }
+        Repeater {
+            model: page.gpu.cardNames.length
+            SectionRow {
+                required property int index
+                readonly property real temperature: page.gpu.cardTemperatures[index] ?? NaN
+                iconName: "show-gpu-effects"
+                chevron: true
+                onClicked: page.openPage("gpu:" + page.gpu.cardNames[index])
+                title: page.gpu.cardLabels[index] ?? ""
+                subtitle: isNaN(temperature) ? "" : qsTr("%1 °C").arg(Math.round(temperature))
+                value: Format.percent(page.gpu.cardUsages[index] ?? NaN)
+            }
+        }
+        // The batteries together; a group's packs are a click away.
+        SectionRow {
+            visible: page.battery.packNames.length > 0
+            iconName: "battery"
+            chevron: true
+            onClicked: page.openPage("battery:" + page.battery.packNames[0])
+            title: qsTr("Battery")
+            value: Format.percent(page.battery.packPercents[0] ?? NaN)
         }
     }
 }

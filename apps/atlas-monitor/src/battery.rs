@@ -293,10 +293,8 @@ impl qobject::BatteryStats {
         }
         let (charge, draw) = {
             let mut rust = self.as_mut().rust_mut();
-            // An unknown charge is a gap, not a fall to 0%.
-            if let Some(p) = b.percent {
-                rust.charge.push(p);
-            }
+            // An unknown charge breaks the line, not a fall to 0%.
+            rust.charge.push(b.percent.unwrap_or(f64::NAN));
             rust.draw.push(b.watts.unwrap_or(f64::NAN));
             (rust.charge.to_qlist(), rust.draw.to_qlist())
         };
