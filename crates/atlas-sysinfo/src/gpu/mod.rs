@@ -139,7 +139,12 @@ impl Card {
             Some("auto") => {}
             _ => return false,
         }
-        if power("runtime_status").as_deref() != Some("active") {
+        // "unsupported": no runtime PM in the driver (a VM's card), so it
+        // never sleeps either.
+        if !matches!(
+            power("runtime_status").as_deref(),
+            Some("active" | "unsupported")
+        ) {
             return false;
         }
         // Connectors are `card1-DP-1` beside `device`.

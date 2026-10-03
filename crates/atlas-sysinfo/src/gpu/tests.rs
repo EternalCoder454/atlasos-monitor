@@ -334,6 +334,12 @@ fn stays_awake_with_a_screen_or_without_runtime_pm() {
         "amdgpu",
         &ids("auto\n", "suspended\n"),
     );
+    sys.card(
+        "card5",
+        "0000:08:00.0",
+        "virtio-pci",
+        &ids("auto\n", "unsupported\n"),
+    );
     let connector = |card: &str, name: &str, enabled: &str| {
         let dir = sys.drm().join(card).join(name);
         fs::create_dir_all(&dir).unwrap();
@@ -344,6 +350,8 @@ fn stays_awake_with_a_screen_or_without_runtime_pm() {
     connector("card1", "card1-HDMI-A-1", "disabled\n");
     // Looked at, this would count; asleep, the card's connectors aren't.
     connector("card4", "card4-eDP-1", "enabled\n");
+    // No runtime PM in the driver (a VM's card): it never sleeps.
+    connector("card5", "card5-Virtual-1", "enabled\n");
     // A status that says connected doesn't count: reading it can probe.
     fs::write(sys.drm().join("card1/card1-HDMI-A-1/status"), "connected\n").unwrap();
 
@@ -354,4 +362,5 @@ fn stays_awake_with_a_screen_or_without_runtime_pm() {
     assert!(awake("card2"));
     assert!(!awake("card3"));
     assert!(!awake("card4"));
+    assert!(awake("card5"));
 }

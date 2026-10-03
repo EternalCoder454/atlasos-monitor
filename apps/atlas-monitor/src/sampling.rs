@@ -9,7 +9,7 @@
 //! - The sidebar's live values (processor and memory use, disk and network
 //!   rates, battery charge, graphics load) are read on every page: a few
 //!   held files and a power supply or two. Where the page reads the same
-//!   thing, the sidebar takes the page's figure instead of reading twice.
+//!   thing, the sidebar shows the page's figure, so the two agree.
 //!   A graphics card is read for the sidebar only if that can't keep it
 //!   awake ([`Card::stays_awake`]).
 //! - `statvfs` (disk space) and the address dump run on a page's first tick
@@ -206,9 +206,10 @@ pub struct Worker {
     interfaces: Vec<NetInterface>,
     net_io: NetSampler,
     power: Option<PowerSampler>,
-    /// The sidebar's own readers, read while the page doesn't read the
-    /// same thing. Kept for the whole run: one made as a page closes would
-    /// measure its first load over a moment.
+    /// The sidebar's own readers, kept for the whole run (one made as a
+    /// page closes would measure its first load over a moment) and read
+    /// every tick. Where the page reads the same thing, its figure is shown,
+    /// so the sidebar and the page agree.
     side_cpu: CpuSampler,
     side_memory: MemorySampler,
     /// Per card, in the order of `cards`: the load, for a card reading
@@ -370,9 +371,6 @@ impl Worker {
                 .map(|c| (c.clone(), GpuSampler::new(c, &self.cards)))
                 .collect()
         });
-        if self.side_gpus.len() != self.cards.len() {
-            self.refresh_side_gpus();
-        }
         self.sensors = (page == Page::Sensors && sensors::available()).then(Sensors::new);
         self.procs = (page == Page::Apps).then(|| ProcessSampler::new(self.wanted()));
         if page == Page::Cpu && self.cpu_info.is_none() {
@@ -466,10 +464,10 @@ impl Worker {
         });
         let sensors = self.sensors.as_mut().map(|s| s.sample().to_vec());
         let mut devices = devices;
-        devices.cpu_usage = Some(match &cpu {
-            Some(c) => c.sample.usage,
-            None => self.side_cpu.sample().usage,
-        });
+        // The sidebar's own readers are read every tick, so their next
+        // figure is never an average over a page that read the same thing.
+        let side_cpu = self.side_cpu.sample().usage;
+        devices.cpu_usage = Some(cpu.as_ref().map_or(side_cpu, |c| c.sample.usage));
         devices.memory_usage = memory.as_ref().map(Memory::usage_percent).or_else(|| {
             self.side_memory
                 .sample()
@@ -484,11 +482,8 @@ impl Worker {
                 let on_page = gpus
                     .as_ref()
                     .and_then(|g: &Vec<GpuTick>| g.iter().find(|t| t.card.node == card.node));
-                match (on_page, side) {
-                    (Some(t), _) => t.reading.usage,
-                    (None, Some(s)) => s.sample().usage,
-                    (None, None) => None,
-                }
+                let side = side.as_mut().and_then(|s| s.sample().usage);
+                on_page.map_or(side, |t| t.reading.usage)
             })
             .collect();
 
