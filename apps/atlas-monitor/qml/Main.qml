@@ -9,8 +9,12 @@ import Atlas.Ui
 QQC2.ApplicationWindow {
     id: root
 
-    // Set from main.cpp through setInitialProperties().
+    // Set from main.cpp through setInitialProperties(); see src/lib.rs.
     required property var backend
+    required property var sampler
+    required property var cpu
+    required property var memory
+    required property var health
 
     title: qsTr("Atlas Monitor")
     width: Kirigami.Units.gridUnit * 56
@@ -39,6 +43,8 @@ QQC2.ApplicationWindow {
         }
         var c = pages[name] ? pages[name] : overviewPage;
         currentPage = pages[name] ? name : "overview";
+        // Only the page on screen is sampled.
+        sampler.showPage(currentPage);
         if (stack.depth === 0) {
             stack.push(c, {}, QQC2.StackView.Immediate);
         } else {
@@ -147,10 +153,19 @@ QQC2.ApplicationWindow {
         }
     }
 
+    Connections {
+        target: root.backend
+        function onRefreshIntervalChanged() {
+            root.sampler.changeInterval(root.backend.refreshInterval);
+        }
+    }
+
     Component {
         id: overviewPage
         OverviewPage {
-            backend: root.backend
+            cpu: root.cpu
+            memory: root.memory
+            health: root.health
         }
     }
     Component {

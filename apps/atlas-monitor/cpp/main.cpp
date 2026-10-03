@@ -13,9 +13,17 @@
 #include <QSGRendererInterface>
 
 #include <cstdio>
+#include <utility>
 
 // Rust, see src/lib.rs, src/crash.rs, src/logging.rs and src/settings.rs.
-extern "C" void *atlas_backend_new();
+struct AtlasObjects {
+    void *backend;
+    void *sampler;
+    void *cpu;
+    void *memory;
+    void *health;
+};
+extern "C" AtlasObjects atlas_objects_new();
 extern "C" void atlas_log_init();
 extern "C" void atlas_crash_install();
 extern "C" void atlas_crash_fatal(const char *msg);
@@ -79,14 +87,28 @@ int main(int argc, char *argv[])
     // window (activateRequested) and exits.
     KDBusService service(KDBusService::Unique);
 
-    auto *backend = static_cast<QObject *>(atlas_backend_new());
-    // main() owns it: the QML engine must never delete it.
-    QQmlEngine::setObjectOwnership(backend, QQmlEngine::CppOwnership);
+    // Every QObject QML sees, made in Rust; main() owns them, so the QML
+    // engine must never delete one. The sampler is listed first: deleting it
+    // stops the thread that posts to the others.
+    const AtlasObjects made = atlas_objects_new();
+    const std::pair<const char *, void *> objects[] = {
+        {"sampler", made.sampler},
+        {"backend", made.backend},
+        {"cpu", made.cpu},
+        {"memory", made.memory},
+        {"health", made.health},
+    };
+    QVariantMap initial;
+    for (const auto &[name, object] : objects) {
+        auto *o = static_cast<QObject *>(object);
+        QQmlEngine::setObjectOwnership(o, QQmlEngine::CppOwnership);
+        initial.insert(QLatin1String(name), QVariant::fromValue(o));
+    }
 
     int rc = 0;
     {
         QQmlApplicationEngine engine;
-        engine.setInitialProperties({{QStringLiteral("backend"), QVariant::fromValue(backend)}});
+        engine.setInitialProperties(initial);
         QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app, [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
         engine.loadFromModule(QStringLiteral("net.eterneon.atlas.monitor"), QStringLiteral("Main"));
 
@@ -106,6 +128,8 @@ int main(int argc, char *argv[])
             rc = 1;
         }
     }
-    delete backend;
+    for (const auto &[name, object] : objects) {
+        delete static_cast<QObject *>(object);
+    }
     return rc;
 }

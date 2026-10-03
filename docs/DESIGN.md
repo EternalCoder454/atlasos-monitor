@@ -136,16 +136,21 @@ when it is resized or one of its properties changes.
 
 ## QObject and model API
 
-QML sees a small set of objects, created in Rust and handed to the engine as
-initial properties of `Main.qml`. Only `Backend` exists so far (Foundation);
-the rest is the plan the later phases build to:
+QML sees a small set of objects. `atlas_objects_new` (`src/lib.rs`) makes
+them all in Rust, wires the sampler's sink to the stats objects' Qt-thread
+handles and starts the sampling thread; `main.cpp` hands them to the engine
+as initial properties of `Main.qml`, owns them, and deletes the `Sampler`
+first, which stops the thread that posts to the others. Built so far:
+`Backend`, `Sampler`, `CpuStats`, `MemoryStats`, `HealthStatus`; the rest is
+the plan the later phases build to:
 
 | Object | What it holds |
 |---|---|
 | `Backend` | Settings (`refreshInterval`, `gpuRendering`), Atlas Monitor's own memory (`ownPss`, `ownRss`). Invokables `changeRefreshInterval(ms)`, `changeGpuRendering(on)`, `refreshOwnMemory()`. |
-| `Sampler` | The sampling thread. QML sets `activePage` ("overview", "cpu", "memory", "disk:nvme0n1", "network:wlp4s0", "gpu", "battery:BAT0", "sensors", "apps", ...); only that page's readers run. |
-| `CpuStats`, `MemoryStats`, `GpuStats`, ... | Plain properties for the current values (`usage`, `frequency`, ...), plus one `Series` per chart. Updated in one queued closure per tick. |
-| `Series` | A 60-sample ring buffer (Rust). Publishes `values` (`QList<f64>`, oldest first) for `LiveChart` once per tick; see Charts. |
+| `Sampler` | The sampling thread. QML calls `showPage(name)` when the page changes ("overview", "cpu", "memory", "disk:nvme0n1", "network:wlp4s0", "gpu", "battery:BAT0", "sensors", ...; anything else reads only the sidebar) and `changeInterval(ms)` when the setting does. |
+| `CpuStats`, `MemoryStats`, `GpuStats`, ... | Plain properties for the current values (`usage`, `frequency`, ...; NaN where the machine doesn't report one), plus a `list<real>` per chart (`usageHistory`, ...). Updated in one queued closure per tick. |
+| `HealthStatus` | `health::check`'s alerts for the Overview: `level` (0 fine, 1 warning, 2 critical) and the parallel lists `titles`, `details`, `levels`. Signals only when the list changes. |
+| `Series` | Not a QObject: a 60-sample ring buffer (`src/series.rs`) in a stats object's Rust struct, published as that object's `list<real>` property once per tick and cleared on a page's first tick; see Charts. |
 | `DeviceModel` | Disks, network interfaces and batteries, for the expanding sidebar entries (`SidebarGroup`), with a live value per row. |
 | `ProcessModel` | The Apps table: a Rust `QAbstractItemModel` with row diffs (`beginInsertRows`/`dataChanged`/`beginRemoveRows`), never `beginResetModel` on a refresh, so rows hold still under the pointer. Group by App, sorting and search are done in Rust. Invokables `endTask`, `kill`, `stop`, `resume`, `details`, `openFileLocation` (`apps::location` for a group) take a row key (pid, or the group's `apps::GroupKey`: an application ID, or a process name for processes that are no application's). |
 | `ServiceModel`, `StartupModel`, `SensorModel` | The Services, Startup and Sensors lists, same row-diff rule. |
@@ -156,16 +161,38 @@ blocking dialog.
 
 ## Sampling
 
-Planned (Backend port phase):
+`src/sampling.rs` is the loop, without Qt; `src/sampler.rs` the QObject
+around it.
 
-- One thread, ticking every `refreshInterval` (500, 1000 (default), 2000 or
-  5000 ms). Only the page on screen is sampled; the Overview reads the compact
-  set it shows. A page opened later starts with empty charts, not history
-  from when it was hidden.
+- One thread (`sampler`), ticking every `refreshInterval` (500, 1000
+  (default), 2000 or 5000 ms). It owns every reader and takes no lock:
+  commands (page, interval) arrive over a channel whose wait is also the
+  sleep between ticks, and closing the channel stops it. Nothing is read
+  until QML names the first page.
+- Only the page on screen is read. Its readers are made when it opens (which
+  takes their baseline) and dropped when it closes, so a page opened later
+  starts with empty charts, not history from when it was hidden. Its first
+  reading comes 500 ms after it opens, or one interval if that is shorter,
+  so a 5 s interval doesn't show an empty page. The first tick is marked
+  `fresh`; the stats objects clear their series on it.
+- The sidebar's live values (disk and network rates, battery charge) are
+  read on every page: two held files and the power supplies.
+- What each page reads: Overview the processor, memory, every graphics card
+  and the health inputs; CPU the processor (and `cpu::info` once); Memory
+  the memory; Disk its space and SMART; Network its addresses; GPU every
+  card; Sensors the hwmon readings.
+- `statfs` (disk capacity) and the address dump run on a page's first tick
+  and every 5th after, never under a lock. SMART is asked once a minute per
+  drive; failed services every 5th tick on the Overview. Those two D-Bus
+  questions run on a second thread, one at a time and never two of the same
+  at once, so a hung daemon delays neither a tick nor closing the window
+  (that thread is not joined). A tick uses the latest answers; a read that
+  fails keeps the last one.
+- The sink splits a tick and queues each part to its object with
+  `qt_thread().queue`; a part whose object is gone is dropped.
 - Kernel files that are read every tick are opened once and re-read with one
   `pread` each (the Go version's biggest CPU win). `/proc/<pid>` files are
   opened with `openat` against a held `/proc` fd, one read per file.
-- `statfs` (disk capacity) runs every 5th tick and never while holding a lock.
 - Targets are the Go version's numbers on the same machine (Fedora 44, KDE
   Wayland, ~700 processes): CPU page just opened 87 MiB RSS; idle page
   2.4 ms/s CPU and 47 read syscalls/s; Apps page 14.8 ms/s and 862 reads/s.
