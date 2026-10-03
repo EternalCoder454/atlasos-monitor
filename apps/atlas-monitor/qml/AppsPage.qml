@@ -25,8 +25,12 @@ Item {
             resume: 3
         })
     function percent(v) {
-        return Number(v).toLocaleString(Qt.locale(), "f", 1) + "%";
+        return Number(v).toLocaleString(Format.locale, "f", 1) + "%";
     }
+    // Translated once: qsTr looks its file up in Qt's resources on every
+    // call, and the cells below run on every row each second.
+    readonly property string countFormat: qsTr("%1 (%2)")
+    readonly property var powerNames: [qsTr("Very Low"), qsTr("Low"), qsTr("Moderate"), qsTr("High")]
 
     // Does `action` to the pinned row's processes (the model's `pin`), and
     // says why if it couldn't.
@@ -113,7 +117,7 @@ Item {
 
     Shortcut {
         enabled: page.visible
-        sequence: StandardKey.Find
+        sequences: [StandardKey.Find]
         onActivated: search.forceActiveFocus()
     }
 
@@ -227,7 +231,7 @@ Item {
                     iconRole: "icon",
                     // An application's row says how many processes it is.
                     // A row on its way out can lose its name for a moment.
-                    text: (v, row) => row.count > 1 ? qsTr("%1 (%2)").arg(v).arg(row.count) : (v ?? "")
+                    text: (v, row) => row.count > 1 ? page.countFormat.arg(v).arg(row.count) : (v ?? "")
                 },
                 {
                     title: qsTr("PID"),
@@ -279,7 +283,7 @@ Item {
                     title: qsTr("Power"),
                     role: "power",
                     width: 5,
-                    text: v => [qsTr("Very Low"), qsTr("Low"), qsTr("Moderate"), qsTr("High")][v] ?? ""
+                    text: v => page.powerNames[v] ?? ""
                 },
                 {
                     // Estimates: the machine's traffic shared out by each

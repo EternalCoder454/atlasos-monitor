@@ -6,6 +6,9 @@ import QtQml
 // NaN (or 0 for a size) and shows as a dash, never as a real-looking 0.
 QtObject {
     readonly property string dash: "–"
+    // Qt.locale() builds a new object each call; the tables format every
+    // cell each second.
+    readonly property var locale: Qt.locale()
 
     function percent(v) {
         return isNaN(v) ? dash : Math.round(v) + "%";
@@ -17,7 +20,7 @@ QtObject {
             return dash;
         }
         if (v >= 1000) {
-            return qsTr("%1 GHz").arg(Number(v / 1000).toLocaleString(Qt.locale(), "f", 2));
+            return qsTr("%1 GHz").arg(Number(v / 1000).toLocaleString(locale, "f", 2));
         }
         return qsTr("%1 MHz").arg(Math.round(v));
     }
@@ -32,7 +35,7 @@ QtObject {
         const steps = [[1099511627776, "TiB", 2], [1073741824, "GiB", 2], [1048576, "MiB", 1], [1024, "KiB", 0]];
         for (const [unit, name, places] of steps) {
             if (v >= unit) {
-                return Number(v / unit).toLocaleString(Qt.locale(), "f", places) + " " + name + suffix;
+                return Number(v / unit).toLocaleString(locale, "f", places) + " " + name + suffix;
             }
         }
         return Math.round(Math.max(0, v)) + " B" + suffix;
@@ -60,7 +63,7 @@ QtObject {
             return dash;
         }
         // Decimals by the rounded figure, so 9.96 is "10 W", not "10.0 W".
-        return qsTr("%1 W").arg(Number(v).toLocaleString(Qt.locale(), "f", Math.round(v * 10) / 10 < 10 ? 1 : 0));
+        return qsTr("%1 W").arg(Number(v).toLocaleString(locale, "f", Math.round(v * 10) / 10 < 10 ? 1 : 0));
     }
 
     // Seconds as the Go version writes them: "2h 15m", "40m"; -1 is a dash.
@@ -75,12 +78,12 @@ QtObject {
 
     // Watt-hours, one decimal.
     function wh(v) {
-        return isNaN(v) || v <= 0 ? dash : qsTr("%1 Wh").arg(Number(v).toLocaleString(Qt.locale(), "f", 1));
+        return isNaN(v) || v <= 0 ? dash : qsTr("%1 Wh").arg(Number(v).toLocaleString(locale, "f", 1));
     }
 
     // A count the device may not report (-1).
     function count(v) {
-        return v < 0 ? dash : Number(v).toLocaleString(Qt.locale(), "f", 0);
+        return v < 0 ? dash : Number(v).toLocaleString(locale, "f", 0);
     }
 
     // "x of y", for a part of a whole.
@@ -99,7 +102,7 @@ QtObject {
         if (h < 24 * 365) {
             return qsTr("%1 days").arg(Math.floor(h / 24));
         }
-        return qsTr("%1 years").arg(Number(h / (24 * 365)).toLocaleString(Qt.locale(), "f", 1));
+        return qsTr("%1 years").arg(Number(h / (24 * 365)).toLocaleString(locale, "f", 1));
     }
 
     // The span a 60-sample chart covers at this refresh interval (ms).

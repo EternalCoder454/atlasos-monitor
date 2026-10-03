@@ -121,7 +121,7 @@ Item {
 
     Shortcut {
         enabled: page.visible
-        sequence: StandardKey.Find
+        sequences: [StandardKey.Find]
         onActivated: search.forceActiveFocus()
     }
 
