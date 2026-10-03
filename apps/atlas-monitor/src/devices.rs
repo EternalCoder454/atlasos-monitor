@@ -29,6 +29,9 @@ pub mod qobject {
         /// The Processor, Memory and Graphics entries' figures, percent.
         /// The cards' come in the order of the GPU object's `cardNames`,
         /// NaN for a card left unread so it can sleep.
+        /// The interface the default route leaves by is wireless: the
+        /// Network entry's icon.
+        #[qproperty(bool, route_wireless, cxx_name = "routeWireless")]
         #[qproperty(f64, cpu_usage, cxx_name = "cpuUsage")]
         #[qproperty(f64, memory_usage, cxx_name = "memoryUsage")]
         #[qproperty(QList_f64, gpu_usages, cxx_name = "gpuUsages")]
@@ -190,6 +193,9 @@ pub struct DeviceListRust {
     /// route's interface, which goes first.
     net_listed: Vec<(String, String)>,
     route: Option<String>,
+    route_wireless: bool,
+    /// The wireless interfaces' kernel names.
+    wireless: Vec<String>,
 }
 
 impl Default for DeviceListRust {
@@ -208,6 +214,8 @@ impl Default for DeviceListRust {
             interfaces: Vec::new(),
             net_listed: Vec::new(),
             route: None,
+            route_wireless: false,
+            wireless: Vec::new(),
         }
     }
 }
@@ -226,6 +234,11 @@ impl qobject::DeviceList {
         let mut reorder = false;
         if let Some(interfaces) = &d.interfaces {
             self.as_mut().rust_mut().net_listed = listed(interfaces);
+            self.as_mut().rust_mut().wireless = interfaces
+                .iter()
+                .filter(|i| i.wireless)
+                .map(|i| i.name.clone())
+                .collect();
             reorder = true;
         }
         if d.default_route != self.rust().route {
@@ -233,6 +246,12 @@ impl qobject::DeviceList {
             reorder = true;
         }
         if reorder {
+            let wireless = self
+                .rust()
+                .route
+                .as_ref()
+                .is_some_and(|r| self.rust().wireless.contains(r));
+            self.as_mut().set_route_wireless(wireless);
             let listed = active_first(&self.rust().net_listed, self.rust().route.as_deref());
             let names = strings(listed.iter().map(|(n, _)| n.as_str()));
             if names != *self.net_names() {

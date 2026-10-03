@@ -228,7 +228,7 @@ QQC2.ApplicationWindow {
                 DeviceGroup {
                     kind: "network"
                     text: qsTr("Network")
-                    iconName: "network-wired"
+                    iconName: root.devices.routeWireless ? "network-wireless" : "network-wired"
                     names: root.devices.netNames
                     labels: root.devices.netLabels
                     rates: root.devices.netRates
