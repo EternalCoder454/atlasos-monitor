@@ -330,6 +330,32 @@ QQC2.ApplicationWindow {
         }
     }
 
+    // A drive, adapter or battery taken out while its page is open: back to
+    // Overview, rather than a page of dashes for something no longer there.
+    function leaveIfGone(kind, names) {
+        const prefix = kind + ":";
+        if (currentPage.startsWith(prefix) && !names.includes(currentPage.slice(prefix.length))) {
+            showPage("overview");
+        }
+    }
+
+    Connections {
+        target: root.devices
+        function onDiskNamesChanged() {
+            root.leaveIfGone("disk", root.devices.diskNames);
+        }
+        function onNetNamesChanged() {
+            root.leaveIfGone("network", root.devices.netNames);
+        }
+    }
+
+    Connections {
+        target: root.battery
+        function onPackNamesChanged() {
+            root.leaveIfGone("battery", root.battery.packNames);
+        }
+    }
+
     Component {
         id: overviewPage
         OverviewPage {

@@ -256,12 +256,14 @@ pub struct DiskIo {
     pub write_rate: f64,
 }
 
-/// Samples `/proc/diskstats` for a fixed list of disks.
+/// Samples `/proc/diskstats` for a list of disks.
 #[derive(Debug)]
 pub struct DiskSampler {
     diskstats: Option<HeldFile>,
     names: Vec<String>,
     io: Vec<DiskIo>,
+    /// The disk's counters have been read once, so the next read has a rate.
+    primed: Vec<bool>,
     last: Instant,
 }
 
@@ -276,21 +278,39 @@ impl DiskSampler {
             diskstats: HeldFile::with_capacity(diskstats, 8192),
             names: disks.iter().map(|d| d.name.clone()).collect(),
             io: vec![DiskIo::default(); disks.len()],
+            primed: vec![false; disks.len()],
             last: Instant::now(),
         };
-        sampler.read(None);
+        sampler.read(0.0);
         sampler
+    }
+
+    /// Samples `disks` from now on, in that order. A disk sampled already
+    /// keeps its counters, so its next rate is a whole interval's; a new one
+    /// shows no rate until its second sample, rather than everything it has
+    /// moved since boot.
+    pub fn set_disks(&mut self, disks: &[Disk]) {
+        let (io, primed) = disks
+            .iter()
+            .map(|d| match self.names.iter().position(|n| *n == d.name) {
+                Some(i) => (self.io[i], self.primed[i]),
+                None => (DiskIo::default(), false),
+            })
+            .unzip();
+        self.io = io;
+        self.primed = primed;
+        self.names = disks.iter().map(|d| d.name.clone()).collect();
     }
 
     /// Reads each disk's counters and its rates since the last sample, in the
     /// order the disks were given.
     pub fn sample(&mut self) -> &[DiskIo] {
         let seconds = elapsed(&mut self.last);
-        self.read(Some(seconds));
+        self.read(seconds);
         &self.io
     }
 
-    fn read(&mut self, seconds: Option<f64>) {
+    fn read(&mut self, seconds: f64) {
         for io in &mut self.io {
             io.read_rate = 0.0;
             io.write_rate = 0.0;
@@ -311,10 +331,11 @@ impl DiskSampler {
             };
             let io = &mut self.io[i];
             let (read, written) = (read.saturating_mul(SECTOR), written.saturating_mul(SECTOR));
-            if let Some(s) = seconds {
-                io.read_rate = rate(read, io.read_total, s);
-                io.write_rate = rate(written, io.write_total, s);
+            if self.primed[i] {
+                io.read_rate = rate(read, io.read_total, seconds);
+                io.write_rate = rate(written, io.write_total, seconds);
             }
+            self.primed[i] = true;
             io.read_total = read;
             io.write_total = written;
         }
@@ -520,6 +541,53 @@ mod tests {
         fs::write(&path, "259 5 nvme1n1 1 0 5 0 1 0 5 0\n").unwrap();
         let io = s.sample();
         assert_eq!((io[0].read_rate, io[0].write_rate), (0.0, 0.0));
+    }
+
+    #[test]
+    fn a_disk_list_that_changes_keeps_counters_and_primes_new_disks() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("diskstats");
+        let disk = |name: &str| Disk {
+            name: name.into(),
+            ..Disk::default()
+        };
+        fs::write(
+            &path,
+            "8 0 sda 1 0 100 0 1 0 100 0
+",
+        )
+        .unwrap();
+        let mut s = DiskSampler::open(&path, &[disk("sda")]);
+
+        // sdb is plugged in, listed first; sda moves on as before.
+        s.set_disks(&[disk("sdb"), disk("sda")]);
+        fs::write(
+            &path,
+            "8 0 sda 1 0 300 0 1 0 100 0
+8 16 sdb 1 0 9000000 0 1 0 9000000 0
+",
+        )
+        .unwrap();
+        let io = s.sample().to_vec();
+        assert_eq!((io[0].read_rate, io[0].write_rate), (0.0, 0.0));
+        assert_eq!(io[0].read_total, 9_000_000 * 512);
+        assert!(io[1].read_rate > 0.0);
+        assert_eq!(io[1].write_rate, 0.0);
+
+        fs::write(
+            &path,
+            "8 0 sda 1 0 300 0 1 0 100 0
+8 16 sdb 1 0 9000100 0 1 0 9000000 0
+",
+        )
+        .unwrap();
+        let io = s.sample().to_vec();
+        assert!(io[0].read_rate > 0.0);
+        assert_eq!(io[1].read_rate, 0.0);
+
+        // Unplugged: gone from the list.
+        s.set_disks(&[disk("sda")]);
+        assert_eq!(s.sample().len(), 1);
     }
 
     // Live tests: invariants only. CI's container has an overlay root and

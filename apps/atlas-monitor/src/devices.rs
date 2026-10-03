@@ -173,10 +173,10 @@ impl qobject::DeviceList {
     pub fn apply(mut self: Pin<&mut Self>, d: Devices) {
         if let Some(disks) = &d.disks {
             let names = strings(disks.iter().map(|d| d.name.as_str()));
+            let labels = strings(disks.iter().map(Disk::label));
             // Labels before names: a row is made per name and reads its label.
-            if names != *self.disk_names() {
-                self.as_mut()
-                    .set_disk_labels(strings(disks.iter().map(Disk::label)));
+            if names != *self.disk_names() || labels != *self.disk_labels() {
+                self.as_mut().set_disk_labels(labels);
                 self.as_mut().set_disk_names(names);
             }
         }

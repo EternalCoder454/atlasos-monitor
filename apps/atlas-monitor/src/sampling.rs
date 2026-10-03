@@ -375,6 +375,16 @@ impl Worker {
             }
         }
 
+        // A drive plugged in or out, or a filesystem mounted on one, likewise.
+        let mut disks_changed = false;
+        if slow {
+            let now = disk::disks();
+            if now != self.disks {
+                self.replace_disks(now);
+                disks_changed = true;
+            }
+        }
+
         // A battery that turns up later (a dock, a pack put back in) gets
         // its sidebar entry within a slow tick.
         if self.power.is_none() && slow && power::available() {
@@ -382,7 +392,7 @@ impl Worker {
         }
 
         let devices = Devices {
-            disks: fresh.then(|| self.disks.clone()),
+            disks: (fresh || disks_changed).then(|| self.disks.clone()),
             interfaces: (fresh || plugged).then(|| self.interfaces.clone()),
             cards: fresh.then(|| self.cards.clone()),
             disk_io: self.disk_io.sample().to_vec(),
@@ -444,7 +454,7 @@ impl Worker {
                 self.ask_drive(name.clone());
                 let news = std::mem::take(&mut self.disk_news);
                 tick.disk = Some(DiskTick {
-                    disk: fresh
+                    disk: (fresh || disks_changed)
                         .then(|| index.map(|i| self.disks[i].clone()))
                         .flatten(),
                     io: index.and_then(|i| tick.devices.disk_io.get(i).cloned()),
@@ -498,6 +508,20 @@ impl Worker {
             apps,
             groups,
         })
+    }
+
+    /// Takes a new disk list. Rates and free space are kept by disk; a new
+    /// disk's space is read on the next slow tick that reads space.
+    fn replace_disks(&mut self, now: Vec<Disk>) {
+        self.disk_io.set_disks(&now);
+        self.space = now
+            .iter()
+            .map(|d| {
+                let old = self.disks.iter().position(|o| o.name == d.name);
+                old.and_then(|i| self.space[i])
+            })
+            .collect();
+        self.disks = now;
     }
 
     /// `statvfs` for one disk, or for every disk.
