@@ -25,7 +25,8 @@ pub mod qobject {
         /// The Battery page's pack, by its page key.
         #[qproperty(QString, name)]
         #[qproperty(QString, label)]
-        /// The pack is there (a pulled hot-swap pack's page stays open).
+        /// The pack is there. A pulled pack's page closes (Main.qml), so this
+        /// is false only until it does.
         #[qproperty(bool, present)]
         /// "charging", "discharging", "notCharging", "full" or "unknown".
         #[qproperty(QString, status)]
@@ -282,7 +283,8 @@ impl qobject::BatteryStats {
             s.packs.iter().find(|p| p.name == shown)
         };
         let Some(b) = pack else {
-            // Pulled, or the page key is stale: no figures, not the last ones.
+            // Pulled (the window is about to leave the page), or the page key
+            // is stale: no figures, not the last ones.
             self.clear();
             return;
         };

@@ -54,6 +54,13 @@ impl Disk {
             self.model.as_deref().unwrap_or(&self.name)
         }
     }
+
+    /// The same drive as `other`, as far as a re-read can tell: a drive
+    /// swapped for another can take its kernel name (`sdb`), not also its
+    /// model and size. Mounts may differ.
+    pub fn same_drive(&self, other: &Disk) -> bool {
+        self.name == other.name && self.model == other.model && self.size == other.size
+    }
 }
 
 /// Finds the disks: root first, swap last, larger before smaller.
@@ -260,7 +267,7 @@ pub struct DiskIo {
 #[derive(Debug)]
 pub struct DiskSampler {
     diskstats: Option<HeldFile>,
-    names: Vec<String>,
+    disks: Vec<Disk>,
     io: Vec<DiskIo>,
     /// The disk's counters have been read once, so the next read has a rate.
     primed: Vec<bool>,
@@ -276,7 +283,7 @@ impl DiskSampler {
     fn open(diskstats: &Path, disks: &[Disk]) -> Self {
         let mut sampler = Self {
             diskstats: HeldFile::with_capacity(diskstats, 8192),
-            names: disks.iter().map(|d| d.name.clone()).collect(),
+            disks: disks.to_vec(),
             io: vec![DiskIo::default(); disks.len()],
             primed: vec![false; disks.len()],
             last: Instant::now(),
@@ -285,21 +292,21 @@ impl DiskSampler {
         sampler
     }
 
-    /// Samples `disks` from now on, in that order. A disk sampled already
-    /// keeps its counters, so its next rate is a whole interval's; a new one
+    /// Samples `disks` from now on, in that order. The same drive (see
+    /// [`Disk::same_drive`]) keeps its counters, so its next rate is a whole interval's; a new one
     /// shows no rate until its second sample, rather than everything it has
     /// moved since boot.
     pub fn set_disks(&mut self, disks: &[Disk]) {
         let (io, primed) = disks
             .iter()
-            .map(|d| match self.names.iter().position(|n| *n == d.name) {
+            .map(|d| match self.disks.iter().position(|o| o.same_drive(d)) {
                 Some(i) => (self.io[i], self.primed[i]),
                 None => (DiskIo::default(), false),
             })
             .unzip();
         self.io = io;
         self.primed = primed;
-        self.names = disks.iter().map(|d| d.name.clone()).collect();
+        self.disks = disks.to_vec();
     }
 
     /// Reads each disk's counters and its rates since the last sample, in the
@@ -326,7 +333,7 @@ impl DiskSampler {
             ) else {
                 continue;
             };
-            let Some(i) = self.names.iter().position(|n| n.as_bytes() == name) else {
+            let Some(i) = self.disks.iter().position(|d| d.name.as_bytes() == name) else {
                 continue;
             };
             let io = &mut self.io[i];
@@ -551,21 +558,14 @@ mod tests {
             name: name.into(),
             ..Disk::default()
         };
-        fs::write(
-            &path,
-            "8 0 sda 1 0 100 0 1 0 100 0
-",
-        )
-        .unwrap();
+        fs::write(&path, "8 0 sda 1 0 100 0 1 0 100 0\n").unwrap();
         let mut s = DiskSampler::open(&path, &[disk("sda")]);
 
         // sdb is plugged in, listed first; sda moves on as before.
         s.set_disks(&[disk("sdb"), disk("sda")]);
         fs::write(
             &path,
-            "8 0 sda 1 0 300 0 1 0 100 0
-8 16 sdb 1 0 9000000 0 1 0 9000000 0
-",
+            "8 0 sda 1 0 300 0 1 0 100 0\n8 16 sdb 1 0 9000000 0 1 0 9000000 0\n",
         )
         .unwrap();
         let io = s.sample().to_vec();
@@ -576,14 +576,25 @@ mod tests {
 
         fs::write(
             &path,
-            "8 0 sda 1 0 300 0 1 0 100 0
-8 16 sdb 1 0 9000100 0 1 0 9000000 0
-",
+            "8 0 sda 1 0 300 0 1 0 100 0\n8 16 sdb 1 0 9000100 0 1 0 9000000 0\n",
         )
         .unwrap();
         let io = s.sample().to_vec();
         assert!(io[0].read_rate > 0.0);
         assert_eq!(io[1].read_rate, 0.0);
+
+        // Another drive under sdb's name starts again, unprimed.
+        let other = Disk {
+            size: 1,
+            ..disk("sdb")
+        };
+        s.set_disks(&[other, disk("sda")]);
+        fs::write(
+            &path,
+            "8 0 sda 1 0 300 0 1 0 100 0\n8 16 sdb 1 0 9900000 0 1 0 9000000 0\n",
+        )
+        .unwrap();
+        assert_eq!(s.sample()[0].read_rate, 0.0);
 
         // Unplugged: gone from the list.
         s.set_disks(&[disk("sda")]);

@@ -510,17 +510,25 @@ impl Worker {
         })
     }
 
-    /// Takes a new disk list. Rates and free space are kept by disk; a new
-    /// disk's space is read on the next slow tick that reads space.
+    /// Takes a new disk list. Rates and free space are kept for the same
+    /// drive ([`Disk::same_drive`]); a new one's space is read on the next
+    /// slow tick that reads space, and a drive that left, or was swapped for
+    /// another under its name, loses its SMART answer and is asked again.
     fn replace_disks(&mut self, now: Vec<Disk>) {
         self.disk_io.set_disks(&now);
         self.space = now
             .iter()
             .map(|d| {
-                let old = self.disks.iter().position(|o| o.name == d.name);
+                let old = self.disks.iter().position(|o| o.same_drive(d));
                 old.and_then(|i| self.space[i])
             })
             .collect();
+        for old in &self.disks {
+            if !now.iter().any(|d| d.same_drive(old)) {
+                self.drives.remove(&old.name);
+                self.asked.remove(&old.name);
+            }
+        }
         self.disks = now;
     }
 

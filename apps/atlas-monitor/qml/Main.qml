@@ -64,6 +64,7 @@ QQC2.ApplicationWindow {
         if (name === currentPage) {
             return;
         }
+        gone.stop();
         // Split at the first colon only: an alias interface is "eth0:1".
         const colon = name.indexOf(":");
         const kind = colon < 0 ? name : name.slice(0, colon);
@@ -330,29 +331,55 @@ QQC2.ApplicationWindow {
         }
     }
 
-    // A drive, adapter or battery taken out while its page is open: back to
-    // Overview, rather than a page of dashes for something no longer there.
-    function leaveIfGone(kind, names) {
-        const prefix = kind + ":";
-        if (currentPage.startsWith(prefix) && !names.includes(currentPage.slice(prefix.length))) {
-            showPage("overview");
+    // A drive, adapter or battery taken out while its page is open: the page
+    // goes, rather than staying as dashes for something no longer there. A
+    // device missing from one read only (a failed read) keeps its page:
+    // leaving waits past the next read of the list, a slow tick away.
+    function deviceListed() {
+        const colon = currentPage.indexOf(":");
+        const kind = currentPage.slice(0, colon);
+        const device = currentPage.slice(colon + 1);
+        const names = kind === "disk" ? devices.diskNames : kind === "network" ? devices.netNames : kind === "battery" ? battery.packNames : undefined;
+        return colon < 0 || names === undefined || names.includes(device);
+    }
+
+    function checkDevice() {
+        if (deviceListed()) {
+            gone.stop();
+        } else if (!gone.running) {
+            gone.restart();
+        }
+    }
+
+    Timer {
+        id: gone
+        // Two slow ticks (every fifth): disks and interfaces are listed again
+        // on each.
+        interval: root.backend.refreshInterval * 10 + 1000
+        onTriggered: {
+            if (root.deviceListed()) {
+                return;
+            }
+            // One pack of two pulled: the one left is the total's page.
+            const toTotal = root.currentPage.startsWith("battery:") && root.battery.packNames.includes("total");
+            root.showPage(toTotal ? "battery:total" : "overview");
         }
     }
 
     Connections {
         target: root.devices
         function onDiskNamesChanged() {
-            root.leaveIfGone("disk", root.devices.diskNames);
+            root.checkDevice();
         }
         function onNetNamesChanged() {
-            root.leaveIfGone("network", root.devices.netNames);
+            root.checkDevice();
         }
     }
 
     Connections {
         target: root.battery
         function onPackNamesChanged() {
-            root.leaveIfGone("battery", root.battery.packNames);
+            root.checkDevice();
         }
     }
 
