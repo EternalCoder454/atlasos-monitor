@@ -72,6 +72,18 @@ Item {
         anchors.rightMargin: Kirigami.Units.gridUnit * 1.5
         spacing: Kirigami.Units.gridUnit
 
+        // Typing over the table starts a search, as in a file manager:
+        // the table passes on keys it has no use for, and they land here.
+        // Only text: Escape, Backspace and Delete carry control characters.
+        Keys.onPressed: event => {
+            if (search.activeFocus || !/[^\s\x00-\x1f\x7f]/.test(event.text) || (event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))) {
+                return;
+            }
+            search.forceActiveFocus();
+            search.insert(search.cursorPosition, event.text);
+            event.accepted = true;
+        }
+
         RowLayout {
             Layout.fillWidth: true
             spacing: Kirigami.Units.largeSpacing
