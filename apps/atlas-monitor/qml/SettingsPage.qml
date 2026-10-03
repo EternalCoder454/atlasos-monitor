@@ -20,10 +20,13 @@ AtlasPage {
         footer: qsTr("Only the page on screen is refreshed. Longer intervals use less power.")
 
         Repeater {
-            model: [500, 1000, 2000, 5000]
+            // settings.rs INTERVALS_MS
+            model: [500, 1000, 2000, 3000, 5000, 10000]
             delegate: SectionRow {
                 required property int modelData
                 title: modelData < 1000 ? qsTr("Every half second") : modelData === 1000 ? qsTr("Every second") : qsTr("Every %1 seconds").arg(modelData / 1000)
+                // A chart holds 60 readings.
+                subtitle: modelData < 1000 ? qsTr("Charts cover the last half minute") : modelData === 1000 ? qsTr("Charts cover the last minute") : qsTr("Charts cover the last %1 minutes").arg(modelData / 1000)
                 clickable: true
                 radio: true
                 checkmark: page.backend.refreshInterval === modelData
@@ -66,6 +69,24 @@ AtlasPage {
             title: qsTr("Memory used")
             subtitle: qsTr("Shared memory is split between the apps that use it.")
             value: page.backend.ownPss > 0 ? Qt.locale().formattedDataSize(page.backend.ownPss) : ""
+
+            SecondaryButton {
+                text: qsTr("Release Idle Memory")
+                onClicked: {
+                    // Script objects nothing holds, then the window's
+                    // caches (glyphs, textures), which go at its next
+                    // frame; what they leave free goes back after that.
+                    gc();
+                    page.Window.window?.releaseResources();
+                    trim.restart();
+                }
+            }
+        }
+
+        Timer {
+            id: trim
+            interval: 500
+            onTriggered: page.backend.releaseIdleMemory()
         }
     }
 

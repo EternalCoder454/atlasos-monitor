@@ -44,6 +44,12 @@ pub mod qobject {
         #[cxx_name = "refreshOwnMemory"]
         fn refresh_own_memory(self: Pin<&mut Backend>);
 
+        /// Hands memory freed and kept for reuse back to the system, then
+        /// reads `ownPss` again.
+        #[qinvokable]
+        #[cxx_name = "releaseIdleMemory"]
+        fn release_idle_memory(self: Pin<&mut Backend>);
+
         /// Starts Atlas Updater, which keeps the crash report setting (a
         /// running one comes to the front). False when it isn't installed.
         #[qinvokable]
@@ -154,6 +160,11 @@ impl qobject::Backend {
         if let Err(e) = WindowState::save_page(&page.to_string()) {
             log::warn!("saving the page on screen: {e}");
         }
+    }
+
+    pub fn release_idle_memory(self: Pin<&mut Self>) {
+        sysmem::trim();
+        self.refresh_own_memory();
     }
 
     pub fn refresh_own_memory(self: Pin<&mut Self>) {

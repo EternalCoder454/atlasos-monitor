@@ -15,6 +15,18 @@ pub struct SelfMemory {
     pub pss: u64,
 }
 
+/// Hands the allocator's free memory back to the system: what was freed
+/// since a peak (a page closed, a long table dropped), which malloc keeps
+/// for reuse. glibc's malloc only; elsewhere it does nothing.
+pub fn trim() {
+    #[cfg(target_env = "gnu")]
+    // SAFETY: malloc_trim takes no pointers and may be called from any
+    // thread.
+    unsafe {
+        libc::malloc_trim(0);
+    }
+}
+
 /// Reads this process's memory use.
 pub fn read() -> io::Result<SelfMemory> {
     let text = std::fs::read_to_string("/proc/self/smaps_rollup")?;

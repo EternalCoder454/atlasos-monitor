@@ -42,7 +42,7 @@ const KEY_PAGE: &str = "Page";
 pub const DEFAULT_HIDDEN: [&str; 2] = ["diskRead", "diskWrite"];
 
 /// The refresh intervals Settings offers, in milliseconds.
-pub const INTERVALS_MS: [i32; 4] = [500, 1000, 2000, 5000];
+pub const INTERVALS_MS: [i32; 6] = [500, 1000, 2000, 3000, 5000, 10000];
 pub const DEFAULT_INTERVAL_MS: i32 = 1000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -350,7 +350,9 @@ mod tests {
         assert_eq!(nearest_interval(1400), 1000);
         assert_eq!(nearest_interval(1500), 1000);
         assert_eq!(nearest_interval(1600), 2000);
-        assert_eq!(nearest_interval(i32::MAX), 5000);
+        assert_eq!(nearest_interval(4000), 3000);
+        assert_eq!(nearest_interval(8000), 10000);
+        assert_eq!(nearest_interval(i32::MAX), 10000);
         assert_eq!(nearest_interval(i32::MIN), 500);
         for i in INTERVALS_MS {
             assert_eq!(nearest_interval(i), i);
