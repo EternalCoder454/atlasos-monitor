@@ -28,8 +28,10 @@ QQC2.ApplicationWindow {
     required property var energy
 
     title: qsTr("Atlas Monitor")
-    width: Kirigami.Units.gridUnit * 56
-    height: Kirigami.Units.gridUnit * 40
+    // As it was left (backend.rs reads it once); the window's minimum
+    // still applies.
+    width: root.backend.windowWidth > 0 ? root.backend.windowWidth : Kirigami.Units.gridUnit * 56
+    height: root.backend.windowHeight > 0 ? root.backend.windowHeight : Kirigami.Units.gridUnit * 40
     minimumWidth: Kirigami.Units.gridUnit * 26
     minimumHeight: Kirigami.Units.gridUnit * 24
     visible: true
@@ -65,6 +67,7 @@ QQC2.ApplicationWindow {
             return;
         }
         gone.stop();
+        pendingPage = "";
         // Split at the first colon only: an alias interface is "eth0:1".
         const colon = name.indexOf(":");
         const kind = colon < 0 ? name : name.slice(0, colon);
@@ -343,6 +346,21 @@ QQC2.ApplicationWindow {
         return colon < 0 || names === undefined || names.includes(device);
     }
 
+    // The page left open last time, when it is a device's: it opens once
+    // the first list of its kind has come in, if the device is still there.
+    property string pendingPage: ""
+
+    function restorePending(kind, names) {
+        const prefix = kind + ":";
+        if (pendingPage.startsWith(prefix)) {
+            const page = pendingPage;
+            pendingPage = "";
+            if (names.includes(page.slice(prefix.length))) {
+                showPage(page);
+            }
+        }
+    }
+
     function checkDevice() {
         if (deviceListed()) {
             gone.stop();
@@ -369,16 +387,26 @@ QQC2.ApplicationWindow {
     Connections {
         target: root.devices
         function onDiskNamesChanged() {
+            root.restorePending("disk", root.devices.diskNames);
             root.checkDevice();
         }
         function onNetNamesChanged() {
+            root.restorePending("network", root.devices.netNames);
             root.checkDevice();
+        }
+    }
+
+    Connections {
+        target: root.gpu
+        function onCardNamesChanged() {
+            root.restorePending("gpu", root.gpu.cardNames);
         }
     }
 
     Connections {
         target: root.battery
         function onPackNamesChanged() {
+            root.restorePending("battery", root.battery.packNames);
             root.checkDevice();
         }
     }
@@ -483,5 +511,26 @@ QQC2.ApplicationWindow {
         }
     }
 
-    Component.onCompleted: showPage("overview")
+    Component.onCompleted: {
+        if (backend.windowMaximized) {
+            showMaximized();
+        }
+        const last = backend.lastPage;
+        const device = last.includes(":");
+        showPage(device || pages[last] === undefined ? "overview" : last);
+        // A device's page waits for its list, which comes with the first tick.
+        if (device) {
+            pendingPage = last;
+        }
+    }
+
+    Shortcut {
+        sequences: [StandardKey.Quit]
+        onActivated: root.close()
+    }
+
+    onClosing: {
+        backend.saveWindowSize(width, height, visibility === Window.Maximized);
+        backend.savePage(currentPage);
+    }
 }

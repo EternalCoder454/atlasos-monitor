@@ -5,6 +5,11 @@
 
 #[cxx_qt::bridge]
 pub mod qobject {
+    unsafe extern "C++" {
+        include!("cxx-qt-lib/qstring.h");
+        type QString = cxx_qt_lib::QString;
+    }
+
     extern "RustQt" {
         #[qobject]
         /// How often the pages on screen are sampled, in milliseconds.
@@ -15,6 +20,12 @@ pub mod qobject {
         /// Atlas Monitor's own memory, in bytes (0 until first read).
         #[qproperty(i64, own_pss, cxx_name = "ownPss")]
         #[qproperty(i64, own_rss, cxx_name = "ownRss")]
+        /// The window as it was left, read once at start: its size (0 for
+        /// the default), maximized or not, and its page ("" for Overview).
+        #[qproperty(i32, window_width, cxx_name = "windowWidth")]
+        #[qproperty(i32, window_height, cxx_name = "windowHeight")]
+        #[qproperty(bool, window_maximized, cxx_name = "windowMaximized")]
+        #[qproperty(QString, last_page, cxx_name = "lastPage")]
         #[namespace = "atlas_monitor"]
         type Backend = super::BackendRust;
 
@@ -38,6 +49,16 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "openUpdater"]
         fn open_updater(self: &Backend) -> bool;
+
+        /// Saves the window's size, when it closes.
+        #[qinvokable]
+        #[cxx_name = "saveWindowSize"]
+        fn save_window_size(self: &Backend, width: i32, height: i32, maximized: bool);
+
+        /// Saves the page on screen, to open on next time.
+        #[qinvokable]
+        #[cxx_name = "savePage"]
+        fn save_page(self: &Backend, page: &QString);
     }
 
     impl cxx_qt::Threading for Backend {}
@@ -57,14 +78,19 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use atlas_sysinfo::sysmem;
 use cxx_qt::{CxxQtType, Threading};
+use cxx_qt_lib::QString;
 
-use crate::settings::{self, Settings};
+use crate::settings::{self, Settings, WindowState};
 
 pub struct BackendRust {
     refresh_interval: i32,
     gpu_rendering: bool,
     own_pss: i64,
     own_rss: i64,
+    window_width: i32,
+    window_height: i32,
+    window_maximized: bool,
+    last_page: QString,
     /// A memory read is running; a second request is dropped.
     reading_memory: Arc<AtomicBool>,
 }
@@ -72,7 +98,12 @@ pub struct BackendRust {
 impl Default for BackendRust {
     fn default() -> Self {
         let s = Settings::load();
+        let w = WindowState::load();
         Self {
+            window_width: w.width,
+            window_height: w.height,
+            window_maximized: w.maximized,
+            last_page: QString::from(&w.page),
             refresh_interval: s.refresh_interval_ms,
             gpu_rendering: s.gpu_rendering,
             own_pss: 0,
@@ -110,6 +141,18 @@ impl qobject::Backend {
         match Settings::save_gpu_rendering(on) {
             Ok(()) => self.set_gpu_rendering(on),
             Err(e) => log::warn!("saving the rendering setting: {e}"),
+        }
+    }
+
+    pub fn save_window_size(&self, width: i32, height: i32, maximized: bool) {
+        if let Err(e) = WindowState::save_size(width, height, maximized) {
+            log::warn!("saving the window's size: {e}");
+        }
+    }
+
+    pub fn save_page(&self, page: &QString) {
+        if let Err(e) = WindowState::save_page(&page.to_string()) {
+            log::warn!("saving the page on screen: {e}");
         }
     }
 

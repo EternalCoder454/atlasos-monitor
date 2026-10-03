@@ -32,6 +32,11 @@ const APPS: &str = "Apps";
 const KEY_GROUPED: &str = "GroupByApp";
 const KEY_KERNEL: &str = "KernelThreads";
 const KEY_HIDDEN: &str = "HiddenColumns";
+const WINDOW: &str = "Window";
+const KEY_WIDTH: &str = "Width";
+const KEY_HEIGHT: &str = "Height";
+const KEY_MAXIMIZED: &str = "Maximized";
+const KEY_PAGE: &str = "Page";
 
 /// The Apps columns hidden until the user shows them, by role.
 pub const DEFAULT_HIDDEN: [&str; 2] = ["diskRead", "diskWrite"];
@@ -179,6 +184,65 @@ impl AppsView {
     }
 }
 
+/// The window as it was left: its size (logical pixels; 0 until saved),
+/// maximized or not, and the page it showed.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WindowState {
+    pub width: i32,
+    pub height: i32,
+    pub maximized: bool,
+    pub page: String,
+}
+
+impl WindowState {
+    pub fn load() -> Self {
+        Self::from_values(
+            rc::get(WINDOW, KEY_WIDTH),
+            rc::get(WINDOW, KEY_HEIGHT),
+            rc::get(WINDOW, KEY_MAXIMIZED),
+            rc::get(WINDOW, KEY_PAGE),
+        )
+    }
+
+    fn from_values(
+        width: Option<String>,
+        height: Option<String>,
+        maximized: Option<String>,
+        page: Option<String>,
+    ) -> Self {
+        // A size from a hand-edited file is kept sane; QML still applies
+        // the window's minimum.
+        let size = |v: Option<String>| {
+            v.and_then(|v| v.trim().parse::<i32>().ok())
+                .filter(|n| (1..=32768).contains(n))
+                .unwrap_or(0)
+        };
+        Self {
+            width: size(width),
+            height: size(height),
+            maximized: maximized.is_some_and(|v| parse_bool(&v)),
+            page: page.unwrap_or_default().trim().to_owned(),
+        }
+    }
+
+    /// A maximized window keeps the size it had before, to come back to.
+    pub fn save_size(width: i32, height: i32, maximized: bool) -> io::Result<()> {
+        if !maximized {
+            rc::set(WINDOW, KEY_WIDTH, Some(&width.to_string()))?;
+            rc::set(WINDOW, KEY_HEIGHT, Some(&height.to_string()))?;
+        }
+        rc::set(
+            WINDOW,
+            KEY_MAXIMIZED,
+            Some(if maximized { "true" } else { "false" }),
+        )
+    }
+
+    pub fn save_page(page: &str) -> io::Result<()> {
+        rc::set(WINDOW, KEY_PAGE, Some(page))
+    }
+}
+
 /// A comma-separated list, trimmed, sorted, without repeats or blanks.
 fn list(v: &str) -> Vec<String> {
     let mut out: Vec<String> = v
@@ -264,6 +328,19 @@ mod tests {
             crate::rc::get_in(&text, APPS, KEY_HIDDEN).as_deref(),
             Some("")
         );
+    }
+
+    #[test]
+    fn the_window_reads_back() {
+        assert_eq!(
+            WindowState::from_values(None, None, None, None),
+            WindowState::default()
+        );
+        let got = WindowState::from_values(s("1200"), s(" 900 "), s("true"), s("disk:sda"));
+        assert_eq!((got.width, got.height, got.maximized), (1200, 900, true));
+        assert_eq!(got.page, "disk:sda");
+        let bad = WindowState::from_values(s("-4"), s("huge"), s("no"), None);
+        assert_eq!((bad.width, bad.height, bad.maximized), (0, 0, false));
     }
 
     #[test]
