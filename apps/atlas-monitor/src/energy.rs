@@ -181,17 +181,32 @@ enum Command {
 }
 
 /// The controller's thread. Dropping it closes the channel, the thread's
-/// signal to put back what it eased and end, and waits for that.
+/// signal to put back what it eased and end, and waits for that, up to
+/// [`SHUTDOWN_WAIT`].
 struct Runner {
     commands: Option<Sender<Command>>,
+    /// Disconnects when the thread ends, however it ends.
+    done: Receiver<()>,
     thread: Option<JoinHandle<()>>,
 }
+
+/// How long closing waits for the eases to be put back. A manager that
+/// doesn't answer could hold it for seconds per app; what is left eased is
+/// in the state file, which the next start puts back.
+const SHUTDOWN_WAIT: Duration = Duration::from_secs(3);
 
 impl Drop for Runner {
     fn drop(&mut self) {
         self.commands = None;
-        if let Some(t) = self.thread.take() {
-            let _ = t.join();
+        match self.done.recv_timeout(SHUTDOWN_WAIT) {
+            Err(RecvTimeoutError::Timeout) => {
+                log::warn!("Energy Saver didn't finish putting apps back; leaving it");
+            }
+            _ => {
+                if let Some(t) = self.thread.take() {
+                    let _ = t.join();
+                }
+            }
         }
     }
 }
@@ -274,7 +289,10 @@ fn run(
     qt: CxxQtThread<qobject::EnergySaver>,
     choices: Energy,
     theme: String,
+    done: Sender<()>,
 ) {
+    // Dropped on every way out, a panic included: Runner stops waiting.
+    let _done = done;
     let mut c = match ease_system::open(ease_system::state_file()) {
         Ok(c) => c,
         Err(u) => {
@@ -354,14 +372,16 @@ impl qobject::EnergySaver {
         self.as_mut().set_automatic(choices.automatic);
         self.as_mut().rust_mut().never = choices.never.clone();
         let (tx, rx) = mpsc::channel();
+        let (done_tx, done) = mpsc::channel();
         let qt = self.qt_thread();
         match std::thread::Builder::new()
             .name("energy-saver".into())
-            .spawn(move || run(rx, qt, choices, icon_theme))
+            .spawn(move || run(rx, qt, choices, icon_theme, done_tx))
         {
             Ok(thread) => {
                 self.as_mut().rust_mut().runner = Some(Runner {
                     commands: Some(tx),
+                    done,
                     thread: Some(thread),
                 });
             }
@@ -373,24 +393,35 @@ impl qobject::EnergySaver {
         }
     }
 
-    fn send(&self, command: Command) {
-        if let Some(tx) = self
-            .rust()
+    /// False when the controller's thread is gone (it panicked).
+    fn send(&self, command: Command) -> bool {
+        self.rust()
             .runner
             .as_ref()
             .and_then(|r| r.commands.as_ref())
-        {
-            let _ = tx.send(command);
-        }
+            .is_some_and(|tx| tx.send(command).is_ok())
     }
 
-    fn act(mut self: Pin<&mut Self>, command: Command) {
-        if self.rust().runner.is_none() {
+    fn act(mut self: Pin<&mut Self>, id: String, command: Command) {
+        if !self.unavailable().is_empty() {
             return;
         }
         self.as_mut().rust_mut().pending += 1;
         self.as_mut().set_busy(true);
-        self.send(command);
+        if !self.send(command) {
+            self.as_mut().answered();
+            let name = self
+                .rust()
+                .rows
+                .iter()
+                .find(|r| r.key == id)
+                .map_or(id.clone(), |r| r.name.clone());
+            self.failed(
+                QString::from(&name),
+                QString::from("noAnswer"),
+                QString::default(),
+            );
+        }
     }
 
     fn answered(mut self: Pin<&mut Self>) {
@@ -432,11 +463,13 @@ impl qobject::EnergySaver {
     }
 
     pub fn ease(self: Pin<&mut Self>, id: &QString) {
-        self.act(Command::Ease(id.to_string()));
+        let id = id.to_string();
+        self.act(id.clone(), Command::Ease(id));
     }
 
     pub fn restore(self: Pin<&mut Self>, id: &QString) {
-        self.act(Command::Restore(id.to_string()));
+        let id = id.to_string();
+        self.act(id.clone(), Command::Restore(id));
     }
 
     pub fn set_never(mut self: Pin<&mut Self>, id: &QString, never: bool) {

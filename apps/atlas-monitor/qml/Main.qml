@@ -258,6 +258,11 @@ QQC2.ApplicationWindow {
                     icon.name: "view-process-all"
                 }
                 NavItem {
+                    page: "energy"
+                    text: qsTr("Energy Saver")
+                    icon.name: "preferences-system-power-management"
+                }
+                NavItem {
                     page: "startup"
                     text: qsTr("Startup")
                     icon.name: "system-run"
@@ -266,11 +271,6 @@ QQC2.ApplicationWindow {
                     page: "services"
                     text: qsTr("Services")
                     icon.name: "preferences-system-services"
-                }
-                NavItem {
-                    page: "energy"
-                    text: qsTr("Energy Saver")
-                    icon.name: "preferences-system-power-management"
                 }
                 Item {
                     Layout.fillHeight: true
