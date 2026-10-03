@@ -7,6 +7,7 @@ fn main() {
         .file("src/backend.rs")
         .file("src/devices.rs")
         .file("src/graphics.rs")
+        .file("src/battery.rs")
         .file("src/sampler.rs")
         .file("src/stats.rs")
         .build();

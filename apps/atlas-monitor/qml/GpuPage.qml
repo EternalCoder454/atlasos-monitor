@@ -25,7 +25,7 @@ AtlasPage {
         Layout.bottomMargin: Kirigami.Units.largeSpacing
         wrapMode: Text.Wrap
         opacity: 0.7
-        text: qsTr("This card is asleep because nothing is using it. Atlas Monitor leaves it asleep rather than wake it to read it.")
+        text: qsTr("This card is asleep because nothing is using it. Atlas Monitor leaves it asleep rather than wake it to read it, so the figures below are from when it was last awake.")
     }
 
     Section {

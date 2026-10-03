@@ -108,6 +108,8 @@ pub struct GpuStatsRust {
     memory_clock: f64,
     usages: Series,
     memory: Series,
+    /// The last video memory share, for a tick without one (asleep).
+    last_share: f64,
 }
 
 impl Default for GpuStatsRust {
@@ -139,6 +141,7 @@ impl Default for GpuStatsRust {
             memory_clock: f64::NAN,
             usages: Series::default(),
             memory: Series::default(),
+            last_share: f64::NAN,
         }
     }
 }
@@ -170,9 +173,8 @@ impl qobject::GpuStats {
             let mut rust = self.as_mut().rust_mut();
             rust.usages.clear();
             rust.memory.clear();
+            rust.last_share = f64::NAN;
         }
-        self.as_mut().set_name(name.clone());
-        self.as_mut().set_label(label.clone());
         self.as_mut().set_driver(d.driver);
         self.as_mut().set_slot(d.slot);
         self.as_mut().set_integrated(d.integrated);
@@ -193,6 +195,9 @@ impl qobject::GpuStats {
         self.as_mut().set_power_limit(d.power_limit);
         self.as_mut().set_core_clock(d.core_clock);
         self.as_mut().set_memory_clock(d.memory_clock);
+        // Last: the title follows the figures already cleared.
+        self.as_mut().set_name(name.clone());
+        self.as_mut().set_label(label.clone());
     }
 
     /// Takes the shown card's reading out of a tick's; the others are for
@@ -206,19 +211,29 @@ impl qobject::GpuStats {
         };
         let card = &t.card;
         let g = &t.reading;
-        let total = g.memory_total.or(card.memory_total);
+        // A total once known stays: NVIDIA's comes only while awake.
+        let total = g
+            .memory_total
+            .or(card.memory_total)
+            .map(|t| size(Some(t)))
+            .unwrap_or(*self.memory_total());
         let memory_share = g
             .memory_used
-            .zip(total.filter(|&t| t > 0))
-            .map_or(f64::NAN, |(u, t)| u as f64 / t as f64 * 100.0);
+            .filter(|_| total > 0)
+            .map_or(f64::NAN, |u| u as f64 / total as f64 * 100.0);
         let (usages, memory) = {
             let mut rust = self.as_mut().rust_mut();
             if fresh {
                 rust.usages.clear();
                 rust.memory.clear();
+                rust.last_share = f64::NAN;
             }
+            if !memory_share.is_nan() {
+                rust.last_share = memory_share;
+            }
+            let share = rust.last_share;
             rust.usages.push(g.usage.unwrap_or(f64::NAN));
-            rust.memory.push(memory_share);
+            rust.memory.push(share);
             (rust.usages.to_qlist(), rust.memory.to_qlist())
         };
         if fresh {
@@ -230,8 +245,15 @@ impl qobject::GpuStats {
         }
         self.as_mut().set_asleep(g.asleep);
         self.as_mut().set_usage(g.usage.unwrap_or(f64::NAN));
+        self.as_mut().set_memory_total(total);
+        self.as_mut().set_usage_history(usages);
+        self.as_mut().set_memory_history(memory);
+        // Asleep, nothing else was read: the last figures stay under the
+        // page's note, rather than rows coming and going as the card naps.
+        if g.asleep {
+            return;
+        }
         self.as_mut().set_memory_used(size(g.memory_used));
-        self.as_mut().set_memory_total(size(total));
         self.as_mut().set_gtt_used(size(g.gtt_used));
         self.as_mut()
             .set_temperature(g.temperature.unwrap_or(f64::NAN));
@@ -248,7 +270,5 @@ impl qobject::GpuStats {
             .set_core_clock(g.core_clock.unwrap_or(f64::NAN));
         self.as_mut()
             .set_memory_clock(g.memory_clock.unwrap_or(f64::NAN));
-        self.as_mut().set_usage_history(usages);
-        self.as_mut().set_memory_history(memory);
     }
 }

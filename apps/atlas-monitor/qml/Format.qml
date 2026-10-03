@@ -58,6 +58,21 @@ QtObject {
         return isNaN(v) || v <= 0 ? dash : qsTr("%1 W").arg(Math.round(v));
     }
 
+    // Seconds as the Go version writes them: "2h 15m", "40m"; -1 is a dash.
+    function duration(s) {
+        if (s <= 0) {
+            return dash;
+        }
+        const h = Math.floor(s / 3600);
+        const m = Math.floor(s / 60) % 60;
+        return h > 0 ? qsTr("%1h %2m").arg(h).arg(m) : qsTr("%1m").arg(m);
+    }
+
+    // Watt-hours, one decimal.
+    function wh(v) {
+        return isNaN(v) || v <= 0 ? dash : qsTr("%1 Wh").arg(Number(v).toLocaleString(Qt.locale(), "f", 1));
+    }
+
     // A count the device may not report (-1).
     function count(v) {
         return v < 0 ? dash : Number(v).toLocaleString(Qt.locale(), "f", 0);

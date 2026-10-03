@@ -41,6 +41,7 @@ use std::time::Duration;
 use cxx_qt::{CxxQtThread, CxxQtType};
 use cxx_qt_lib::QString;
 
+use crate::battery::qobject::BatteryStats;
 use crate::devices::qobject::{DeviceList, DiskStats, NetStats};
 use crate::graphics::qobject::GpuStats;
 use crate::sampling::{Loop, Page, Tick};
@@ -89,6 +90,7 @@ pub struct Sink {
     pub disk: CxxQtThread<DiskStats>,
     pub net: CxxQtThread<NetStats>,
     pub gpu: CxxQtThread<GpuStats>,
+    pub battery: CxxQtThread<BatteryStats>,
 }
 
 impl Sink {
@@ -117,8 +119,12 @@ impl Sink {
         if let Some(cards) = devices.cards.take() {
             let _ = self.gpu.queue(move |o| o.set_cards(&cards));
         }
-        if let Some(g) = tick.gpus {
+        // The Overview's readings are for its own row, not the GPU page.
+        if let (Some(g), Page::Gpu(_)) = (tick.gpus, &tick.page) {
             let _ = self.gpu.queue(move |o| o.apply(g, fresh));
+        }
+        if let Some(p) = devices.power.take() {
+            let _ = self.battery.queue(move |o| o.apply(&p));
         }
         let _ = self.devices.queue(move |o| o.apply(devices));
     }

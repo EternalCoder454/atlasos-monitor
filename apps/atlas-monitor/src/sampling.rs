@@ -50,7 +50,7 @@ pub enum Page {
     Memory,
     Disk(String),
     Network(String),
-    /// A card by its DRM node; every card is read, for the sidebar's list.
+    /// A card by its DRM node.
     Gpu(String),
     Battery(String),
     Sensors,
@@ -95,7 +95,6 @@ pub struct Devices {
     #[allow(dead_code, reason = "the Network page will mark it; drop this then")]
     pub default_route: Option<String>,
     /// Batteries and adapters; `None` on a machine with none.
-    #[allow(dead_code, reason = "the Battery page will read it; drop this then")]
     pub power: Option<Supplies>,
 }
 
@@ -246,9 +245,18 @@ impl Worker {
     pub fn set_page(&mut self, page: Page) {
         self.cpu = matches!(page, Page::Overview | Page::Cpu).then(CpuSampler::new);
         self.memory = matches!(page, Page::Overview | Page::Memory).then(MemorySampler::new);
+        // The Overview reads every card; a GPU page only its own, so a
+        // laptop's other card can still sleep. Each sampler gets the whole
+        // list, to know whether its card is the only one.
+        let shown = |c: &Card| match &page {
+            Page::Overview => true,
+            Page::Gpu(node) => c.node == *node,
+            _ => false,
+        };
         self.gpus = matches!(page, Page::Overview | Page::Gpu(_)).then(|| {
             self.cards
                 .iter()
+                .filter(|c| shown(c))
                 .map(|c| (c.clone(), GpuSampler::new(c, &self.cards)))
                 .collect()
         });

@@ -19,6 +19,7 @@ QQC2.ApplicationWindow {
     required property var disk
     required property var net
     required property var gpu
+    required property var battery
 
     title: qsTr("Atlas Monitor")
     width: Kirigami.Units.gridUnit * 56
@@ -42,6 +43,7 @@ QQC2.ApplicationWindow {
             "disk": diskPage,
             "network": networkPage,
             "gpu": gpuPage,
+            "battery": batteryPage,
             "settings": settingsPage,
             "about": aboutPage
         })
@@ -55,7 +57,7 @@ QQC2.ApplicationWindow {
         const colon = name.indexOf(":");
         const kind = colon < 0 ? name : name.slice(0, colon);
         const device = colon < 0 ? undefined : name.slice(colon + 1);
-        const known = pages[kind] !== undefined && (device !== undefined) === ["disk", "network", "gpu"].includes(kind) && device !== "";
+        const known = pages[kind] !== undefined && (device !== undefined) === ["disk", "network", "gpu", "battery"].includes(kind) && device !== "";
         var c = known ? pages[kind] : overviewPage;
         currentPage = known ? name : "overview";
         // Only the page on screen is sampled.
@@ -68,6 +70,8 @@ QQC2.ApplicationWindow {
             net.show(device, devices.netLabels[devices.netNames.indexOf(device)] ?? device);
         } else if (known && kind === "gpu") {
             gpu.show(device, gpu.cardLabels[gpu.cardNames.indexOf(device)] ?? device);
+        } else if (known && kind === "battery") {
+            battery.show(device, battery.packLabels[battery.packNames.indexOf(device)] ?? device);
         }
         if (stack.depth === 0) {
             stack.push(c, {}, QQC2.StackView.Immediate);
@@ -88,8 +92,9 @@ QQC2.ApplicationWindow {
         elide: Text.ElideRight
     }
 
-    // Disk and Network: a group with an entry and its live rate per device;
-    // graphics cards, with no rates, when there are two or more.
+    // Disk and Network: a group with an entry and its live rate per device.
+    // Graphics cards (no figure) and batteries (percent charged) are a group
+    // when there are two or more.
     // Compact, the group is one icon that opens the first device.
     component DeviceGroup: SidebarGroup {
         id: group
@@ -97,6 +102,7 @@ QQC2.ApplicationWindow {
         property list<string> names
         property list<string> labels
         property list<real> rates
+        property list<real> percents
 
         visible: names.length > 0
         compact: root.compact
@@ -110,7 +116,7 @@ QQC2.ApplicationWindow {
                 Layout.fillWidth: true
                 sub: true
                 text: group.labels[index] ?? ""
-                value: group.rates.length > 0 ? Format.rate(group.rates[index] ?? NaN) : ""
+                value: group.rates.length > 0 ? Format.rate(group.rates[index] ?? NaN) : group.percents.length > 0 ? Format.percent(group.percents[index] ?? NaN) : ""
                 selected: root.currentPage === page
                 onClicked: root.showPage(page)
             }
@@ -159,7 +165,7 @@ QQC2.ApplicationWindow {
                 anchors.topMargin: Kirigami.Units.gridUnit
                 spacing: 2
 
-                // Battery and Sensors join Hardware, and
+                // Sensors joins Hardware, and
                 // System (Apps, Energy Saver, Startup, Services) comes, with
                 // their pages; see docs/DESIGN.md.
                 NavItem {
@@ -210,6 +216,22 @@ QQC2.ApplicationWindow {
                     iconName: "show-gpu-effects"
                     names: root.gpu.cardNames
                     labels: root.gpu.cardLabels
+                }
+                NavItem {
+                    visible: root.battery.packNames.length === 1
+                    page: "battery:" + (root.battery.packNames[0] ?? "")
+                    text: qsTr("Battery")
+                    value: Format.percent(root.battery.packPercents[0] ?? NaN)
+                    icon.name: "battery"
+                }
+                DeviceGroup {
+                    visible: names.length > 1
+                    kind: "battery"
+                    text: qsTr("Battery")
+                    iconName: "battery"
+                    names: root.battery.packNames
+                    labels: root.battery.packLabels
+                    percents: root.battery.packPercents
                 }
                 Item {
                     Layout.fillHeight: true
@@ -310,6 +332,13 @@ QQC2.ApplicationWindow {
         id: gpuPage
         GpuPage {
             gpu: root.gpu
+            interval: root.backend.refreshInterval
+        }
+    }
+    Component {
+        id: batteryPage
+        BatteryPage {
+            battery: root.battery
             interval: root.backend.refreshInterval
         }
     }
