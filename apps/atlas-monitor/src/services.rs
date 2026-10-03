@@ -300,10 +300,20 @@ fn can(s: &Service) -> Can {
         );
     let up = matches!(status, Status::Running | Status::Active | Status::Starting)
         || s.active == ActiveState::Reloading;
+    // Not a target (see `services::runs_by_hand`). A file system or swap
+    // only stops, behind a question: restarting one unmounts it unasked.
+    let runs = services::runs_by_hand(&s.name);
+    let storage = matches!(
+        services::kind(&s.name),
+        Some("mount" | "automount" | "swap")
+    );
     Can {
-        start: startable && matches!(status, Status::Stopped | Status::Failed),
-        stop: up,
-        restart: startable && matches!(status, Status::Running | Status::Active | Status::Failed),
+        start: runs && startable && matches!(status, Status::Stopped | Status::Failed),
+        stop: runs && up,
+        restart: runs
+            && !storage
+            && startable
+            && matches!(status, Status::Running | Status::Active | Status::Failed),
         enable: s.file_state.as_ref().is_some_and(FileState::can_enable),
         disable: s.file_state.as_ref().is_some_and(FileState::can_disable),
     }
@@ -638,5 +648,12 @@ mod tests {
         let failed = service("c.service", "", ActiveState::Failed, "failed");
         let c = can(&failed);
         assert!(c.start && !c.stop && c.restart);
+        // A target is only switched on or off at boot.
+        let target = service("reboot.target", "", ActiveState::Inactive, "dead");
+        let c = can(&target);
+        assert!(!c.start && !c.stop && !c.restart && !c.enable && c.disable);
+        let mount = service("home.mount", "", ActiveState::Active, "mounted");
+        let c = can(&mount);
+        assert!(!c.start && c.stop && !c.restart);
     }
 }

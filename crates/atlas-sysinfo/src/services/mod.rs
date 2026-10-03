@@ -60,7 +60,6 @@ const DEST: &str = "org.freedesktop.systemd1";
 const PATH: &str = "/org/freedesktop/systemd1";
 const MANAGER_IF: &str = "org.freedesktop.systemd1.Manager";
 const UNIT_IF: &str = "org.freedesktop.systemd1.Unit";
-const SERVICE_IF: &str = "org.freedesktop.systemd1.Service";
 const PROPS_IF: &str = "org.freedesktop.DBus.Properties";
 const PEER_IF: &str = "org.freedesktop.DBus.Peer";
 const BUS: Option<&str> = Some("org.freedesktop.DBus");
@@ -749,13 +748,13 @@ impl Live {
     }
 }
 
-/// The loaded services as systemd has them now.
+/// The loaded units of the listed kinds as systemd has them now.
 ///
 /// Listing by pattern makes systemd go through every unit it has loaded
-/// (devices, mounts, sockets: 576 here), about 20 ms of PID 1's time
-/// whatever the pattern matches. Listing by name costs it under 1 ms for
-/// all 231 services. So every unit is listed now and then (see
-/// [`FULL_LIST_EVERY`]), and in between the services are listed by name,
+/// (devices and slices too: 576 here), about 20 ms of PID 1's time
+/// whatever the pattern matches. Listing by name costs it about 0.5 ms for
+/// the 474 units of the listed kinds. So every unit is listed now and then
+/// (see [`FULL_LIST_EVERY`]), and in between the units are listed by name,
 /// the names kept by `UnitNew` and `UnitRemoved`. Only loaded names are
 /// asked for: systemd loads a unit that is asked for by name.
 async fn units(live: &mut Live, state: &mut State) -> zbus::Result<Vec<Unit>> {
@@ -931,13 +930,20 @@ async fn details(live: &mut Live, state: &mut State, name: &str) -> zbus::Result
         .call(state, unit.as_str(), PROPS_IF, "GetAll", &(UNIT_IF,))
         .await?
         .unwrap_or_default();
-    // Only a service has the Service interface; systemd refuses the rest.
-    let service_props: Props = if kind(name) == Some("service") {
-        live.call(state, unit.as_str(), PROPS_IF, "GetAll", &(SERVICE_IF,))
+    // The kind's own interface (Service, Socket, Mount...) has the result
+    // of its last run; a target has none.
+    let kind_props: Props = match kind_interface(name) {
+        Some(interface) => live
+            .call(
+                state,
+                unit.as_str(),
+                PROPS_IF,
+                "GetAll",
+                &(interface.as_str(),),
+            )
             .await?
-            .unwrap_or_default()
-    } else {
-        Props::default()
+            .unwrap_or_default(),
+        None => Props::default(),
     };
     if unit_props.is_empty() {
         return Ok(None);
@@ -953,7 +959,7 @@ async fn details(live: &mut Live, state: &mut State, name: &str) -> zbus::Result
     Ok(Some(parse_details(
         name,
         &unit_props,
-        &service_props,
+        &kind_props,
         file_state,
     )))
 }
@@ -1210,6 +1216,26 @@ pub fn kind(name: &str) -> Option<&'static str> {
     KINDS.iter().copied().find(|k| *k == suffix)
 }
 
+/// The D-Bus interface of a unit's kind, `org.freedesktop.systemd1.Socket`
+/// for a socket. `None` for a target, which has none of its own.
+fn kind_interface(name: &str) -> Option<String> {
+    let kind = kind(name).filter(|k| *k != "target")?;
+    let mut chars = kind.chars();
+    let first = chars.next()?.to_ascii_uppercase();
+    Some(format!(
+        "org.freedesktop.systemd1.{first}{}",
+        chars.as_str()
+    ))
+}
+
+/// Whether a unit may be started, stopped or restarted from here. A target
+/// may not: starting `poweroff.target` or `rescue.target` turns the
+/// computer off or takes the desktop away, and stopping one stops what it
+/// pulls in. Targets can still be switched on or off at boot.
+pub fn runs_by_hand(name: &str) -> bool {
+    kind(name).is_some_and(|k| k != "target")
+}
+
 fn is_template(name: &str) -> bool {
     name.rsplit_once('.')
         .is_some_and(|(stem, _)| stem.ends_with('@'))
@@ -1264,7 +1290,9 @@ pub enum JobResult {
 /// Why an action wasn't done.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ActionError {
-    /// Not the name of a unit of a listed kind (see [`valid_name`]).
+    /// Not the name of a unit of a listed kind (see [`valid_name`]), or a
+    /// start, stop or restart of a unit that may not have one (see
+    /// [`runs_by_hand`]).
     InvalidName,
     /// polkit said no: the password dialog was cancelled, or the user may
     /// not manage services.
@@ -1280,7 +1308,7 @@ pub enum ActionError {
     NoAnswer,
 }
 
-/// Asks systemd to do `action` to the service `name`, and waits for the
+/// Asks systemd to do `action` to the unit `name`, and waits for the
 /// result. Blocks while polkit asks for a password, up to [`AUTH_TIMEOUT`],
 /// and then on a start, stop or restart for the job, up to [`JOB_WAIT`]: run
 /// it on a thread of its own, never on the sampling thread. It makes its own
@@ -1291,7 +1319,8 @@ pub enum ActionError {
 /// with a daemon-reload, which polkit would ask a second password for, and
 /// which only matters for a unit's dependencies before the next boot.
 pub fn act(name: &str, action: Action) -> Result<Outcome, ActionError> {
-    if !valid_name(name) {
+    let runs = matches!(action, Action::Start | Action::Stop | Action::Restart);
+    if !valid_name(name) || runs && !runs_by_hand(name) {
         return Err(ActionError::InvalidName);
     }
     let rt = tokio::runtime::Builder::new_current_thread()

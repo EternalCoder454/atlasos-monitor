@@ -410,6 +410,18 @@ fn kinds_and_templates() {
     assert!(!is_template("getty@tty1.service"));
     assert!(is_instance("sshd@0-1.2.3.4:22.socket"));
     assert!(!is_instance("sshd.socket"));
+    assert_eq!(
+        kind_interface("sshd.socket").as_deref(),
+        Some("org.freedesktop.systemd1.Socket")
+    );
+    assert_eq!(
+        kind_interface("proc-sys-fs-binfmt_misc.automount").as_deref(),
+        Some("org.freedesktop.systemd1.Automount")
+    );
+    assert_eq!(kind_interface("multi-user.target"), None);
+    assert!(runs_by_hand("fstrim.timer"));
+    assert!(!runs_by_hand("reboot.target"));
+    assert!(!runs_by_hand("x.device"));
 }
 
 #[test]
@@ -560,6 +572,12 @@ fn act_refuses_a_path_before_the_bus() {
         act("x.device", Action::Start),
         Err(ActionError::InvalidName)
     );
+    for action in [Action::Start, Action::Stop, Action::Restart] {
+        assert_eq!(
+            act("poweroff.target", action),
+            Err(ActionError::InvalidName)
+        );
+    }
 }
 
 /// Live: only where there is a system bus with systemd (not in CI).

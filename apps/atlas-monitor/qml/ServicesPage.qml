@@ -94,7 +94,7 @@ Item {
         case "failed":
             return qsTr("%1 failed.").arg(name);
         case "dependency":
-            return qsTr("%1 didn't start: a service it needs failed.").arg(name);
+            return qsTr("%1 didn't start: something it needs failed.").arg(name);
         case "timeout":
             return qsTr("%1 took too long and was stopped.").arg(name);
         case "canceled":
@@ -368,7 +368,7 @@ Item {
     ConfirmDialog {
         id: stopDialog
         title: qsTr("Stop %1?").arg(page.target)
-        text: qsTr("Anything that needs it may stop working until it is started again or the computer restarts.")
+        text: page.target.endsWith(".mount") ? qsTr("This unmounts it: programs using files on it lose them, and unsaved work there may be lost.") : page.target.endsWith(".swap") ? qsTr("What is in it moves back into memory first. With memory short, that can take a while and slow everything down.") : qsTr("Anything that needs it may stop working until it is started again or the computer restarts.")
         acceptText: qsTr("Stop")
         focusReject: true
         onAccepted: page.act(page.actions.stop)
@@ -378,5 +378,6 @@ Item {
         page.resort();
         page.services.setSearch(search.query);
         page.services.setProblemsOnly(false);
+        page.services.setAllTypes(false);
     }
 }
