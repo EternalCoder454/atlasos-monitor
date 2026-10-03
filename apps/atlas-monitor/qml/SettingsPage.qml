@@ -1,12 +1,15 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Layouts
+import org.kde.kirigami as Kirigami
 import Atlas.Ui
 
 AtlasPage {
     id: page
 
     required property var backend
+    required property var energy
 
     title: qsTr("Settings")
 
@@ -32,6 +35,19 @@ AtlasPage {
     }
 
     Section {
+        title: qsTr("Energy Saver")
+        footer: page.energy.unavailable.length > 0 ? qsTr("Energy Saver can't work on this system; its page says why.") : qsTr("An app that keeps a core busy for half a minute is put behind the rest, and put back when it calms down. Apps playing or recording sound, the app you're using, and terminals are left alone.")
+
+        SectionRow {
+            title: qsTr("Ease Off Busy Apps Automatically")
+            showSwitch: true
+            switchChecked: page.energy.automatic
+            enabled: page.energy.unavailable.length === 0
+            onSwitchToggled: checked => page.energy.setAutomaticEasing(checked)
+        }
+    }
+
+    Section {
         title: qsTr("Drawing")
         footer: qsTr("Atlas Monitor draws its window with the processor, which uses less memory. Takes effect the next time Atlas Monitor opens.")
 
@@ -51,5 +67,24 @@ AtlasPage {
             subtitle: qsTr("Shared memory is split between the apps that use it.")
             value: page.backend.ownPss > 0 ? Qt.locale().formattedDataSize(page.backend.ownPss) : ""
         }
+    }
+
+    Section {
+        title: qsTr("Crash Reports")
+        footer: qsTr("Crash reports for every Atlas app are turned on or off in Atlas Updater. They're off unless you turn them on, and each one is shown to you before it's sent.")
+
+        SectionRow {
+            title: qsTr("Open Atlas Updater")
+            chevron: true
+            onClicked: missing.visible = !page.backend.openUpdater()
+        }
+    }
+
+    Kirigami.InlineMessage {
+        id: missing
+        Layout.fillWidth: true
+        type: Kirigami.MessageType.Warning
+        showCloseButton: true
+        text: qsTr("Atlas Updater isn't installed.")
     }
 }

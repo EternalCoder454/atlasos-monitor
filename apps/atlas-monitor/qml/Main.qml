@@ -421,6 +421,7 @@ QQC2.ApplicationWindow {
         id: settingsPage
         SettingsPage {
             backend: root.backend
+            energy: root.energy
         }
     }
     Component {

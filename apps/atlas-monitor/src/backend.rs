@@ -32,6 +32,12 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "refreshOwnMemory"]
         fn refresh_own_memory(self: Pin<&mut Backend>);
+
+        /// Starts Atlas Updater, which keeps the crash report setting (a
+        /// running one comes to the front). False when it isn't installed.
+        #[qinvokable]
+        #[cxx_name = "openUpdater"]
+        fn open_updater(self: &Backend) -> bool;
     }
 
     impl cxx_qt::Threading for Backend {}
@@ -79,6 +85,9 @@ impl Default for BackendRust {
 fn to_i64(bytes: u64) -> i64 {
     i64::try_from(bytes).unwrap_or(i64::MAX)
 }
+
+/// Atlas Updater's program, on the `PATH` wherever AtlasOS installs it.
+const UPDATER: &str = "atlas-updater";
 
 impl qobject::Backend {
     pub fn change_refresh_interval(self: Pin<&mut Self>, ms: i32) {
@@ -130,6 +139,33 @@ impl qobject::Backend {
             });
         if let Err(e) = spawned {
             log::warn!("starting the memory read: {e}");
+        }
+    }
+
+    pub fn open_updater(&self) -> bool {
+        let child = std::process::Command::new(UPDATER)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn();
+        match child {
+            Ok(mut child) => {
+                // Reaped when it exits; a running Updater answers the new
+                // one at once, which then exits.
+                let reaped = std::thread::Builder::new()
+                    .name("updater-wait".into())
+                    .spawn(move || {
+                        let _ = child.wait();
+                    });
+                if let Err(e) = reaped {
+                    log::warn!("waiting for Atlas Updater: {e}");
+                }
+                true
+            }
+            Err(e) => {
+                log::warn!("starting {UPDATER}: {e}");
+                false
+            }
         }
     }
 }
