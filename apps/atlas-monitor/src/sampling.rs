@@ -356,10 +356,18 @@ impl Worker {
         }
         let questions = self.questions.get_or_insert_with(Questions::start);
         if questions.asks.send(ask).is_err() {
-            // The thread could not start or has died; asking again would
-            // only fill a channel nobody reads.
-            log::warn!("the D-Bus question thread is gone; SMART and services go unread");
+            // The thread could not start or has died. Forget it and what it
+            // was asked; the next question, a slow tick or a minute away,
+            // starts a new one.
+            log::warn!("the D-Bus question thread is gone; starting another on the next question");
+            self.lost_questions();
         }
+    }
+
+    fn lost_questions(&mut self) {
+        self.questions = None;
+        self.waiting_drives.clear();
+        self.waiting_failed = false;
     }
 
     /// Takes in what the question thread has answered since the last tick.
@@ -374,7 +382,15 @@ impl Worker {
                         self.disk_news = true;
                     }
                     self.waiting_drives.remove(&name);
-                    self.drives.insert(name, health);
+                    // A read that fails keeps the last answer, as below.
+                    match health {
+                        Some(h) => {
+                            self.drives.insert(name, Some(h));
+                        }
+                        None => {
+                            self.drives.entry(name).or_insert(None);
+                        }
+                    }
                 }
                 Ok(Answer::Failed(failed)) => {
                     self.waiting_failed = false;
@@ -384,7 +400,11 @@ impl Worker {
                         self.failed = failed;
                     }
                 }
-                Err(TryRecvError::Empty | TryRecvError::Disconnected) => return,
+                Err(TryRecvError::Empty) => return,
+                Err(TryRecvError::Disconnected) => {
+                    self.lost_questions();
+                    return;
+                }
             }
         }
     }
@@ -456,6 +476,8 @@ impl Questions {
     fn start() -> Self {
         let (asks, rx) = mpsc::channel();
         let (tx, answers) = mpsc::channel();
+        // A thread that could not start drops `rx` and `tx` with its
+        // closure, so the first send or receive finds it gone.
         let spawned = std::thread::Builder::new()
             .name("dbus-questions".into())
             .spawn(move || ask_dbus(rx, tx));
@@ -669,6 +691,20 @@ mod tests {
         assert_eq!(asked.len(), drives + 1, "{asked:?}");
         // The ticks went on without the answers.
         assert_eq!(w.ticks, SLOW_EVERY * 3);
+    }
+
+    #[test]
+    fn a_dead_question_thread_is_forgotten() {
+        let mut w = Worker::new();
+        let (asks, sent) = mpsc::channel();
+        let (tx, answers) = mpsc::channel();
+        w.questions = Some(Questions { asks, answers });
+        w.set_page(Page::Overview);
+        w.tick();
+        assert!(w.waiting_failed);
+        drop((sent, tx));
+        w.tick();
+        assert!(w.questions.is_none() && !w.waiting_failed && w.waiting_drives.is_empty());
     }
 
     #[test]

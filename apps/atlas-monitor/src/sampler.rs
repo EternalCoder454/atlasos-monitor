@@ -89,7 +89,9 @@ impl Sink {
     fn post(&self, tick: Tick) {
         let fresh = tick.fresh;
         // Health first: the Overview waits for memory before it shows
-        // anything, so the hero never says "fine" before health is in.
+        // anything, so the hero never shows a tick without its health.
+        // SMART and failed services answer a tick or so later, so a problem
+        // with a drive or a service appears a moment after the Overview opens.
         if let Some(alerts) = tick.health {
             let _ = self.health.queue(move |o| o.apply(alerts));
         }
