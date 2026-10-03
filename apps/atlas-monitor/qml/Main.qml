@@ -146,7 +146,9 @@ QQC2.ApplicationWindow {
         onActivated: root.showPage(kind + ":" + names[0])
 
         Repeater {
-            model: group.names.length
+            // None while hidden: a lone card's group still has its name,
+            // and the row would format its load every tick for nothing.
+            model: group.visible ? group.names.length : 0
             SidebarItem {
                 required property int index
                 readonly property string page: group.kind + ":" + group.names[index]
