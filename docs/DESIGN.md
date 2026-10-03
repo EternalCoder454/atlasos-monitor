@@ -498,9 +498,16 @@ The readers the loop drives (`atlas-sysinfo`):
   anything playing or recording (pw-dump, checked before every ease; no
   answer means no easing), terminals, Atlas Monitor, apps listed as never,
   an app the user put back (while it runs), and any unit whose weight
-  someone else set. uresourced, which AtlasOS runs, raises the focused app
-  and apps playing sound to 300; a weight changed after Atlas set it is let
-  go and never restored over. Closing the window or turning automatic off
+  someone else set. The app in use is never eased automatically, and one
+  eased is put back when it gets focus: on Plasma, `ease::kwin` loads a
+  KWin script (`$XDG_RUNTIME_DIR/net.eterneon.atlas.monitor/focus.js`) that
+  reports the focused window's pid to its own connection's unique name, and
+  the Energy Saver thread passes that pid's unit to `set_focused`. The
+  script is unloaded when the window closes, replaced by the next run after
+  a crash, and loaded again into a KWin that restarted. uresourced, which
+  AtlasOS runs, raises apps playing sound to 300 (the focused app too, but
+  only on GNOME); a weight changed after Atlas set it is let go and never
+  restored over. Closing the window or turning automatic off
   puts back the automatic eases; manual ones stay. Every ease is listed in
   `$XDG_RUNTIME_DIR/net.eterneon.atlas.monitor/eased`, so after a crash
   `open` puts back the automatic ones and takes up the manual ones again,

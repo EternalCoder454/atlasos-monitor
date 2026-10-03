@@ -419,6 +419,74 @@ fn the_focused_app_is_left_alone() {
     assert_eq!(r.weight(FIREFOX), 300);
 }
 
+/// On Plasma uresourced can't see focus, so the desktop says which window
+/// has it (a KWin script) and Atlas keeps that application itself.
+#[test]
+fn the_window_with_focus_is_left_alone() {
+    let mut r = Rig::new(&[FIREFOX]);
+    r.c.set_focused(Some(FIREFOX.into()));
+    r.run(60, &[(FIREFOX, 90)]);
+    assert_eq!(r.weight(FIREFOX), UNSET);
+    assert_eq!(r.status("org.mozilla.firefox"), Some(Status::KeptInUse));
+
+    // Focus moves on: busy counts from then, not from when it began.
+    r.c.set_focused(None);
+    r.run(25, &[(FIREFOX, 90)]);
+    assert_eq!(r.weight(FIREFOX), UNSET);
+    r.run(10, &[(FIREFOX, 90)]);
+    assert_eq!(r.weight(FIREFOX), EASED_WEIGHT);
+
+    // Eased, then focused (another of its windows): put back on the next
+    // tick, though still busy.
+    r.c.set_focused(Some(FIREFOX_2.into()));
+    r.world
+        .borrow_mut()
+        .units
+        .insert(FIREFOX_2.into(), (0, UNSET));
+    r.run(5, &[(FIREFOX, 90)]);
+    assert_eq!(r.weight(FIREFOX), UNSET);
+    assert_eq!(r.weight(FIREFOX_2), UNSET);
+    assert_eq!(r.status("org.mozilla.firefox"), Some(Status::KeptInUse));
+    assert!(r.c.saved().is_empty());
+}
+
+/// What the user eased by hand stays eased when it gets focus.
+#[test]
+fn focus_leaves_a_manual_ease() {
+    let mut r = Rig::new(&[FIREFOX]);
+    r.run(5, &[(FIREFOX, 90)]);
+    r.c.ease("org.mozilla.firefox").unwrap();
+    r.c.set_focused(Some(FIREFOX.into()));
+    r.run(20, &[(FIREFOX, 90)]);
+    assert_eq!(r.weight(FIREFOX), EASED_WEIGHT);
+    assert_eq!(r.status("org.mozilla.firefox"), Some(Status::EasedManual));
+}
+
+#[test]
+fn unit_of_a_cgroup_file() {
+    let u = |t: &str| system::unit_of_cgroup(t).map(|u| u.to_string());
+    let base = "0::/user.slice/user-1000.slice/user@1000.service/app.slice";
+    assert_eq!(u(&format!("{base}/{FIREFOX}\n")).as_deref(), Some(FIREFOX));
+    // In a sub-slice, and with cgroups of its own below (a Flatpak).
+    assert_eq!(
+        u(&format!(
+            "{base}/app-flatpak.slice/app-flatpak-org.gnome.Maps-7.scope/a/b.scope\n"
+        ))
+        .as_deref(),
+        Some("app-flatpak-org.gnome.Maps-7.scope")
+    );
+    // Not an application's: the session's own services, or outside app.slice.
+    assert_eq!(u(&format!("{base}/dbus-broker.service\n")), None);
+    assert_eq!(u("0::/user.slice/user-1000.slice/session-3.scope\n"), None);
+    assert_eq!(u("0::/init.scope\n"), None);
+    assert_eq!(u(""), None);
+    // A v1 line before the unified one is skipped.
+    assert_eq!(
+        u(&format!("1:name=systemd:/x\n0::{}/{FIREFOX}\n", &base[3..])).as_deref(),
+        Some(FIREFOX)
+    );
+}
+
 #[test]
 fn someone_elses_weight_is_not_ours() {
     let mut r = Rig::new(&[FIREFOX]);

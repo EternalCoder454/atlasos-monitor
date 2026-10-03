@@ -24,11 +24,16 @@
 //!   starts playing is put back. When PipeWire doesn't answer, nothing is
 //!   eased: easing the music is the one thing this must never do;
 //! - terminals (a busy terminal is a build someone is waiting on);
+//! - the one in use: the window with focus, as the desktop reports it
+//!   ([`Controller::set_focused`]; on Plasma a KWin script). An eased one
+//!   that gets focus is put back, and counts as busy again only from when
+//!   it loses focus;
 //! - Atlas Monitor itself, and the applications the user listed as never;
 //! - one the user put back by hand, for as long as it runs;
 //! - one whose weight someone else set. Fedora (and so AtlasOS) runs
-//!   uresourced, which gives the *focused* application's unit a weight of
-//!   300 and resets it when focus moves, and does the same for one playing
+//!   uresourced, which on GNOME gives the *focused* application's unit a
+//!   weight of 300 and resets it when focus moves (on Plasma it can't see
+//!   focus, checked in the AtlasOS VM), and does the same for one playing
 //!   sound (seen in the trial, `--example ease -- --trial`): a raised unit
 //!   is the one in use ([`Status::KeptInUse`]). Any unit not at the kernel default is someone
 //!   else's, and a unit whose weight changed after Atlas eased it is let go
@@ -51,6 +56,7 @@
 //! [`Controller::tick`] every [`TICK_EVERY`] while the window is open.
 
 pub mod audio;
+pub mod kwin;
 pub mod system;
 
 use std::collections::{HashMap, HashSet};
@@ -103,9 +109,10 @@ pub enum Status {
     KeptNever,
     /// Heavy, but the user put it back by hand while it runs.
     KeptByUser,
-    /// Heavy, but something raised its weight: uresourced's focused
-    /// application, the one being used. One raised for its sound reads
-    /// [`KeptSound`](Status::KeptSound).
+    /// Heavy, but the one being used: the window with focus
+    /// ([`Controller::set_focused`]), or one whose weight something raised
+    /// (uresourced's focused application, on GNOME). One raised for its
+    /// sound reads [`KeptSound`](Status::KeptSound).
     KeptInUse,
     /// Heavy, but something else set its weight lower or otherwise.
     KeptOther,
@@ -287,6 +294,8 @@ pub struct Controller {
     last: Option<Instant>,
     last_audio: Option<Instant>,
     audible: HashSet<String>,
+    /// The unit of the window with focus, as the desktop last said.
+    focused: Option<Arc<str>>,
     shut_down: bool,
 }
 
@@ -314,6 +323,7 @@ impl Controller {
             last: None,
             last_audio: None,
             audible: HashSet::new(),
+            focused: None,
             shut_down: false,
         }
     }
@@ -397,6 +407,22 @@ impl Controller {
         self.shut_down = true;
     }
 
+    /// The unit of the window with focus, `None` for none or unknown. Its
+    /// application is the one being used: not eased automatically, and put
+    /// back on the next tick if it was (by hand stays). It counts as busy
+    /// again from when it loses focus. uresourced does this by raising the
+    /// weight, but only on GNOME; Plasma says through a KWin script.
+    pub fn set_focused(&mut self, unit: Option<Arc<str>>) {
+        self.focused = unit;
+    }
+
+    /// The application of the window with focus, once a tick has seen its
+    /// unit.
+    fn focused_app(&self) -> Option<Arc<str>> {
+        let unit = self.focused.as_ref()?;
+        Some(self.unit_app.get(unit)?.as_ref()?.id.clone())
+    }
+
     /// Every application worth showing, busiest first: anything using a
     /// noticeable share of a core, and anything eased, whatever it does.
     /// Atlas Monitor itself is left out.
@@ -421,6 +447,7 @@ impl Controller {
     }
 
     fn status(&self, id: &str, a: &AppState) -> Status {
+        let focused = self.focused_app();
         match () {
             _ if a.eased && a.manual => Status::EasedManual,
             _ if a.eased => Status::EasedAuto,
@@ -431,6 +458,7 @@ impl Controller {
             _ if a.foreign => Status::KeptOther,
             _ if self.never.contains(id) => Status::KeptNever,
             _ if a.spared => Status::KeptByUser,
+            _ if focused.as_deref() == Some(id) => Status::KeptInUse,
             _ if a.terminal => Status::KeptTerminal,
             _ => Status::Busy,
         }
@@ -615,6 +643,10 @@ impl Controller {
         // first so an eased application is put back soon after it starts
         // playing, the second so the page can say a busy one is kept for
         // its sound rather than about to be eased.
+        let focused = self.focused_app();
+        if let Some(a) = focused.as_ref().and_then(|f| self.apps.get_mut(f)) {
+            a.heavy_for = Duration::ZERO;
+        }
         let mut due = Vec::new();
         let mut watch = false;
         for (id, a) in &self.apps {
@@ -629,6 +661,7 @@ impl Controller {
                 && !a.spared
                 && !self.never.contains(&**id)
                 && self.own.as_ref() != Some(id)
+                && focused.as_ref() != Some(id)
             {
                 due.push(id.clone());
             }
@@ -663,7 +696,8 @@ impl Controller {
                 && !a.manual
                 && (a.calm_for >= RESTORE_AFTER
                     || self.audible.contains(&**id)
-                    || self.never.contains(&**id))
+                    || self.never.contains(&**id)
+                    || focused.as_ref() == Some(id))
             {
                 let _ = restore_app(&mut *self.weights, a);
                 changed = true;

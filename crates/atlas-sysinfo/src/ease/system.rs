@@ -232,6 +232,23 @@ pub fn parse_usage(stat: &[u8]) -> Option<u64> {
     })
 }
 
+/// The application unit process `pid` runs in, for
+/// [`Controller::set_focused`](super::Controller::set_focused): `None` for
+/// one that has ended or isn't in an application's unit.
+pub fn unit_of_pid(pid: u32) -> Option<Arc<str>> {
+    let text = fs::read_to_string(format!("/proc/{pid}/cgroup")).ok()?;
+    unit_of_cgroup(&text)
+}
+
+/// The application unit in a `/proc/<pid>/cgroup` file's unified line: the
+/// first unit under `app.slice`, as [`unit_dirs`] lists them.
+pub fn unit_of_cgroup(text: &str) -> Option<Arc<str>> {
+    let path = text.lines().find_map(|l| l.strip_prefix("0::"))?;
+    let mut parts = path.split('/').skip_while(|p| *p != "app.slice").skip(1);
+    let unit = parts.find(|p| p.ends_with(".scope") || p.ends_with(".service"))?;
+    app_unit(unit).then(|| Arc::from(unit))
+}
+
 /// Whether `unit` is one Energy Saver may set a weight on: an application's
 /// scope or service, as the desktop names them.
 pub fn app_unit(unit: &str) -> bool {
@@ -444,9 +461,15 @@ async fn connect() -> Option<Connection> {
 /// The runtime directory lives exactly as long as the session, and so as
 /// long as the eases it lists.
 pub fn state_file() -> Option<PathBuf> {
+    Some(runtime_dir()?.join("eased"))
+}
+
+/// Atlas Monitor's folder in the runtime directory, for the state file and
+/// the KWin script ([`super::kwin`]).
+pub fn runtime_dir() -> Option<PathBuf> {
     let dir = PathBuf::from(std::env::var_os("XDG_RUNTIME_DIR")?);
     // A relative one would put it wherever Atlas was started.
-    dir.is_absolute().then(|| dir.join(STATE_DIR).join("eased"))
+    dir.is_absolute().then(|| dir.join(STATE_DIR))
 }
 
 /// One line per eased unit: `auto|manual <weight to put back> <since,

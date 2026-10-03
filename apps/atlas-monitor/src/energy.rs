@@ -146,7 +146,7 @@ use std::time::{Duration, Instant};
 
 use atlas_sysinfo::apps::Resolver;
 use atlas_sysinfo::ease::system::{self as ease_system, Unavailable};
-use atlas_sysinfo::ease::{self, Controller, Error, Status};
+use atlas_sysinfo::ease::{self, Controller, Error, Status, kwin};
 use cxx_qt::{CxxQtThread, CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
 
@@ -319,10 +319,15 @@ fn run(
     c.set_never(choices.never);
     c.set_automatic(choices.automatic);
     let mut resolver = Resolver::for_session(&theme);
+    // The window with focus, on Plasma: the app in use is left alone. Its
+    // script is unloaded when this ends, the window closed.
+    let mut focus = ease_system::runtime_dir().map(kwin::Watch::start);
     let mut next = Instant::now();
     let mut first = true;
     loop {
         if Instant::now() >= next {
+            let pid = focus.as_ref().map_or(0, kwin::Watch::pid);
+            c.set_focused((pid != 0).then(|| ease_system::unit_of_pid(pid)).flatten());
             c.tick(&mut resolver);
             next = Instant::now() + if first { FIRST_TICK } else { ease::TICK_EVERY };
             first = false;
@@ -371,7 +376,11 @@ fn run(
         });
     }
     // The window closed: what was eased automatically goes back, since
-    // nothing watches it any more. The user's own eases stay.
+    // nothing watches it any more. The user's own eases stay. KWin unloads
+    // the focus script meanwhile; `focus` waits for that as it drops.
+    if let Some(f) = &mut focus {
+        f.stop();
+    }
     c.shutdown();
 }
 
