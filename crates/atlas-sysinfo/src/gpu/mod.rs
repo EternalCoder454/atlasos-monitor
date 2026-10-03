@@ -359,7 +359,8 @@ impl GpuSampler {
 
     /// Like [`Self::new`], but reads only the load, and only where the
     /// driver keeps a figure (a busy file, idle residency or NVML): the
-    /// rest of a reading is `None`. For the sidebar.
+    /// rest of a reading is `None`. For the sidebar, which also asks it for
+    /// [`Self::temperature`].
     pub fn load_only(card: &Card, cards: &[Card]) -> Self {
         Self::with(card, cards, false, true)
     }
@@ -411,7 +412,7 @@ impl GpuSampler {
         if self.load_only {
             self.load = Self::own_figure(card, node).unwrap_or(Load::None);
             // For `temperature`; `sample` leaves it alone.
-            self.hwmon = hwmon::Hwmon::open(&card.device);
+            self.hwmon = hwmon::Hwmon::open_temperature(&card.device);
             return;
         }
         self.memory_used = HeldFile::open(dev("mem_info_vram_used"));

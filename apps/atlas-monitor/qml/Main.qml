@@ -204,7 +204,7 @@ QQC2.ApplicationWindow {
                     text: qsTr("Overview")
                     icon.name: "speedometer"
                     badge: root.health.level === 2 ? "dialog-error" : root.health.level === 1 ? "dialog-warning" : ""
-                    badgeText: root.health.titles.length === 1 ? root.health.titles[0] : qsTr("%1 things need attention").arg(root.health.titles.length)
+                    badgeText: root.health.titles.length === 1 ? root.health.titles[0] : root.health.titles.length > 1 ? qsTr("%1 things need attention").arg(root.health.titles.length) : qsTr("Something needs attention")
                 }
                 NavHeading {
                     text: qsTr("Hardware")

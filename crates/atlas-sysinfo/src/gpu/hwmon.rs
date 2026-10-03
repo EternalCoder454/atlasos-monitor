@@ -1,5 +1,6 @@
 //! A card's own hwmon node (`device/hwmon/hwmonN`): temperatures, fan,
-//! power and clocks, each held open while the GPU page is.
+//! power and clocks, each held open while the GPU page is; the card's
+//! temperature alone for the sidebar's health check.
 //!
 //! Drivers label what they report. amdgpu has `edge`, `junction` (the
 //! hottest point on the die) and `mem`; xe has `pkg` and `vram`; nouveau
@@ -33,6 +34,15 @@ pub(super) struct Hwmon {
 impl Hwmon {
     /// Opens the card's hwmon attributes; an empty `Hwmon` without one.
     pub fn open(device: &Path) -> Self {
+        Self::opened(device, false)
+    }
+
+    /// Opens only the card's temperature, for [`Self::temperature`].
+    pub fn open_temperature(device: &Path) -> Self {
+        Self::opened(device, true)
+    }
+
+    fn opened(device: &Path, temperature_only: bool) -> Self {
         let Some(dir) = dir(device) else {
             return Self::default();
         };
@@ -46,8 +56,8 @@ impl Hwmon {
             let label = sysfs::read_string(at(&format!("temp{i}_label"))).unwrap_or_default();
             let slot = match label.to_ascii_lowercase().as_str() {
                 "edge" | "gpu" | "pkg" => &mut h.temperature,
-                "junction" | "hotspot" => &mut h.hotspot,
-                "mem" | "vram" => &mut h.memory_temperature,
+                "junction" | "hotspot" if !temperature_only => &mut h.hotspot,
+                "mem" | "vram" if !temperature_only => &mut h.memory_temperature,
                 // An unlabelled first sensor is the card's temperature.
                 "" if i == 1 => &mut h.temperature,
                 _ => continue,
@@ -55,6 +65,9 @@ impl Hwmon {
             if slot.is_none() {
                 *slot = HeldFile::open(input);
             }
+        }
+        if temperature_only {
+            return h;
         }
         for i in 1..=4 {
             let label = sysfs::read_string(at(&format!("freq{i}_label"))).unwrap_or_default();
@@ -199,6 +212,17 @@ mod tests {
         assert_eq!(g.core_clock, Some(249.0));
         assert_eq!(g.memory_clock, Some(1249.0));
         assert_eq!(power_limit(dev.path()), Some(327.0));
+
+        // The sidebar's health check holds the card's temperature alone.
+        let mut t = Hwmon::open_temperature(dev.path());
+        assert_eq!(t.temperature(), Some(52.0));
+        let mut g = Gpu::default();
+        t.read(&mut g);
+        assert_eq!(
+            (g.temperature, g.hotspot, g.fan_rpm),
+            (Some(52.0), None, None)
+        );
+        assert_eq!((g.power, g.core_clock), (None, None));
     }
 
     /// nouveau and older drivers: one unlabelled temperature, a duty cycle,
