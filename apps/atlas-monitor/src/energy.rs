@@ -150,7 +150,7 @@ use atlas_sysinfo::ease::{self, Controller, Error, Status};
 use cxx_qt::{CxxQtThread, CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
 
-use crate::rows::int;
+use crate::rows::{FIRST_ROLE, Roles, Value, int};
 use crate::settings::Energy;
 
 /// The busiest applications listed; an eased one is listed whatever it
@@ -226,8 +226,6 @@ pub struct EnergySaverRust {
 }
 
 const ROLES: [&str; 6] = ["appId", "name", "icon", "cpu", "status", "never"];
-/// Qt::UserRole: roles below it are Qt's own.
-const FIRST_ROLE: i32 = 0x0100;
 
 fn status_key(s: Status) -> &'static str {
     match s {
@@ -377,6 +375,22 @@ fn run(
     c.shutdown();
 }
 
+impl Roles for Row {
+    const NAMES: &'static [&'static str] = &ROLES;
+
+    fn value(&self, role: usize) -> Value<'_> {
+        match ROLES[role] {
+            "appId" => Value::Text(&self.key),
+            "name" => Value::Text(&self.name),
+            "icon" => Value::Text(&self.icon),
+            "cpu" => Value::Real(self.cpu),
+            "status" => Value::Text(status_key(self.status)),
+            "never" => Value::Bool(self.never),
+            _ => unreachable!("a role in ROLES without a value"),
+        }
+    }
+}
+
 crate::rows::row_model!(qobject::EnergySaver, Row, "Energy Saver");
 
 impl qobject::EnergySaver {
@@ -517,22 +531,7 @@ impl qobject::EnergySaver {
         else {
             return QVariant::default();
         };
-        let Some(&name) = usize::try_from(role - FIRST_ROLE)
-            .ok()
-            .and_then(|i| ROLES.get(i))
-        else {
-            return QVariant::default();
-        };
-        let text = |t: &str| QVariant::from(&QString::from(t));
-        match name {
-            "appId" => text(&row.key),
-            "name" => text(&row.name),
-            "icon" => text(&row.icon),
-            "cpu" => QVariant::from(&row.cpu),
-            "status" => text(status_key(row.status)),
-            "never" => QVariant::from(&row.never),
-            _ => QVariant::default(),
-        }
+        row.data(role)
     }
 
     pub fn role_names(&self) -> QHash<QHashPair_i32_QByteArray> {
@@ -549,5 +548,23 @@ impl qobject::EnergySaver {
         } else {
             int(self.rust().rows.len())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_role_has_a_value() {
+        let row = Row {
+            key: "org.kde.dolphin".into(),
+            name: "Dolphin".into(),
+            icon: "system-file-manager".into(),
+            cpu: f64::NAN,
+            status: Status::Normal,
+            never: false,
+        };
+        assert_eq!(crate::rows::changed(&row, &row.clone()), 0);
     }
 }

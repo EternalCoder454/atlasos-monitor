@@ -193,7 +193,7 @@ use cxx_qt_lib::{
 
 use crate::details::qobject::ProcessDetails;
 use crate::details::{Member, Subject};
-use crate::rows::int;
+use crate::rows::{FIRST_ROLE, Roles, Value, int};
 use crate::sampler::qobject::Sampler;
 use crate::sampling::AppsTick;
 use crate::settings::AppsView;
@@ -335,8 +335,6 @@ const ROLES: [&str; 15] = [
     "expanded",
     "count",
 ];
-/// Qt::UserRole: roles below it are Qt's own.
-const FIRST_ROLE: i32 = 0x0100;
 
 fn column(role: &str) -> Option<Column> {
     Some(match role {
@@ -513,6 +511,37 @@ fn subject_of(data: &AppsTick, row: &Row) -> Subject {
 
 fn opt(v: Option<f64>) -> f64 {
     v.unwrap_or(f64::NAN)
+}
+
+impl Roles for Row {
+    const NAMES: &'static [&'static str] = &ROLES;
+
+    fn value(&self, role: usize) -> Value<'_> {
+        let p = &self.proc;
+        match ROLES[role] {
+            "name" => Value::Text(&p.name),
+            "icon" => Value::Text(&self.icon),
+            // A row of several processes has no one pid to show.
+            "pid" => Value::Int(if self.count == 1 {
+                int(p.pid as usize)
+            } else {
+                0
+            }),
+            "cpu" => Value::Real(p.cpu),
+            "memory" => Value::Real(p.memory as f64),
+            "gpu" => Value::Real(opt(p.gpu)),
+            "power" => Value::Int(p.impact() as i32),
+            "netIn" => Value::Real(opt(p.net_in)),
+            "netOut" => Value::Real(opt(p.net_out)),
+            "diskRead" => Value::Real(opt(p.disk_read)),
+            "diskWrite" => Value::Real(opt(p.disk_write)),
+            "depth" => Value::Int(self.depth),
+            "expandable" => Value::Bool(self.count > 1),
+            "expanded" => Value::Bool(self.expanded),
+            "count" => Value::Int(int(self.count as usize)),
+            _ => unreachable!("a role in ROLES without a value"),
+        }
+    }
 }
 
 crate::rows::row_model!(qobject::ProcessModel, Row, "Apps");
@@ -746,39 +775,8 @@ impl qobject::ProcessModel {
     }
 
     pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
-        let Some(row) = self.row(index.row()) else {
-            return QVariant::default();
-        };
-        let p = &row.proc;
-        let Some(&name) = usize::try_from(role - FIRST_ROLE)
-            .ok()
-            .and_then(|i| ROLES.get(i))
-        else {
-            return QVariant::default();
-        };
-        match name {
-            "name" => QVariant::from(&QString::from(&*p.name)),
-            "icon" => QVariant::from(&QString::from(&row.icon)),
-            // A row of several processes has no one pid to show.
-            "pid" => QVariant::from(&if row.count == 1 {
-                int(p.pid as usize)
-            } else {
-                0
-            }),
-            "cpu" => QVariant::from(&p.cpu),
-            "memory" => QVariant::from(&(p.memory as f64)),
-            "gpu" => QVariant::from(&opt(p.gpu)),
-            "power" => QVariant::from(&(p.impact() as i32)),
-            "netIn" => QVariant::from(&opt(p.net_in)),
-            "netOut" => QVariant::from(&opt(p.net_out)),
-            "diskRead" => QVariant::from(&opt(p.disk_read)),
-            "diskWrite" => QVariant::from(&opt(p.disk_write)),
-            "depth" => QVariant::from(&row.depth),
-            "expandable" => QVariant::from(&(row.count > 1)),
-            "expanded" => QVariant::from(&row.expanded),
-            "count" => QVariant::from(&int(row.count as usize)),
-            _ => QVariant::default(),
-        }
+        self.row(index.row())
+            .map_or_else(QVariant::default, |row| row.data(role))
     }
 
     pub fn role_names(&self) -> QHash<QHashPair_i32_QByteArray> {
@@ -819,6 +817,36 @@ mod tests {
         let rows = layout(&data, &view, &HashMap::new());
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[1].key, RowKey::Proc(2, 0));
+    }
+
+    #[test]
+    fn a_row_reports_only_the_roles_that_changed() {
+        let row = Row {
+            key: k(1),
+            icon: "sh".into(),
+            proc: proc(1, "sh", 1.0),
+            count: 1,
+            depth: 0,
+            expanded: false,
+        };
+        // Every role has a value, and a row hasn't changed from itself,
+        // its figures the machine doesn't report (NaN) included.
+        assert_eq!(crate::rows::changed(&row, &row.clone()), 0);
+        let mut busier = row.clone();
+        busier.proc.cpu = 2.0;
+        // Not shown: no role changes.
+        busier.proc.parent = 7;
+        let bit = |role: &str| 1 << ROLES.iter().position(|r| *r == role).unwrap();
+        // The power impact is worked out from the CPU, among others.
+        let mask = crate::rows::changed(&row, &busier);
+        assert_eq!(mask & !bit("power"), bit("cpu"));
+        // A group's pid shows as 0, so it changes with the count.
+        let mut group = row.clone();
+        group.count = 2;
+        assert_eq!(
+            crate::rows::changed(&row, &group),
+            bit("pid") | bit("expandable") | bit("count")
+        );
     }
 
     fn proc(pid: u32, name: &str, cpu: f64) -> Proc {

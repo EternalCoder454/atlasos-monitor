@@ -180,7 +180,7 @@ use atlas_sysinfo::services::{
 use cxx_qt::{CxxQtThread, CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
 
-use crate::rows::int;
+use crate::rows::{FIRST_ROLE, Roles, Value, int};
 use crate::sampler::qobject::Sampler;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -236,8 +236,6 @@ pub struct ServiceModelRust {
 }
 
 const ROLES: [&str; 5] = ["name", "description", "status", "startup", "job"];
-/// Qt::UserRole: roles below it are Qt's own.
-const FIRST_ROLE: i32 = 0x0100;
 
 fn status_key(s: Status) -> &'static str {
     match s {
@@ -404,6 +402,22 @@ fn result_of(r: Result<Outcome, ActionError>) -> (&'static str, String) {
     }
 }
 
+impl Roles for Row {
+    const NAMES: &'static [&'static str] = &ROLES;
+
+    fn value(&self, role: usize) -> Value<'_> {
+        let s = &self.service;
+        Value::Text(match ROLES[role] {
+            "name" => &s.name,
+            "description" => &s.description,
+            "status" => status_key(s.status()),
+            "startup" => startup_key(s.file_state.as_ref()),
+            "job" => s.job.as_deref().unwrap_or_default(),
+            _ => unreachable!("a role in ROLES without a value"),
+        })
+    }
+}
+
 crate::rows::row_model!(qobject::ServiceModel, Row, "Services");
 
 impl qobject::ServiceModel {
@@ -532,22 +546,7 @@ impl qobject::ServiceModel {
         let Some(row) = self.row(index.row()) else {
             return QVariant::default();
         };
-        let s = &row.service;
-        let Some(&name) = usize::try_from(role - FIRST_ROLE)
-            .ok()
-            .and_then(|i| ROLES.get(i))
-        else {
-            return QVariant::default();
-        };
-        let text = |t: &str| QVariant::from(&QString::from(t));
-        match name {
-            "name" => text(&s.name),
-            "description" => text(&s.description),
-            "status" => text(status_key(s.status())),
-            "startup" => text(startup_key(s.file_state.as_ref())),
-            "job" => text(s.job.as_deref().unwrap_or_default()),
-            _ => QVariant::default(),
-        }
+        row.data(role)
     }
 
     pub fn role_names(&self) -> QHash<QHashPair_i32_QByteArray> {
@@ -582,6 +581,15 @@ mod tests {
             file_state: Some(FileState::Enabled),
             job: None,
         }
+    }
+
+    #[test]
+    fn every_role_has_a_value() {
+        let row = Row {
+            key: "a.service".into(),
+            service: service("a.service", "Ay", ActiveState::Active, "running"),
+        };
+        assert_eq!(crate::rows::changed(&row, &row.clone()), 0);
     }
 
     fn names(rows: &[Row]) -> Vec<&str> {

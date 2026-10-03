@@ -1,10 +1,86 @@
 //! Bringing a list model from the rows it shows to new ones in steps:
-//! removals, moves and insertions, then one report of changed figures. The
+//! removals, moves and insertions, then reports of the changed figures. The
 //! view keeps its rows, scroll position and selection, which a reset would
 //! lose. The Apps and Services tables both work this way.
 
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
+
+use cxx_qt_lib::{QList, QString, QVariant};
+
+/// The first of a row model's roles (Qt::UserRole: roles below it are Qt's
+/// own).
+pub const FIRST_ROLE: i32 = 0x0100;
+
+/// A role's value: what `data` gives the view, and what `replace_rows`
+/// compares to tell which roles changed.
+#[derive(Debug, Clone, Copy)]
+pub enum Value<'a> {
+    Text(&'a str),
+    Int(i32),
+    /// NaN for a figure the machine doesn't report.
+    Real(f64),
+    Bool(bool),
+}
+
+impl PartialEq for Value<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Text(a), Self::Text(b)) => a == b,
+            (Self::Int(a), Self::Int(b)) => a == b,
+            // By bits, so a NaN equals itself and doesn't change every tick.
+            (Self::Real(a), Self::Real(b)) => a.to_bits() == b.to_bits(),
+            (Self::Bool(a), Self::Bool(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
+impl Value<'_> {
+    pub fn variant(self) -> QVariant {
+        match self {
+            Self::Text(t) => QVariant::from(&QString::from(t)),
+            Self::Int(i) => QVariant::from(&i),
+            Self::Real(f) => QVariant::from(&f),
+            Self::Bool(b) => QVariant::from(&b),
+        }
+    }
+}
+
+/// A row model's row, by role: role `FIRST_ROLE + i` is `NAMES[i]`.
+pub trait Roles {
+    const NAMES: &'static [&'static str];
+    /// The value of role `NAMES[role]`.
+    fn value(&self, role: usize) -> Value<'_>;
+
+    /// `data` for this row: nothing for a role it doesn't have.
+    fn data(&self, role: i32) -> QVariant {
+        usize::try_from(role - FIRST_ROLE)
+            .ok()
+            .filter(|&i| i < Self::NAMES.len())
+            .map_or_else(QVariant::default, |i| self.value(i).variant())
+    }
+}
+
+/// The roles that differ between two rows, as bits: bit `i` for role
+/// `FIRST_ROLE + i`.
+pub fn changed<R: Roles>(old: &R, new: &R) -> u64 {
+    debug_assert!(R::NAMES.len() <= 64);
+    (0..R::NAMES.len())
+        .filter(|&i| old.value(i) != new.value(i))
+        .fold(0, |mask, i| mask | 1 << i)
+}
+
+/// The roles in a mask from [`changed`], for `dataChanged`.
+pub fn role_list(mask: u64) -> QList<i32> {
+    let mut roles = QList::default();
+    for i in 0..64 {
+        if mask & 1 << i != 0 {
+            roles.append(FIRST_ROLE + i);
+        }
+    }
+    roles
+}
 
 /// One step from the rows shown to the rows wanted.
 #[derive(Debug, Clone, PartialEq)]
@@ -108,8 +184,8 @@ pub fn plan<K: Eq + Hash>(old: &[K], new: &[K]) -> Vec<Op> {
 }
 
 /// Gives a list model `replace_rows(new)`, which plays [`plan`] on its
-/// `rows` (each with a `key`) with Qt's begin and end calls, reports the
-/// changed figures once, and keeps its `count` property; and
+/// `rows` (each with a `key`, and [`Roles`]) with Qt's begin and end calls,
+/// reports the changed figures, and keeps its `count` property; and
 /// `update_count()`. The model inherits the calls `plan` needs
 /// (`beginInsertRows` ... `endResetModel`, `index`, `dataChanged`).
 macro_rules! row_model {
@@ -168,22 +244,36 @@ macro_rules! row_model {
                         }
                     }
                 }
-                // The figures: one report covering every row that changed.
-                let mut changed: Option<(usize, usize)> = None;
+                // The figures: a report for each run of rows that changed,
+                // naming the roles that did. With no roles named, the view
+                // would evaluate every cell of every row from the first
+                // change to the last again.
+                let mut runs: Vec<(usize, usize, u64)> = Vec::new();
                 {
                     let mut r = self.as_mut().rust_mut();
                     for (i, (row, want)) in r.rows.iter_mut().zip(new).enumerate() {
-                        if *row != want {
-                            *row = want;
-                            changed = Some(changed.map_or((i, i), |(a, _)| (a, i)));
+                        if *row == want {
+                            continue;
+                        }
+                        let mask = $crate::rows::changed(&*row, &want);
+                        *row = want;
+                        if mask == 0 {
+                            continue;
+                        }
+                        match runs.last_mut() {
+                            Some((_, last, roles)) if *last + 1 == i => {
+                                *last = i;
+                                *roles |= mask;
+                            }
+                            _ => runs.push((i, i, mask)),
                         }
                     }
                 }
-                if let Some((a, b)) = changed {
+                for (a, b, mask) in runs {
                     let top = self.index(int(a), 0, &root);
                     let bottom = self.index(int(b), 0, &root);
                     self.as_mut()
-                        .data_changed(&top, &bottom, &::cxx_qt_lib::QList::default());
+                        .data_changed(&top, &bottom, &$crate::rows::role_list(mask));
                 }
                 self.update_count();
             }
@@ -202,6 +292,23 @@ pub(crate) use row_model;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn values_compare_as_the_view_would_see_them() {
+        assert_eq!(Value::Real(f64::NAN), Value::Real(f64::NAN));
+        assert_ne!(Value::Real(1.0), Value::Real(2.0));
+        assert_ne!(Value::Int(1), Value::Real(1.0));
+        assert_eq!(Value::Text("a"), Value::Text("a"));
+    }
+
+    #[test]
+    fn a_mask_names_its_roles() {
+        let roles = role_list(0b1010);
+        assert_eq!(roles.len(), 2);
+        assert_eq!(roles.get(0), Some(&(FIRST_ROLE + 1)));
+        assert_eq!(roles.get(1), Some(&(FIRST_ROLE + 3)));
+        assert_eq!(role_list(0).len(), 0);
+    }
 
     /// Plays a plan on `old`, as the model does.
     fn play(old: &[u32], new: &[u32]) -> Vec<u32> {
