@@ -8,6 +8,7 @@ fn main() {
         .file("src/devices.rs")
         .file("src/graphics.rs")
         .file("src/battery.rs")
+        .file("src/sensors.rs")
         .file("src/sampler.rs")
         .file("src/stats.rs")
         .build();

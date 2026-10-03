@@ -45,6 +45,7 @@ use crate::battery::qobject::BatteryStats;
 use crate::devices::qobject::{DeviceList, DiskStats, NetStats};
 use crate::graphics::qobject::GpuStats;
 use crate::sampling::{Loop, Page, Tick};
+use crate::sensors::qobject::SensorList;
 use crate::stats::qobject::{CpuStats, HealthStatus, MemoryStats};
 
 #[derive(Default)]
@@ -91,6 +92,7 @@ pub struct Sink {
     pub net: CxxQtThread<NetStats>,
     pub gpu: CxxQtThread<GpuStats>,
     pub battery: CxxQtThread<BatteryStats>,
+    pub sensors: CxxQtThread<SensorList>,
 }
 
 impl Sink {
@@ -115,6 +117,9 @@ impl Sink {
         if let Some(n) = tick.net {
             let _ = self.net.queue(move |o| o.apply(n, fresh));
         }
+        if let Some(s) = tick.sensors {
+            let _ = self.sensors.queue(move |o| o.apply(s));
+        }
         let mut devices = tick.devices;
         if let Some(cards) = devices.cards.take() {
             let _ = self.gpu.queue(move |o| o.set_cards(&cards));
@@ -124,7 +129,8 @@ impl Sink {
             let _ = self.gpu.queue(move |o| o.apply(g, fresh));
         }
         if let Some(p) = devices.power.take() {
-            let _ = self.battery.queue(move |o| o.apply(&p));
+            let on_page = matches!(tick.page, Page::Battery(_));
+            let _ = self.battery.queue(move |o| o.apply(p, on_page));
         }
         let _ = self.devices.queue(move |o| o.apply(devices));
     }

@@ -145,7 +145,6 @@ pub struct NetTick {
 
 /// One reading of everything the page on screen shows. A part the page
 /// doesn't show is `None`.
-#[allow(dead_code, reason = "read by the pages as they land; drop this then")]
 #[derive(Debug, Clone, Default)]
 pub struct Tick {
     /// The first tick since the page opened: charts start empty.
@@ -288,6 +287,12 @@ impl Worker {
             if plugged {
                 self.interfaces = now;
             }
+        }
+
+        // A battery that turns up later (a dock, a pack put back in) gets
+        // its sidebar entry within a slow tick.
+        if self.power.is_none() && slow && power::available() {
+            self.power = Some(PowerSampler::new());
         }
 
         let devices = Devices {

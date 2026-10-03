@@ -111,6 +111,8 @@ pub struct BatteryStatsRust {
     draw_history: QList<f64>,
     charge: Series,
     draw: Series,
+    /// The last tick's supplies, to fill a page as it opens.
+    last: Option<Supplies>,
 }
 
 impl Default for BatteryStatsRust {
@@ -142,6 +144,7 @@ impl Default for BatteryStatsRust {
             draw_history: QList::default(),
             charge: Series::default(),
             draw: Series::default(),
+            last: None,
         }
     }
 }
@@ -164,6 +167,14 @@ fn entries(s: &Supplies) -> Vec<(String, String, f64)> {
     out
 }
 
+fn strings<'a>(items: impl Iterator<Item = &'a str>) -> QStringList {
+    let mut list = QStringList::default();
+    for s in items {
+        list.append(QString::from(s));
+    }
+    list
+}
+
 fn status_key(s: Status) -> &'static str {
     match s {
         Status::Charging => "charging",
@@ -183,7 +194,11 @@ fn identity(b: &Battery, packs: usize) -> String {
     if b.name.is_empty() && packs > 1 {
         parts.push(format!("{packs} packs"));
     }
-    parts.join(" · ")
+    match (b.name.is_empty(), parts.is_empty()) {
+        (false, true) => b.name.clone(),
+        (false, false) => format!("{} — {}", b.name, parts.join(" · ")),
+        (true, _) => parts.join(" · "),
+    }
 }
 
 fn adapters(s: &Supplies) -> String {
@@ -200,77 +215,93 @@ fn adapters(s: &Supplies) -> String {
 
 impl qobject::BatteryStats {
     pub fn show(mut self: Pin<&mut Self>, name: &QString, label: &QString) {
-        let d = BatteryStatsRust::default();
         {
             let mut rust = self.as_mut().rust_mut();
             rust.charge.clear();
             rust.draw.clear();
         }
-        self.as_mut().set_present(d.present);
-        self.as_mut().set_status(d.status);
-        self.as_mut().set_percent(d.percent);
-        self.as_mut().set_energy(d.energy);
-        self.as_mut().set_full(d.full);
-        self.as_mut().set_design(d.design);
-        self.as_mut().set_watts(d.watts);
-        self.as_mut().set_volts(d.volts);
-        self.as_mut().set_cycles(d.cycles);
-        self.as_mut().set_health(d.health);
-        self.as_mut().set_wear(d.wear);
-        self.as_mut().set_charge_limit(d.charge_limit);
-        self.as_mut().set_time_left(d.time_left);
-        self.as_mut().set_identity(d.identity);
-        self.as_mut().set_charge_history(d.charge_history);
-        self.as_mut().set_draw_history(d.draw_history);
-        // Last: the title follows the figures already cleared.
+        self.as_mut().set_charge_history(QList::default());
+        self.as_mut().set_draw_history(QList::default());
         self.as_mut().set_name(name.clone());
         self.as_mut().set_label(label.clone());
+        // The sidebar's supplies are read every tick: fill the page from
+        // the last at once, rather than wait a tick on dashes.
+        let last = self.rust().last.clone();
+        match last {
+            Some(s) => self.fill(&s),
+            None => self.clear(),
+        }
     }
 
-    /// Every tick's supplies, read with the sidebar.
-    pub fn apply(mut self: Pin<&mut Self>, s: &Supplies) {
-        let entries = entries(s);
-        let mut names = QStringList::default();
-        let mut labels = QStringList::default();
-        let mut percents = QList::default();
-        for (n, l, p) in &entries {
-            names.append(QString::from(n));
-            labels.append(QString::from(l));
-            percents.append(*p);
-        }
-        if names != *self.pack_names() || labels != *self.pack_labels() {
-            self.as_mut().set_pack_names(names);
+    /// Every tick's supplies, read with the sidebar. The page's figures
+    /// move only while it is on screen.
+    pub fn apply(mut self: Pin<&mut Self>, s: Supplies, on_page: bool) {
+        let entries = entries(&s);
+        let names = strings(entries.iter().map(|e| e.0.as_str()));
+        let labels = strings(entries.iter().map(|e| e.1.as_str()));
+        // Labels first: the sidebar reads them by a name's index.
+        if labels != *self.pack_labels() {
             self.as_mut().set_pack_labels(labels);
         }
-        self.as_mut().set_pack_percents(percents);
+        if names != *self.pack_names() {
+            self.as_mut().set_pack_names(names);
+        }
+        let changed = {
+            let old = self.pack_percents();
+            old.len() != entries.len() as isize
+                || entries
+                    .iter()
+                    .zip(old.iter())
+                    .any(|(e, o)| !(e.2 == *o || (e.2.is_nan() && o.is_nan())))
+        };
+        if changed {
+            let mut percents = QList::default();
+            for e in &entries {
+                percents.append(e.2);
+            }
+            self.as_mut().set_pack_percents(percents);
+        }
+        if on_page {
+            self.as_mut().fill(&s);
+        }
+        self.as_mut().rust_mut().last = Some(s);
+    }
 
+    /// Puts the shown pack's figures from `s` on the page, and a sample on
+    /// its charts.
+    fn fill(mut self: Pin<&mut Self>, s: &Supplies) {
         let on_ac = s.on_ac();
         self.as_mut().set_has_adapter(on_ac.is_some());
         self.as_mut().set_on_ac(on_ac == Some(true));
         self.as_mut().set_adapters(QString::from(&adapters(s)));
 
         let shown = self.name().to_string();
-        if shown.is_empty() {
-            return;
-        }
         let pack = if shown == TOTAL {
             s.total.as_ref()
         } else {
             s.packs.iter().find(|p| p.name == shown)
         };
         let Some(b) = pack else {
-            self.as_mut().set_present(false);
+            // Pulled, or the page key is stale: no figures, not the last ones.
+            self.clear();
             return;
         };
+        // The title follows a pack docked or pulled beside this one
+        // ("Battery" becomes "All Batteries").
+        if let Some((_, label, _)) = entries(s).into_iter().find(|e| e.0 == shown) {
+            self.as_mut().set_label(QString::from(&label));
+        }
         let (charge, draw) = {
             let mut rust = self.as_mut().rust_mut();
-            rust.charge.push(b.percent.unwrap_or(f64::NAN));
+            // An unknown charge is a gap, not a fall to 0%.
+            if let Some(p) = b.percent {
+                rust.charge.push(p);
+            }
             rust.draw.push(b.watts.unwrap_or(f64::NAN));
             (rust.charge.to_qlist(), rust.draw.to_qlist())
         };
         self.as_mut().set_charge_history(charge);
         self.as_mut().set_draw_history(draw);
-        self.as_mut().set_present(true);
         self.as_mut()
             .set_status(QString::from(status_key(b.status)));
         self.as_mut().set_percent(b.percent.unwrap_or(f64::NAN));
@@ -293,6 +324,27 @@ impl qobject::BatteryStats {
         );
         self.as_mut()
             .set_identity(QString::from(&identity(b, s.packs.len())));
+        // Last: the page's sections show once the figures are in.
+        self.as_mut().set_present(true);
+    }
+
+    /// Every figure to its unknown value; the charts keep their line.
+    fn clear(mut self: Pin<&mut Self>) {
+        let d = BatteryStatsRust::default();
+        self.as_mut().set_present(d.present);
+        self.as_mut().set_status(d.status);
+        self.as_mut().set_percent(d.percent);
+        self.as_mut().set_energy(d.energy);
+        self.as_mut().set_full(d.full);
+        self.as_mut().set_design(d.design);
+        self.as_mut().set_watts(d.watts);
+        self.as_mut().set_volts(d.volts);
+        self.as_mut().set_cycles(d.cycles);
+        self.as_mut().set_health(d.health);
+        self.as_mut().set_wear(d.wear);
+        self.as_mut().set_charge_limit(d.charge_limit);
+        self.as_mut().set_time_left(d.time_left);
+        self.as_mut().set_identity(d.identity);
     }
 }
 

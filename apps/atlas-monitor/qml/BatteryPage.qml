@@ -13,6 +13,14 @@ AtlasPage {
     required property int interval
 
     readonly property var b: page.battery
+    readonly property bool limited: page.b.chargeLimit > 0
+    // What the driver says, as the Go version's Status row.
+    readonly property string statusText: ({
+            "charging": qsTr("Charging"),
+            "discharging": qsTr("Discharging"),
+            "notCharging": qsTr("Not charging"),
+            "full": qsTr("Full")
+        })[page.b.status] ?? qsTr("Unknown")
     // The draw chart means nothing on a machine that never reports a rate.
     readonly property bool hasRate: page.b.watts > 0 || page.b.timeLeft > 0
 
@@ -25,15 +33,24 @@ AtlasPage {
             return qsTr("Fully charged");
         }
         if (page.b.status === "charging") {
-            return page.b.timeLeft > 0 ? qsTr("Charging · %1 until full").arg(Format.duration(page.b.timeLeft)) : qsTr("Charging");
+            // With a charge limit, the estimate is to the limit.
+            if (page.b.timeLeft <= 0) {
+                return qsTr("Charging");
+            }
+            return page.limited ? qsTr("Charging · %1 until %2").arg(Format.duration(page.b.timeLeft)).arg(page.b.chargeLimit + "%") : qsTr("Charging · %1 until full").arg(Format.duration(page.b.timeLeft));
         }
         if (page.b.status === "discharging") {
             return page.b.timeLeft > 0 ? qsTr("On battery · %1 remaining").arg(Format.duration(page.b.timeLeft)) : qsTr("On battery");
         }
-        if (page.b.onAc) {
-            return page.b.chargeLimit > 0 ? qsTr("Plugged in, held at the %1 charge limit").arg(page.b.chargeLimit + "%") : qsTr("Plugged in, not charging");
+        // Held at the limit only when it is there: below it, a start
+        // threshold or the firmware (heat) is holding it.
+        if (page.b.onAc && page.limited && page.b.percent >= page.b.chargeLimit - 1) {
+            return qsTr("Plugged in, held at the %1 charge limit").arg(page.b.chargeLimit + "%");
         }
-        return "";
+        if (page.b.onAc) {
+            return qsTr("Plugged in, not charging");
+        }
+        return page.statusText;
     }
 
     title: page.b.label
@@ -57,7 +74,7 @@ AtlasPage {
 
     Section {
         title: page.b.status === "charging" ? qsTr("Charging Rate") : qsTr("Power Draw")
-        visible: page.hasRate
+        visible: page.b.present && page.hasRate
 
         LiveChart {
             Layout.fillWidth: true
@@ -75,7 +92,16 @@ AtlasPage {
 
     Section {
         title: qsTr("Details")
+        visible: page.b.present
 
+        SectionRow {
+            title: qsTr("Status")
+            value: page.statusText
+        }
+        SectionRow {
+            title: page.b.status === "charging" ? qsTr("Charging Rate") : qsTr("Power Draw")
+            value: Format.watts(page.b.watts)
+        }
         SectionRow {
             title: page.b.status === "charging" ? qsTr("Time Until Full") : qsTr("Time Remaining")
             value: Format.duration(page.b.timeLeft)

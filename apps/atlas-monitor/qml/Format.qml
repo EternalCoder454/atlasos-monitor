@@ -53,9 +53,13 @@ QtObject {
         return isNaN(v) || v < 0 ? dash : scaled(v, "/s");
     }
 
-    // Watts; a card that doesn't say reads NaN or 0.
+    // Watts, a decimal under 10 W as the Go version: "4.6 W", "88 W". A
+    // device that doesn't say reads NaN or 0.
     function watts(v) {
-        return isNaN(v) || v <= 0 ? dash : qsTr("%1 W").arg(Math.round(v));
+        if (isNaN(v) || v <= 0) {
+            return dash;
+        }
+        return qsTr("%1 W").arg(Number(v).toLocaleString(Qt.locale(), "f", v < 10 ? 1 : 0));
     }
 
     // Seconds as the Go version writes them: "2h 15m", "40m"; -1 is a dash.

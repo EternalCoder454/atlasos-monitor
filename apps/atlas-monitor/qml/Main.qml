@@ -20,6 +20,7 @@ QQC2.ApplicationWindow {
     required property var net
     required property var gpu
     required property var battery
+    required property var sensors
 
     title: qsTr("Atlas Monitor")
     width: Kirigami.Units.gridUnit * 56
@@ -44,6 +45,7 @@ QQC2.ApplicationWindow {
             "network": networkPage,
             "gpu": gpuPage,
             "battery": batteryPage,
+            "sensors": sensorsPage,
             "settings": settingsPage,
             "about": aboutPage
         })
@@ -165,7 +167,6 @@ QQC2.ApplicationWindow {
                 anchors.topMargin: Kirigami.Units.gridUnit
                 spacing: 2
 
-                // Sensors joins Hardware, and
                 // System (Apps, Energy Saver, Startup, Services) comes, with
                 // their pages; see docs/DESIGN.md.
                 NavItem {
@@ -232,6 +233,12 @@ QQC2.ApplicationWindow {
                     names: root.battery.packNames
                     labels: root.battery.packLabels
                     percents: root.battery.packPercents
+                }
+                NavItem {
+                    visible: root.sensors.available
+                    page: "sensors"
+                    text: qsTr("Sensors")
+                    icon.name: "temperature-normal"
                 }
                 Item {
                     Layout.fillHeight: true
@@ -340,6 +347,12 @@ QQC2.ApplicationWindow {
         BatteryPage {
             battery: root.battery
             interval: root.backend.refreshInterval
+        }
+    }
+    Component {
+        id: sensorsPage
+        SensorsPage {
+            sensors: root.sensors
         }
     }
     Component {
