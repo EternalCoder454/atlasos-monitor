@@ -2,6 +2,7 @@
 # The container half of run.sh: opens the app on each page in turn, with a
 # fresh config and session bus each time, and measures it.
 #   measure.sh <runs> <seconds> <page...>
+#   APP=<path in the container> measure.sh ...   another build, for an A/B run
 set -uo pipefail
 runs=$1 seconds=$2
 shift 2
@@ -30,7 +31,7 @@ for run in $(seq "$runs"); do
         HOME=$home XDG_CONFIG_HOME=$home/config XDG_DATA_HOME=$home/data \
             XDG_CACHE_HOME=$home/cache XDG_RUNTIME_DIR=$home/runtime \
             dbus-run-session -- bash -c '
-                /src/build/release/atlas-monitor &
+                ${APP:-/src/build/release/atlas-monitor} &
                 app=$!
                 sleep "$1"
                 if ! kill -0 $app 2>/dev/null; then
