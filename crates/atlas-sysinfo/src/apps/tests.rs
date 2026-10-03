@@ -43,6 +43,7 @@ fn proc(pid: u32, name: &str, unit: &str, cpu: f64, memory: u64) -> Proc {
         parent: 1,
         kernel: false,
         unit: (!unit.is_empty()).then(|| unit.into()),
+        container: None,
         cpu,
         memory,
         gpu: None,
@@ -189,6 +190,127 @@ fn knows_a_flatpak_by_its_unit() {
     assert_eq!(a.icon, Some(Icon::Name("com.discordapp.Discord".into())));
     assert!(!r.of(Some(&unit(DISCORD_B))).unwrap().flatpak);
     assert!(!r.of(Some(&unit(FIREFOX))).unwrap().flatpak);
+}
+
+const TOOLBOX: &str = "2414f7b322e3a727aae64037b633eefd3f14b985dff8ddcd38915e66ffd4e539";
+
+/// A process in the container `id`, in the cgroup podman gives it.
+fn contained(pid: u32, name: &str, id: &str) -> Proc {
+    let mut p = proc(pid, name, &format!("libpod-{id}.scope"), 1.0, 1 << 20);
+    p.container = Some(id.into());
+    p
+}
+
+#[test]
+fn groups_a_container_under_its_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let storage = dir.path().join("storage");
+    write(
+        &storage.join("overlay-containers/containers.json"),
+        include_str!("../../tests/fixtures/containers_json"),
+    );
+    let mut apps = resolver(dir.path()).with_containers(container::Store::new(vec![storage]));
+    let unknown = "f".repeat(64);
+    let konsole = "app-org.kde.konsole-4242.scope";
+    let mut systemd_inside = contained(23, "sshd", TOOLBOX);
+    systemd_inside.unit = Some("sshd.service".into());
+    let mut in_an_app_scope = contained(24, "bash", TOOLBOX);
+    in_an_app_scope.unit = Some(FIREFOX.into());
+    let procs = vec![
+        proc(10, "konsole", konsole, 1.0, 1 << 20),
+        // `toolbox enter`, and podman's monitor when it has no scope of its
+        // own, stay with the terminal.
+        proc(11, "podman", konsole, 1.0, 1 << 20),
+        proc(12, "conmon", konsole, 1.0, 1 << 20),
+        contained(20, "toolbox", TOOLBOX),
+        contained(21, "bash", TOOLBOX),
+        contained(22, "clangd", TOOLBOX),
+        systemd_inside,
+        in_an_app_scope,
+        contained(30, "sleep", &unknown),
+    ];
+    let groups = Grouper::default().group(&procs, &mut apps).to_vec();
+    let names: Vec<(&str, u32)> = groups.iter().map(|g| (&*g.total.name, g.count)).collect();
+    assert_eq!(
+        names,
+        [
+            ("Konsole", 3),
+            ("fedora-toolbox-44", 5),
+            ("Container ffffffffffff", 1)
+        ]
+    );
+    let toolbox = groups[1].app.as_ref().unwrap();
+    assert!(toolbox.container && !toolbox.flatpak && !toolbox.terminal);
+    assert_eq!(&*toolbox.id, TOOLBOX);
+    assert_eq!(groups[1].key, GroupKey::App(TOOLBOX.into()));
+    assert_eq!(toolbox.icon, Some(Icon::Name(container::ICON.into())));
+    assert_eq!(groups[1].total.memory, 5 << 20);
+    assert!(!groups[0].app.as_ref().unwrap().container);
+    let members: Vec<u32> = apps
+        .members(&groups[1].key, &procs)
+        .map(|p| p.pid)
+        .collect();
+    assert_eq!(members, [20, 21, 22, 23, 24]);
+
+    // Searching for the container finds what runs in it.
+    let s = Search::new("toolbox-44");
+    assert!(s.matches_group(&groups[1]));
+    let clangd = &procs[5];
+    assert!(s.matches(clangd, apps.of_proc(clangd).map(|a| &**a)));
+}
+
+/// A container renamed while it runs, or seen before podman listed it, is
+/// named afresh once the lists change.
+#[test]
+fn a_renamed_container_is_named_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let storage = dir.path().join("storage");
+    let list = storage.join("overlay-containers/containers.json");
+    let mut apps = resolver(dir.path()).with_containers(container::Store::new(vec![storage]));
+    let procs = [contained(20, "bash", TOOLBOX)];
+    let mut grouper = Grouper::default();
+    let name = |g: &mut Grouper, a: &mut Resolver| g.group(&procs, a)[0].total.name.clone();
+    assert_eq!(&*name(&mut grouper, &mut apps), "Container 2414f7b322e3");
+
+    write(&list, include_str!("../../tests/fixtures/containers_json"));
+    let mut seen = Vec::new();
+    for _ in 0..CONTAINER_RECHECK {
+        seen.push(name(&mut grouper, &mut apps));
+    }
+    assert_eq!(&**seen.last().unwrap(), "fedora-toolbox-44");
+
+    let renamed = include_str!("../../tests/fixtures/containers_json")
+        .replace("\"names\":[\"fedora-toolbox-44\"]", "\"names\":[\"dev\"]");
+    write(&list, &renamed);
+    let f = std::fs::File::options().write(true).open(&list).unwrap();
+    f.set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(5))
+        .unwrap();
+    // A container new since reads the changed lists before the check does.
+    let newcomer = contained(30, "sleep", &"e".repeat(64));
+    assert_eq!(
+        &*apps.of_proc(&newcomer).unwrap().name,
+        "Container eeeeeeeeeeee"
+    );
+    for _ in 0..CONTAINER_RECHECK {
+        seen.push(name(&mut grouper, &mut apps));
+    }
+    assert_eq!(&**seen.last().unwrap(), "dev");
+}
+
+#[test]
+fn a_container_without_storage_is_named_by_its_id() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut apps = resolver(dir.path());
+    let p = contained(20, "bash", TOOLBOX);
+    let app = apps.of_proc(&p).unwrap();
+    assert_eq!(&*app.name, "Container 2414f7b322e3");
+    assert!(app.container);
+    // The unit alone, without the container, is no application.
+    assert_eq!(apps.of(p.unit.as_ref()), None);
+    // Nothing to open, even with a member whose program the host has.
+    let app = apps.of_proc(&p).unwrap().clone();
+    let me = proc(std::process::id(), "me", "", 0.0, 0);
+    assert_eq!(location(Some(&app), [&me]), None);
 }
 
 #[test]

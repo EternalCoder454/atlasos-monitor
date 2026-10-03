@@ -110,24 +110,49 @@ pub fn parse_io(b: &[u8]) -> Option<(u64, u64)> {
 /// The systemd unit in `/proc/<pid>/cgroup`: the deepest path component that
 /// is a scope or a service. Deepest unit, not deepest directory: a unit may
 /// have cgroups of its own below it (a delegated scope, a Flatpak's sandbox)
-/// and those belong to the unit above. The unified hierarchy's `0::` line is
-/// used where there is one; on a legacy or hybrid system, the systemd
-/// controller's line.
+/// and those belong to the unit above.
 pub fn unit_from_cgroup(b: &[u8]) -> Option<&[u8]> {
+    cgroup_path(b)?
+        .rsplit(|&c| c == b'/')
+        .find(|c| c.ends_with(b".scope") || c.ends_with(b".service"))
+}
+
+/// The podman container in `/proc/<pid>/cgroup`, by its 64-digit ID. Podman
+/// (and toolbox and distrobox, which run on it) puts a container in
+/// `libpod-<ID>.scope`, its monitor where it has a scope of its own in
+/// `libpod-conmon-<ID>.scope`, and a Quadlet's container in
+/// `libpod-payload-<ID>` inside the unit made for it. The outermost wins, so
+/// a container's own units (distrobox `--init` runs systemd) and containers
+/// it runs belong to it.
+pub fn container_from_cgroup(b: &[u8]) -> Option<&[u8]> {
+    cgroup_path(b)?.split(|&c| c == b'/').find_map(|c| {
+        let rest = c.strip_prefix(b"libpod-")?;
+        let id = match rest.strip_prefix(b"payload-") {
+            Some(id) => id,
+            None => {
+                let rest = rest.strip_suffix(b".scope")?;
+                rest.strip_prefix(b"conmon-").unwrap_or(rest)
+            }
+        };
+        (id.len() == 64 && id.iter().all(|c| matches!(c, b'0'..=b'9' | b'a'..=b'f'))).then_some(id)
+    })
+}
+
+/// The cgroup path in `/proc/<pid>/cgroup`: the unified hierarchy's `0::`
+/// line where there is one; on a legacy or hybrid system, the systemd
+/// controller's line.
+fn cgroup_path(b: &[u8]) -> Option<&[u8]> {
     const SYSTEMD: &[u8] = b":name=systemd:";
     let mut path = None;
     for line in b.split(|&c| c == b'\n') {
         if let Some(rest) = line.strip_prefix(b"0::") {
-            path = Some(rest);
-            break;
+            return Some(rest);
         }
         if let Some(i) = line.windows(SYSTEMD.len()).position(|w| w == SYSTEMD) {
             path = Some(&line[i + SYSTEMD.len()..]);
         }
     }
-    path?
-        .rsplit(|&c| c == b'/')
-        .find(|c| c.ends_with(b".scope") || c.ends_with(b".service"))
+    path
 }
 
 /// One DRM client, from `/proc/<pid>/fdinfo/<fd>` of a `/dev/dri` handle.
@@ -331,6 +356,78 @@ mod tests {
             let got = unit_from_cgroup(input.as_bytes());
             assert_eq!(got, want.map(str::as_bytes), "{name}");
         }
+    }
+
+    #[test]
+    fn containers() {
+        const ID: &str = "2414f7b322e3a727aae64037b633eefd3f14b985dff8ddcd38915e66ffd4e539";
+        let user = "0::/user.slice/user-1000.slice/user@1000.service";
+        for (name, path, want) in [
+            (
+                "podman run, toolbox, distrobox",
+                format!("{user}/user.slice/libpod-{ID}.scope/container"),
+                Some(ID),
+            ),
+            (
+                "the container's own cgroup",
+                format!("{user}/user.slice/libpod-{ID}.scope"),
+                Some(ID),
+            ),
+            (
+                "its monitor",
+                format!("{user}/user.slice/libpod-conmon-{ID}.scope"),
+                Some(ID),
+            ),
+            (
+                "Quadlet",
+                format!("{user}/app.slice/claude-otel.service/libpod-payload-{ID}"),
+                Some(ID),
+            ),
+            (
+                "a Quadlet's monitor is its service's",
+                format!("{user}/app.slice/claude-otel.service/runtime"),
+                None,
+            ),
+            (
+                "systemd inside (distrobox --init)",
+                format!("{user}/user.slice/libpod-{ID}.scope/container/system.slice/sshd.service"),
+                Some(ID),
+            ),
+            (
+                "rootful",
+                format!("0::/machine.slice/libpod-{ID}.scope/container"),
+                Some(ID),
+            ),
+            (
+                "an app",
+                format!("{user}/app.slice/app-org.kde.konsole-4242.scope"),
+                None,
+            ),
+            (
+                "short ID",
+                format!("{user}/user.slice/libpod-{}.scope", &ID[..12]),
+                None,
+            ),
+            (
+                "not hex",
+                format!("{user}/user.slice/libpod-{}.scope", ID.replace('a', "z")),
+                None,
+            ),
+            (
+                "no scope suffix",
+                format!("{user}/user.slice/libpod-{ID}"),
+                None,
+            ),
+        ] {
+            let got = container_from_cgroup(path.as_bytes());
+            assert_eq!(got, want.map(str::as_bytes), "{name}");
+        }
+        let legacy = format!("1:name=systemd:/machine.slice/libpod-{ID}.scope\n");
+        assert_eq!(
+            container_from_cgroup(legacy.as_bytes()),
+            Some(ID.as_bytes())
+        );
+        assert_eq!(container_from_cgroup(b""), None);
     }
 
     #[test]

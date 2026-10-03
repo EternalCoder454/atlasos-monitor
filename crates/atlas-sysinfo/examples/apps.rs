@@ -44,9 +44,10 @@ fn main() {
         for g in groups.iter().filter(|g| g.app.is_some()) {
             let members: Vec<_> = apps.members(&g.key, &procs).collect();
             println!(
-                "{} (flatpak: {}): {:?}",
+                "{} (flatpak: {}, container: {}): {:?}",
                 g.total.name,
                 g.app.as_ref().is_some_and(|a| a.flatpak),
+                g.app.as_ref().is_some_and(|a| a.container),
                 location(g.app.as_deref(), members.iter().copied())
             );
             for p in members {

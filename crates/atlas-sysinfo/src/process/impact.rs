@@ -71,6 +71,7 @@ mod tests {
             parent: 0,
             kernel: false,
             unit: None,
+            container: None,
             cpu,
             memory: 0,
             gpu: None,

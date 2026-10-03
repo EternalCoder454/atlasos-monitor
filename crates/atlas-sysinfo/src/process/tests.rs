@@ -44,6 +44,8 @@ fn finds_this_process() {
     let cgroup = std::fs::read("/proc/self/cgroup").unwrap();
     let unit = unit_from_cgroup(&cgroup).map(|u| String::from_utf8_lossy(u).into_owned());
     assert_eq!(p.unit.as_deref(), unit.as_deref());
+    let container = container_from_cgroup(&cgroup).map(|c| String::from_utf8_lossy(c).into_owned());
+    assert_eq!(p.container.as_deref(), container.as_deref());
     // Our own io and fd/ are readable, and disk and network are wanted.
     assert!(p.disk_read.is_some() && p.disk_write.is_some());
     assert!(p.net_in.is_some() && p.net_out.is_some());
@@ -265,6 +267,7 @@ fn network_is_shared_by_socket_count() {
         start_time: 0,
         name: Arc::from(""),
         unit: None,
+        container: None,
         jiffies: 0,
         faults: 0,
         rss: 0,
@@ -285,6 +288,7 @@ fn network_is_shared_by_socket_count() {
         parent: 0,
         kernel: false,
         unit: None,
+        container: None,
         cpu: 0.0,
         memory: 0,
         gpu: None,

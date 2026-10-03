@@ -246,6 +246,25 @@ The readers the loop drives (`atlas-sysinfo`):
   installation that has it), otherwise the first member's program. Both
   read files on request: call them off the GUI thread. To see them live:
   `--example apps -- --locations`.
+- `apps::container`: a podman container's processes (toolbox and distrobox
+  are podman too) are one row under the container's name. The ID comes
+  from the cgroup, read with the unit at no extra syscall: `libpod-<ID>.scope`,
+  `libpod-conmon-<ID>.scope`, or a Quadlet's `libpod-payload-<ID>`, the
+  outermost winning, so systemd inside a container stays its row. The name
+  comes from podman's own lists in the user's storage (`containers.json`
+  and `volatile-containers.json` in each `<driver>-containers/` under
+  the user's `graphroot`, the system's `rootless_storage_path`, or
+  `~/.local/share/containers/storage`), read again when an unknown
+  container turns up and a list has changed, and checked every 30 ticks
+  while containers are shown, for renames. A container they lack (a
+  rootful one) is "Container <short ID>". `podman exec` and
+  `toolbox enter` stay in the terminal or service that ran them, and so
+  does `conmon` unless podman gave it a `libpod-conmon` scope. A rootless
+  container's files are mounted only in podman's namespace, so a container
+  row has no Open File Location, and
+  `process::executable` keeps a path only when the host's file there is
+  the running program (same device and inode), which also covers a
+  Flatpak's mapped paths.
 - History is not kept here: the app's `Series` holds it.
 
 ## Privilege

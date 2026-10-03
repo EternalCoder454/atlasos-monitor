@@ -7,6 +7,7 @@
 
 use std::ffi::CStr;
 use std::fs;
+use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
@@ -116,22 +117,26 @@ pub fn details(pid: u32) -> Option<Info> {
 
 /// The full path of a process's program as the host sees it, for Open File
 /// Location. `None` if it can't be read (another user's process, a kernel
-/// thread).
+/// thread), or if no path on the host leads to it.
 ///
-/// A process in a Flatpak sandbox reads its program from inside it
-/// (`/app/discord/Discord`), so that path is turned into the host's, in the
-/// app's or runtime's deployed files. Where that file isn't there, the path
-/// is kept only if the host has it (the sandbox's own `bwrap` is the
-/// host's): a sandbox path the host lacks is `None`, not a file to show.
+/// A process names its program as it sees it, from inside its own root,
+/// which for a sandbox or a container isn't the host's: a Flatpak's is
+/// `/app/discord/Discord`, and a container's `/usr/bin/bash` is the
+/// container's bash, where the host has a bash of its own. So a path is
+/// kept only if the host's file there is the program itself, the file the
+/// kernel runs (same device and inode): the path as given, or for a Flatpak
+/// its host path in the app's or runtime's deployed files. A rootless
+/// container's files are mounted only in podman's namespace, so its own
+/// programs have none; one run from the home folder a toolbox shares does.
+/// A program replaced on disk since it started has none either.
 pub fn executable(pid: u32) -> Option<PathBuf> {
     let exe = fs::read_link(format!("/proc/{pid}/exe")).ok()?;
-    let Some(instance) = crate::apps::flatpak::Instance::of(pid) else {
-        return Some(exe);
+    let running = fs::metadata(format!("/proc/{pid}/exe")).ok()?;
+    let is_it = |p: &PathBuf| {
+        fs::metadata(p).is_ok_and(|m| m.dev() == running.dev() && m.ino() == running.ino())
     };
-    instance
-        .host_path(&exe)
-        .filter(|p| p.exists())
-        .or_else(|| exe.exists().then_some(exe))
+    let host = crate::apps::flatpak::Instance::of(pid).and_then(|i| i.host_path(&exe));
+    host.into_iter().chain([exe]).find(is_it)
 }
 
 /// A process's start time in clock ticks since boot, `None` if it has gone.
@@ -304,6 +309,45 @@ mod tests {
         assert_eq!(details(pid), None);
         assert_eq!(start_time(pid), None);
         assert_eq!(executable(pid), None);
+    }
+
+    /// A program is found at its path while that path holds it, and not
+    /// once the file there is another, as after an update replaced it, or
+    /// as a container's `/usr/bin/bash` is to the host's.
+    #[test]
+    fn a_program_is_found_only_where_it_is() {
+        let dir = tempfile::tempdir().unwrap();
+        let copy = dir.path().join("atlas-sleep");
+        fs::copy("/usr/bin/sleep", &copy).unwrap();
+        // Another test's fork can hold the copy open for writing a moment.
+        let mut child = None;
+        for _ in 0..50 {
+            match std::process::Command::new(&copy).arg("30").spawn() {
+                Ok(c) => {
+                    child = Some(c);
+                    break;
+                }
+                Err(e) if e.raw_os_error() == Some(libc::ETXTBSY) => {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+                    eprintln!("can't run programs from {}; skipping", dir.path().display());
+                    return;
+                }
+                Err(e) => panic!("{e}"),
+            }
+        }
+        let mut child = child.expect("the copy stayed busy");
+        let pid = child.id();
+        let path = fs::canonicalize(&copy).unwrap();
+        assert_eq!(executable(pid), Some(path));
+
+        fs::remove_file(&copy).unwrap();
+        assert_eq!(executable(pid), None, "gone from disk");
+        fs::copy("/usr/bin/sleep", &copy).unwrap();
+        assert_eq!(executable(pid), None, "a different file at its path");
+        child.kill().unwrap();
+        child.wait().unwrap();
     }
 
     #[test]

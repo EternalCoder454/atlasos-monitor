@@ -10,12 +10,17 @@
 //! ([`Proc::unit`]) → application ID ([`desktop::app_id`]) → desktop entry
 //! ([`desktop::Index`]) → icon that draws ([`icons::IconLookup`]).
 //!
-//! [`Resolver`] answers that per unit and remembers it. [`Grouper`] folds a
-//! tick's processes into one row per application, and per name for the
-//! processes that are no application's. [`Search`] is the table's filter and
+//! A container's processes ([`Proc::container`]) are one row too, under the
+//! container's name ([`container`]): a toolbox is one place to look, not a
+//! shell, a compiler and a language server scattered through the table.
+//!
+//! [`Resolver`] answers that per unit and per container and remembers it.
+//! [`Grouper`] folds a tick's processes into one row per application or
+//! container, and per name for the processes that are neither's. [`Search`] is the table's filter and
 //! [`Column`] its sort orders, and [`location`] where Open File Location
 //! goes for a row ([`flatpak`] for a Flatpak's).
 
+pub mod container;
 pub mod desktop;
 pub mod flatpak;
 pub mod icons;
@@ -28,10 +33,12 @@ use std::sync::Arc;
 use crate::process::Proc;
 pub use icons::{Icon, IconLookup};
 
-/// An application as the Apps and Energy Saver pages show it.
+/// An application as the Apps and Energy Saver pages show it, or a
+/// container, which the Apps page shows the same way.
 #[derive(Debug, Clone, PartialEq)]
 pub struct App {
-    /// The desktop ID: `org.mozilla.firefox`, `com.discordapp.Discord`.
+    /// The desktop ID: `org.mozilla.firefox`, `com.discordapp.Discord`. A
+    /// container's 64-digit ID.
     pub id: Arc<str>,
     /// The name people know it by, from its desktop file, or made from the
     /// ID ([`desktop::fallback_name`]) when it has none.
@@ -45,25 +52,35 @@ pub struct App {
     pub terminal: bool,
     /// Started as a Flatpak: its unit is `app-flatpak-<ID>-…`.
     pub flatpak: bool,
+    /// A podman container (toolbox, distrobox, any other), named as podman
+    /// knows it, or "Container" and its short ID where its storage can't be
+    /// read (a rootful one).
+    pub container: bool,
     /// `name` lower-cased, for the search.
     folded: Box<str>,
 }
 
-/// A unit's answer, and the tick it was last asked for.
+/// A unit's or container's answer, and the tick it was last asked for.
 #[derive(Debug)]
 struct Known {
     app: Option<Arc<App>>,
     seen: u32,
 }
 
-/// Units not asked about for this many ticks are forgotten. Every launch of
-/// a Flatpak or a scope gets a unit with a new random suffix, so the cache
+/// Units and containers not asked about for this many ticks are forgotten.
+/// Every launch of a Flatpak or a scope gets a unit with a new random
+/// suffix, and every `podman run` a container with a new ID, so the cache
 /// would otherwise grow for as long as Atlas runs.
 const FORGET_AFTER: u32 = 120;
 
-/// Turns a process's systemd unit into its application, remembering the
-/// answer per unit: a unit's application never changes, a desktop has a few
-/// dozen of them, and the table asks about every row every tick.
+/// How often, in ticks, containers' names are checked against podman's
+/// lists.
+const CONTAINER_RECHECK: u32 = 30;
+
+/// Turns a process's systemd unit into its application, and its container
+/// into a row of its own, remembering the answer per unit and container: a
+/// unit's application never changes, a desktop has a few dozen of them, and
+/// the table asks about every row every tick.
 ///
 /// Owned by the sampling thread, like the samplers.
 #[derive(Debug)]
@@ -71,6 +88,13 @@ pub struct Resolver {
     index: desktop::Index,
     /// `None` takes every icon name on trust (tests, and no display).
     icons: Option<IconLookup>,
+    /// `None` names every container by its short ID.
+    containers: Option<container::Store>,
+    /// The store's [`reads`](container::Store::reads) when the containers
+    /// known were last checked.
+    container_reads: u64,
+    /// By unit name, and by container ID: the two never look alike, since
+    /// a unit's name ends in `.scope` or `.service`.
     by_unit: HashMap<Arc<str>, Known>,
     tick: u32,
 }
@@ -80,9 +104,17 @@ impl Resolver {
         Self {
             index,
             icons,
+            containers: None,
+            container_reads: 0,
             by_unit: HashMap::new(),
             tick: 0,
         }
+    }
+
+    /// Names containers from `store`'s lists.
+    pub fn with_containers(mut self, store: container::Store) -> Self {
+        self.containers = Some(store);
+        self
     }
 
     /// The resolver for this session: desktop files from the XDG data
@@ -91,6 +123,7 @@ impl Resolver {
         let dirs = desktop::data_dirs();
         let icons = IconLookup::new(theme, &dirs);
         Self::new(desktop::Index::new(dirs), Some(icons))
+            .with_containers(container::Store::for_user())
     }
 
     /// The `icons/` folders Qt must search for the icons this picks; see
@@ -117,15 +150,48 @@ impl Resolver {
     /// The application `unit` belongs to, or `None` when it is no
     /// application's: a system service, the session, a kernel thread.
     pub fn of(&mut self, unit: Option<&Arc<str>>) -> Option<&Arc<App>> {
-        let unit = unit?;
-        let tick = self.tick;
-        if !self.by_unit.contains_key(&**unit) {
-            let app = self.resolve(unit).map(Arc::new);
-            self.by_unit.insert(unit.clone(), Known { app, seen: tick });
+        self.remember(unit?, Self::resolve)
+    }
+
+    /// What a process's row stands for: its container, if it runs in one,
+    /// whatever unit that runs (distrobox `--init` runs systemd in there),
+    /// else the application of its unit ([`of`](Self::of)).
+    pub fn of_proc(&mut self, p: &Proc) -> Option<&Arc<App>> {
+        match &p.container {
+            Some(id) => self.remember(id, Self::resolve_container),
+            None => self.of(p.unit.as_ref()),
         }
-        let known = self.by_unit.get_mut(&**unit)?;
+    }
+
+    fn remember(
+        &mut self,
+        key: &Arc<str>,
+        resolve: fn(&mut Self, &str) -> Option<App>,
+    ) -> Option<&Arc<App>> {
+        let tick = self.tick;
+        if !self.by_unit.contains_key(&**key) {
+            let app = resolve(self, key).map(Arc::new);
+            self.by_unit.insert(key.clone(), Known { app, seen: tick });
+        }
+        let known = self.by_unit.get_mut(&**key)?;
         known.seen = tick;
         known.app.as_ref()
+    }
+
+    fn resolve_container(&mut self, id: &str) -> Option<App> {
+        let name = match self.containers.as_mut().and_then(|s| s.name(id)) {
+            Some(name) => name.to_owned(),
+            None => format!("Container {}", container::short_id(id)),
+        };
+        Some(App {
+            id: id.into(),
+            folded: name.to_lowercase().into(),
+            name: name.into(),
+            icon: self.pick_icon(container::ICON, "", ""),
+            terminal: false,
+            flatpak: false,
+            container: true,
+        })
     }
 
     fn resolve(&mut self, unit: &str) -> Option<App> {
@@ -142,6 +208,7 @@ impl Resolver {
             icon,
             terminal,
             flatpak: unit.starts_with(flatpak::UNIT_PREFIX),
+            container: false,
         })
     }
 
@@ -168,7 +235,7 @@ impl Resolver {
 
     /// The row a process belongs to in the grouped table.
     pub fn key_of(&mut self, p: &Proc) -> GroupKey {
-        match self.of(p.unit.as_ref()) {
+        match self.of_proc(p) {
             Some(a) => GroupKey::App(a.id.clone()),
             None => GroupKey::Process(p.name.clone()),
         }
@@ -193,6 +260,28 @@ impl Resolver {
             self.by_unit
                 .retain(|_, k| tick.wrapping_sub(k.seen) <= FORGET_AFTER);
         }
+        if self.tick.is_multiple_of(CONTAINER_RECHECK) {
+            self.recheck_containers();
+        }
+    }
+
+    /// Names every container again if podman's lists have changed since
+    /// the last check, read now or for a container seen in between: one may
+    /// have been renamed, or been seen before podman listed it and named by
+    /// its ID. Only while there are containers to name.
+    fn recheck_containers(&mut self) {
+        let is_container = |k: &Known| k.app.as_ref().is_some_and(|a| a.container);
+        let Some(store) = &mut self.containers else {
+            return;
+        };
+        if !self.by_unit.values().any(is_container) {
+            return;
+        }
+        store.refresh();
+        if store.reads() != self.container_reads {
+            self.container_reads = store.reads();
+            self.by_unit.retain(|_, k| !is_container(k));
+        }
     }
 
     #[cfg(test)]
@@ -201,8 +290,8 @@ impl Resolver {
     }
 }
 
-/// A row of the grouped table: an application by its ID, or, for a process
-/// that is no application's, its name. The two are kept apart so a process
+/// A row of the grouped table: an application or container by its ID, or,
+/// for a process that is neither's, its name. The two are kept apart so a process
 /// that merely shares an application's name can't fold into its row.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum GroupKey {
@@ -246,14 +335,15 @@ pub struct Grouper {
 }
 
 impl Grouper {
-    /// One row per application, and per name for the processes that are no
-    /// application's, in the order their first members come in `procs`.
+    /// One row per application or container, and per name for the
+    /// processes that are neither's, in the order their first members come
+    /// in `procs`.
     pub fn group(&mut self, procs: &[Proc], apps: &mut Resolver) -> &[Group] {
         apps.next_tick();
         self.groups.clear();
         self.index.clear();
         for p in procs {
-            let app = apps.of(p.unit.as_ref()).cloned();
+            let app = apps.of_proc(p).cloned();
             let key = match &app {
                 Some(a) => GroupKey::App(a.id.clone()),
                 None => GroupKey::Process(p.name.clone()),
@@ -310,6 +400,10 @@ pub enum Location {
 /// shows the first member's program that can be read
 /// ([`crate::process::executable`]). `None` when nothing can be found.
 ///
+/// A container's row has none: its own programs are files only podman's
+/// namespace sees, and what the host can show (a toolbox's init is the
+/// host's `toolbox`) is not the container.
+///
 /// The row is a Flatpak's if any member runs in that app's sandbox, so a
 /// row that holds both a Flatpak and a native launch of one ID opens the
 /// Flatpak's folder whichever launch [`App::flatpak`] came from.
@@ -319,6 +413,9 @@ pub fn location<'a>(
     app: Option<&App>,
     members: impl IntoIterator<Item = &'a Proc>,
 ) -> Option<Location> {
+    if app.is_some_and(|a| a.container) {
+        return None;
+    }
     let pids: Vec<u32> = members.into_iter().map(|p| p.pid).collect();
     if let Some(app) = app {
         // The bwrap that sets the sandbox up runs outside it: ask them all.

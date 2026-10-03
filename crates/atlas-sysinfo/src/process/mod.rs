@@ -6,7 +6,7 @@
 //! so the app makes one only while the Apps page is on screen, and the scan
 //! is arranged to allocate nothing per tick once the first has run: the
 //! files are read into reused buffers ([`procfs`]), parsed in place
-//! ([`parse`]), and a process's name and unit are shared with the previous
+//! ([`parse`]), and a process's name, unit and container are shared with the previous
 //! tick's unless they changed. The costly extras are throttled and carried
 //! forward:
 //!
@@ -49,7 +49,10 @@ mod signal;
 
 pub use details::{Info, details, executable, start_time};
 pub use impact::Impact;
-pub use parse::{DrmClient, Stat, parse_fdinfo_drm, parse_io, parse_stat, unit_from_cgroup};
+pub use parse::{
+    DrmClient, Stat, container_from_cgroup, parse_fdinfo_drm, parse_io, parse_stat,
+    unit_from_cgroup,
+};
 pub use signal::{Action, ActionError, act};
 
 use std::sync::Arc;
@@ -116,6 +119,10 @@ pub struct Proc {
     /// application in a unit of its own, so this is what groups an
     /// application's processes.
     pub unit: Option<Arc<str>>,
+    /// The podman container it runs in, by ID ([`container_from_cgroup`]):
+    /// a toolbox's, a distrobox's or any other. Its unit is podman's
+    /// `libpod-<ID>.scope`, which no desktop file names.
+    pub container: Option<Arc<str>>,
     /// Percent of one core; above 100 for a process busy on several.
     pub cpu: f64,
     /// Resident bytes, as `ps` and `top` count them.
@@ -165,6 +172,7 @@ struct Prev {
     start_time: u64,
     name: Arc<str>,
     unit: Option<Arc<str>>,
+    container: Option<Arc<str>>,
     jiffies: u64,
     faults: u64,
     rss: u64,
@@ -307,15 +315,19 @@ impl ProcessSampler {
             // rescan, not every tick: one more file per process per tick
             // would be a third more opens.
             let prev_unit = prev.as_ref().and_then(|p| p.unit.as_ref());
-            let unit = if kernel {
-                None
+            let prev_container = prev.as_ref().and_then(|p| p.container.as_ref());
+            let (unit, container) = if kernel {
+                (None, None)
             } else if prev.is_none() || (tick + u64::from(pid)).is_multiple_of(UNIT_RESCAN_TICKS) {
                 match dir.read(pid, b"/cgroup", b"") {
-                    Ok(b) => parse::unit_from_cgroup(b).map(|u| reuse(prev_unit, u)),
-                    Err(_) => prev_unit.cloned(),
+                    Ok(b) => (
+                        parse::unit_from_cgroup(b).map(|u| reuse(prev_unit, u)),
+                        parse::container_from_cgroup(b).map(|c| reuse(prev_container, c)),
+                    ),
+                    Err(_) => (prev_unit.cloned(), prev_container.cloned()),
                 }
             } else {
-                prev_unit.cloned()
+                (prev_unit.cloned(), prev_container.cloned())
             };
 
             // Most processes sleep through most ticks. One that hasn't run,
@@ -441,6 +453,7 @@ impl ProcessSampler {
                 start_time,
                 name: Arc::clone(&name),
                 unit: unit.clone(),
+                container: container.clone(),
                 jiffies,
                 faults,
                 rss,
@@ -461,6 +474,7 @@ impl ProcessSampler {
                 parent,
                 kernel,
                 unit,
+                container,
                 cpu,
                 memory,
                 gpu,
