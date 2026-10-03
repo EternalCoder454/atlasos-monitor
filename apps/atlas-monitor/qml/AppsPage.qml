@@ -60,6 +60,17 @@ Item {
         onTriggered: page.apps.setColumnShown(role, checked)
     }
 
+    // A table sorted by a hidden column (hidden now, or saved hidden) sorts
+    // by CPU instead, or by name when that is hidden too.
+    function sortShown() {
+        if (!page.apps.hiddenColumns.includes(table.sortRole)) {
+            return;
+        }
+        const cpu = !page.apps.hiddenColumns.includes("cpu");
+        table.sortOrder = cpu ? Qt.DescendingOrder : Qt.AscendingOrder;
+        table.sortRole = cpu ? "cpu" : "name";
+    }
+
     // Sorts once a header click has set both its column and order.
     function resort() {
         page.apps.sortBy(table.sortRole, table.sortOrder === Qt.DescendingOrder);
@@ -308,17 +319,10 @@ Item {
         }
     }
 
-    // Hiding the column the table is sorted by sorts by CPU, or by name
-    // when that is hidden too.
     Connections {
         target: page.apps
         function onHiddenColumnsChanged() {
-            if (!page.apps.hiddenColumns.includes(table.sortRole)) {
-                return;
-            }
-            const cpu = !page.apps.hiddenColumns.includes("cpu");
-            table.sortOrder = cpu ? Qt.DescendingOrder : Qt.AscendingOrder;
-            table.sortRole = cpu ? "cpu" : "name";
+            page.sortShown();
         }
     }
 
@@ -416,6 +420,7 @@ Item {
     Component.onCompleted: {
         // A hold left over from a page closed under the pointer.
         page.apps.setHeld(false);
+        page.sortShown();
         page.resort();
         page.apps.setSearch(search.query);
     }
