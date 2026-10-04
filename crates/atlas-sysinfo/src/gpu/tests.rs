@@ -73,6 +73,10 @@ fn lists_cards_best_first() {
         &[
             ("vendor", "0x1002\n"),
             ("device", "0x164e\n"),
+            // The codename, as older pci.ids give it. Set here rather than
+            // looked up: the machine's pci.ids changes with hwdata (newer ones
+            // name this device "Radeon 610M").
+            ("product_name", "Raphael\n"),
             ("mem_info_vram_total", "536870912\n"),
         ],
     );
@@ -86,7 +90,7 @@ fn lists_cards_best_first() {
     assert_eq!(nodes, ["card1", "card2", "card0"]);
     let integrated: Vec<bool> = cards.iter().map(|c| c.integrated).collect();
     assert_eq!(integrated, [false, true, true]);
-    // Listed by codename ("Raphael"), named as sold.
+    // Named by codename alone, shown as sold.
     assert_eq!(cards[1].name, "AMD Radeon Graphics");
 
     let amd = &cards[0];
