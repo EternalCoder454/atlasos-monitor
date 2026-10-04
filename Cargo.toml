@@ -10,9 +10,8 @@ repository = "https://github.com/EternalCoder454/atlasos-monitor"
 rust-version = "1.89"
 
 [workspace.dependencies]
-# atlas-core and the Atlas.Ui QML module come from the same atlasos-updater
-# commit. apps/atlas-monitor/CMakeLists.txt reads this `rev` to fetch Atlas.Ui,
-# so this line is the only place the pin lives. To move it, see CLAUDE.md.
+# atlas-core comes from atlasos-updater; to move the pin, see CLAUDE.md.
+# (Atlas.Ui is no longer tied to it: it is the installed atlas-ui package.)
 atlas-core = { git = "https://github.com/EternalCoder454/atlasos-updater", rev = "20ff489e5e00c0efaf565bf650e84994277dde6d" }
 
 [profile.release]

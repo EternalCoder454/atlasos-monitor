@@ -20,7 +20,7 @@ crates/atlas-sysinfo/         the readers: /proc, /sys, hwmon, D-Bus. No Qt.
   src/<reader>.rs             one module per Go package (stats, process, gpu, ...)
   tests/fixtures/             recorded /proc and /sys files for the parsers
 apps/atlas-monitor/           the app
-  CMakeLists.txt              Corrosion + qt_add_qml_module; fetches Atlas.Ui
+  CMakeLists.txt              Corrosion + qt_add_qml_module; checks Atlas.Ui is installed
   build.rs                    cxx-qt-build: one entry per #[cxx_qt::bridge] file
   src/                        QObjects and models (CXX-Qt), settings, crash, logging
   cpp/                        main.cpp, and C++ Qt Quick items (the chart)
@@ -37,23 +37,25 @@ invokables.
 
 ## Shared code: atlas-core and Atlas.Ui
 
-Both come from the atlasos-updater repo at **one commit**:
-
-- atlas-core: `[workspace.dependencies] atlas-core = { git, rev }` in the
-  workspace `Cargo.toml`. Cargo.lock records the same commit.
-- Atlas.Ui: `apps/atlas-monitor/CMakeLists.txt` reads that `rev` from
-  `Cargo.toml` and fetches `ui/` of the same commit with FetchContent
-  (`SOURCE_SUBDIR ui`). `-DFETCHCONTENT_SOURCE_DIR_ATLASOS_UPDATER=<checkout>`
-  builds against a local checkout instead, for trying unpushed UI work.
+- atlas-core comes from the atlasos-updater repo:
+  `[workspace.dependencies] atlas-core = { git, rev }` in the workspace
+  `Cargo.toml`. Cargo.lock records the same commit. Moving the pin: push the
+  atlasos-updater commit, change `rev`, run `cargo update -p atlas-core`,
+  commit `Cargo.toml` and `Cargo.lock` together. CI fails if they disagree.
+- Atlas.Ui comes from [atlas-framework](https://github.com/EternalCoder454/atlas-framework)
+  (read its `docs/DESIGN.md`, "How apps use it"). It is installed like Kirigami, by the `atlas-ui` RPM, at
+  `/usr/lib64/qt6/qml/Atlas/Ui`: the QML imports it and nothing links it.
+  CMake stops if it isn't installed; qmlcachegen and qmllint read its types
+  from there. The RPM `Requires` and `BuildRequires` it. No repository has
+  it, so builds install atlas-framework's RPMs first: `build-rpm.sh` and
+  `scripts/dev.sh` take them from `ATLAS_LOCAL_RPMS=<dir>`, CI builds them
+  from atlas-framework `main`, and the AtlasOS image builds them before the
+  apps. A change to Atlas.Ui reaches the app when atlas-ui is updated, with
+  no rebuild of the app.
 
 New shared components (`LiveChart`, `UsageBar`, `SidebarGroup`, `DataTable`,
-`SearchField`, `ContextMenu`) land in atlasos-updater `ui/` first, then the pin
-moves. Code that only Atlas Monitor needs stays here.
-
-Moving the pin: push the atlasos-updater commit, change `rev`, run
-`cargo update -p atlas-core`, rebuild (CMake refetches Atlas.Ui), commit
-`Cargo.toml` and `Cargo.lock` together. CI fails if Cargo.lock and the `rev`
-disagree.
+`SearchField`, `ContextMenu`) land in atlas-framework `ui/` first, following
+its compatibility rules. Code that only Atlas Monitor needs stays here.
 
 ## Process and window
 

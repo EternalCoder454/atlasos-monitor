@@ -14,17 +14,46 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Atlas.Ui (atlas-ui), which the app builds against, is in no repository:
+  # build atlas-framework's RPMs from its main branch for the jobs below.
+  framework:
+    name: atlas-framework RPMs
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Tools for checkout
+        run: dnf -y install git-core tar
+      - uses: actions/checkout@v5
+        with:
+          repository: EternalCoder454/atlas-framework
+          ref: main
+      - name: Build the RPMs
+        run: packaging/build-rpm.sh "$GITHUB_WORKSPACE/out"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: atlas-framework-rpms
+          path: out/*.rpm
+          if-no-files-found: error
+
   check:
     name: fmt, clippy, tests
+    needs: framework
     runs-on: ubuntu-latest
     container: registry.fedoraproject.org/fedora:44
     steps:
       - name: Tools for checkout and cache
         run: dnf -y install git-core tar zstd
       - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: atlas-framework-rpms
+          # In the container: runner.temp would be the host's path.
+          path: /tmp/atlas-framework-rpms
       - name: Build dependencies
         run: |
-          dnf -y install dnf5-plugins clippy rustfmt
+          dnf -y install dnf5-plugins clippy rustfmt \
+            /tmp/atlas-framework-rpms/atlas-ui-[0-9]*.rpm \
+            /tmp/atlas-framework-rpms/atlas-symbols-fonts-[0-9]*.rpm
           dnf -y builddep packaging/atlas-monitor.spec
       - uses: actions/cache@v4
         with:
@@ -44,14 +73,20 @@ jobs:
 
   rpm:
     name: RPM
+    needs: framework
     runs-on: ubuntu-latest
     container: registry.fedoraproject.org/fedora:44
     steps:
       - name: Tools for checkout
         run: dnf -y install git-core tar
       - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: atlas-framework-rpms
+          # In the container: runner.temp would be the host's path.
+          path: /tmp/atlas-framework-rpms
       - name: Build the RPM
-        run: packaging/build-rpm.sh "$GITHUB_WORKSPACE/out"
+        run: ATLAS_LOCAL_RPMS=/tmp/atlas-framework-rpms packaging/build-rpm.sh "$GITHUB_WORKSPACE/out"
       - uses: actions/upload-artifact@v4
         with:
           name: atlas-monitor-rpm

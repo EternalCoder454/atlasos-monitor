@@ -21,7 +21,7 @@ BuildRequires:  gcc-c++
 BuildRequires:  cmake
 BuildRequires:  ninja-build
 BuildRequires:  corrosion
-# Cargo fetches atlas-core and CMake fetches Atlas.Ui from atlasos-updater.
+# Cargo fetches atlas-core from atlasos-updater.
 BuildRequires:  git-core
 BuildRequires:  desktop-file-utils
 BuildRequires:  libappstream-glib
@@ -35,10 +35,15 @@ BuildRequires:  cmake(Qt6QmlTools)
 BuildRequires:  qt6-qtbase-devel
 BuildRequires:  cmake(KF6DBusAddons)
 BuildRequires:  cmake(KF6WindowSystem)
-# QML modules qmlcachegen resolves at build time (not linked)
+# QML modules qmlcachegen resolves at build time (not linked). atlas-ui comes
+# from atlas-framework, which is in no repository: install its RPMs first
+# (build-rpm.sh does, given ATLAS_LOCAL_RPMS).
 BuildRequires:  kf6-kirigami-devel
+BuildRequires:  atlas-ui
 
 Requires:       kf6-kirigami
+# Atlas.Ui, the shared look (atlas-framework)
+Requires:       atlas-ui
 Requires:       kf6-qqc2-desktop-style
 Requires:       qt6-qtdeclarative
 # the app icon and Breeze's icons are SVG
@@ -54,9 +59,8 @@ start and stop services, and choose what starts when you log in.
 
 %build
 # NETWORK: cargo (Corrosion runs it with --locked) fetches crates.io and the
-# pinned atlas-core, and CMake's FetchContent clones Atlas.Ui at the same
-# commit, during %%build. That works in podman and with `rpmbuild` on a
-# networked machine, not in an offline mock/Koji build.
+# pinned atlas-core during %%build. That works in podman and with `rpmbuild`
+# on a networked machine, not in an offline mock/Koji build.
 # CARGO_HOME from the environment keeps a crate cache between builds
 # (CLAUDE.md mounts one); otherwise a fresh one in the build dir.
 export CARGO_HOME=${CARGO_HOME:-%{_builddir}/cargo-home}

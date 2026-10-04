@@ -27,10 +27,12 @@ behaviour and numbers; it is frozen, so don't change it from here.
   atlas-system-helper and never add a method to it. Services go through
   systemd's own polkit actions, SMART through udisks2, Energy Saver through
   the user's systemd manager.
-- **atlas-core and Atlas.Ui come from one atlasos-updater commit**, the `rev`
-  in the workspace `Cargo.toml`. Never fork or copy Atlas.Ui components into
-  this repo: shared UI goes into atlasos-updater `ui/` first, then the pin
-  moves (DESIGN.md, Shared code).
+- **Atlas.Ui is the installed `atlas-ui` package** from atlas-framework
+  (`~/Documents/Atlas Framework`, github.com/EternalCoder454/atlas-framework),
+  not part of this build. Never fork or copy Atlas.Ui components into this
+  repo: shared UI goes into atlas-framework `ui/` first, under its
+  compatibility rules (DESIGN.md, Shared code). atlas-core still comes from
+  the atlasos-updater `rev` in the workspace `Cargo.toml`.
 - **The GUI thread never blocks.** Readers live in `crates/atlas-sysinfo` (no
   Qt) and run on a worker thread; results come back with `qt_thread().queue`.
 - **Rendering defaults to the CPU** (Qt Quick software backend). Charts are
@@ -53,17 +55,20 @@ behaviour and numbers; it is frozen, so don't change it from here.
 | Tests | `scripts/dev.sh cargo test --workspace --locked` |
 | App build | `scripts/dev.sh bash -c 'cmake -S apps/atlas-monitor -B build/dev -G Ninja && cmake --build build/dev'` |
 | Smoke run | `scripts/dev.sh dbus-run-session -- env QT_QPA_PLATFORM=offscreen build/dev/atlas-monitor` |
-| RPM | `podman run --rm -v "$PWD":/src:Z -v atlas-cargo:/root/.cargo/registry -v atlas-cargo-git:/root/.cargo/git -e CARGO_HOME=/root/.cargo registry.fedoraproject.org/fedora:44 /src/packaging/build-rpm.sh /src/out` |
+| RPM | `podman run --rm -v "$PWD":/src:Z -v <framework rpms>:/atlas-rpms:ro,z -e ATLAS_LOCAL_RPMS=/atlas-rpms -v atlas-cargo:/root/.cargo/registry -v atlas-cargo-git:/root/.cargo/git -e CARGO_HOME=/root/.cargo registry.fedoraproject.org/fedora:44 /src/packaging/build-rpm.sh /src/out` |
+
+`<framework rpms>` is the out dir of atlas-framework's `packaging/build-rpm.sh`
+(run the same way from its checkout): no repository has atlas-ui.
 
 The app needs a session bus (single instance), hence `dbus-run-session`.
-`scripts/dev.sh` builds `localhost/atlas-monitor-dev:44` on first use; delete
-that image after changing the spec's BuildRequires. Cold builds compile
-CXX-Qt and Qt bindings for a few minutes.
+`scripts/dev.sh` builds `localhost/atlas-monitor-dev:44` on first use, which
+needs `ATLAS_LOCAL_RPMS=<dir>` holding atlas-framework's RPMs; delete that
+image after changing the spec's BuildRequires or to take a newer atlas-ui.
+Cold builds compile CXX-Qt and Qt bindings for a few minutes.
 
 ## Moving the atlasos-updater pin
 
 1. The commit must be pushed to atlasos-updater `main`.
 2. Change `rev` in `Cargo.toml` (full 40-character hash), then
    `scripts/dev.sh cargo update -p atlas-core`.
-3. Rebuild the app: CMake reads the new `rev` and refetches Atlas.Ui.
-4. Commit `Cargo.toml` and `Cargo.lock` together.
+3. Commit `Cargo.toml` and `Cargo.lock` together.

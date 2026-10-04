@@ -2,7 +2,9 @@
 # Build the Atlas Monitor RPM inside a fedora:44 container, as root.
 #   packaging/build-rpm.sh <out dir> [rpmbuild options]
 # The binary RPM (no source, no debuginfo) is copied to <out dir>.
-# Cargo and CMake need network access.
+# Cargo needs network access.
+# ATLAS_LOCAL_RPMS=<dir> installs the RPMs in <dir> first: atlas-framework's
+# (atlas-ui), which the app builds against and no repository has.
 set -euo pipefail
 
 main() {
@@ -15,6 +17,14 @@ main() {
     version=$(awk '/^Version:/ {print $2; exit}' "$spec")
 
     dnf -y install rpm-build dnf5-plugins tar gzip >&2
+    if [ -n "${ATLAS_LOCAL_RPMS:-}" ]; then
+        # Atlas.Ui and its fonts, not the gallery. dnf brings their
+        # dependencies; rpm then puts these exact files in place even when a
+        # build of the same version is installed already.
+        local_rpms=("$ATLAS_LOCAL_RPMS"/atlas-ui-[0-9]*.rpm "$ATLAS_LOCAL_RPMS"/atlas-symbols-fonts-[0-9]*.rpm)
+        dnf -y install "${local_rpms[@]}" >&2
+        rpm -U --replacepkgs --replacefiles "${local_rpms[@]}" >&2
+    fi
     dnf -y builddep "$spec" >&2
 
     top=$(mktemp -d)

@@ -16,9 +16,9 @@ Not part of the app build or CI. Build the Release app in the dev container:
 scripts/dev.sh bash -c 'cmake -S apps/atlas-monitor -B build/release -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build/release'
 ```
 
-(With a local Atlas Updater checkout, add
-`-DFETCHCONTENT_SOURCE_DIR_ATLASOS_UPDATER=...` and mount it, as the pages
-build does.)
+(Atlas.Ui is the atlas-ui installed in the dev image. To measure an unpackaged
+Atlas.Ui change, install it over that one inside the container first, as
+atlas-framework's `docs/DESIGN.md` describes.)
 
 ## Running
 
