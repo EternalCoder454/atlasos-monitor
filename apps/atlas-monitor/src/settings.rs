@@ -26,8 +26,108 @@
 //! isn't one Settings offers snaps to the nearest one.
 
 use std::io;
+use std::sync::mpsc;
+use std::sync::{Mutex, PoisonError};
+use std::thread::JoinHandle;
 
-use crate::rc;
+use atlas_framework_ui::atlas_framework_core::settings as rc;
+
+/// `~/.config/atlas-monitorrc`, looked up on each use (`XDG_CONFIG_HOME`
+/// may change under a test).
+fn file() -> rc::Settings {
+    rc::Settings::for_app(atlas_framework_ui::app_info())
+}
+
+/// One key's new value, or `None` to remove it.
+type Change = (&'static str, &'static str, Option<String>);
+
+/// What the window saves as it is used (page, folds, size) is written on a
+/// thread of its own: each write syncs the file to disk, which the GUI
+/// thread must not wait for. Writes keep their order, and a burst (pages
+/// clicked through) writes only each key's last value. [`atlas_settings_flush`]
+/// waits for them.
+static WRITER: Mutex<Writer> = Mutex::new(Writer::Idle);
+
+enum Writer {
+    /// No save yet: the thread starts with the first.
+    Idle,
+    /// Where the saves are sent, and the thread writing them.
+    Running(mpsc::Sender<Vec<Change>>, JoinHandle<()>),
+    /// Flushed for the way out: any later save is written right away.
+    Closed,
+}
+
+fn save_later(changes: Vec<Change>) {
+    let mut writer = WRITER.lock().unwrap_or_else(PoisonError::into_inner);
+    if matches!(*writer, Writer::Idle) {
+        let (tx, rx) = mpsc::channel();
+        match std::thread::Builder::new()
+            .name("settings".into())
+            .spawn(move || write_queued(&rx))
+        {
+            Ok(thread) => *writer = Writer::Running(tx, thread),
+            Err(e) => {
+                log::warn!("no thread to save settings on: {e}");
+                *writer = Writer::Closed;
+            }
+        }
+    }
+    let changes = match &*writer {
+        // Only fails when the thread is gone (it panicked): write here.
+        Writer::Running(tx, _) => match tx.send(changes) {
+            Ok(()) => return,
+            Err(mpsc::SendError(changes)) => {
+                log::warn!("the settings thread is gone; saving on this one");
+                changes
+            }
+        },
+        _ => changes,
+    };
+    drop(writer);
+    write(changes);
+}
+
+fn write_queued(rx: &mpsc::Receiver<Vec<Change>>) {
+    while let Ok(mut pending) = rx.recv() {
+        while let Ok(more) = rx.try_recv() {
+            merge(&mut pending, more);
+        }
+        write(pending);
+    }
+}
+
+/// `more` after `pending`, each key once, with its last value.
+fn merge(pending: &mut Vec<Change>, more: Vec<Change>) {
+    for c in more {
+        pending.retain(|p| (p.0, p.1) != (c.0, c.1));
+        pending.push(c);
+    }
+}
+
+fn write(changes: Vec<Change>) {
+    let f = file();
+    for (group, key, value) in changes {
+        if let Err(e) = f.set(group, key, value.as_deref()) {
+            log::warn!("saving {group}/{key}: {e}");
+        }
+    }
+}
+
+/// Waits until the window's queued saves are on disk. `main.cpp` calls it
+/// once the window has closed, before the process ends.
+#[unsafe(no_mangle)]
+pub extern "C" fn atlas_settings_flush() {
+    let writer = std::mem::replace(
+        &mut *WRITER.lock().unwrap_or_else(PoisonError::into_inner),
+        Writer::Closed,
+    );
+    if let Writer::Running(tx, thread) = writer {
+        drop(tx);
+        if thread.join().is_err() {
+            log::warn!("the settings thread panicked; some window settings may be lost");
+        }
+    }
+}
 
 const GROUP: &str = "General";
 const KEY_INTERVAL: &str = "RefreshInterval";
@@ -73,7 +173,7 @@ impl Default for Settings {
 
 impl Settings {
     pub fn load() -> Self {
-        Self::from_values(rc::get(GROUP, KEY_INTERVAL), rc::get(GROUP, KEY_GPU))
+        Self::from_values(file().get(GROUP, KEY_INTERVAL), file().get(GROUP, KEY_GPU))
     }
 
     fn from_values(interval: Option<String>, gpu: Option<String>) -> Self {
@@ -88,11 +188,11 @@ impl Settings {
 
     /// Saves an interval (callers snap it with [`nearest_interval`] first).
     pub fn save_refresh_interval(ms: i32) -> io::Result<()> {
-        rc::set(GROUP, KEY_INTERVAL, Some(&ms.to_string()))
+        file().set(GROUP, KEY_INTERVAL, Some(&ms.to_string()))
     }
 
     pub fn save_gpu_rendering(on: bool) -> io::Result<()> {
-        rc::set(GROUP, KEY_GPU, Some(if on { "true" } else { "false" }))
+        file().set(GROUP, KEY_GPU, Some(if on { "true" } else { "false" }))
     }
 }
 
@@ -107,7 +207,10 @@ pub struct Energy {
 
 impl Energy {
     pub fn load() -> Self {
-        Self::from_values(rc::get(ENERGY, KEY_AUTOMATIC), rc::get(ENERGY, KEY_NEVER))
+        Self::from_values(
+            file().get(ENERGY, KEY_AUTOMATIC),
+            file().get(ENERGY, KEY_NEVER),
+        )
     }
 
     fn from_values(automatic: Option<String>, never: Option<String>) -> Self {
@@ -118,7 +221,7 @@ impl Energy {
     }
 
     pub fn save_automatic(on: bool) -> io::Result<()> {
-        rc::set(
+        file().set(
             ENERGY,
             KEY_AUTOMATIC,
             Some(if on { "true" } else { "false" }),
@@ -128,7 +231,7 @@ impl Energy {
     /// Desktop IDs hold no commas, so a plain KConfig list needs no escapes.
     pub fn save_never(ids: &[String]) -> io::Result<()> {
         let value = ids.join(",");
-        rc::set(
+        file().set(
             ENERGY,
             KEY_NEVER,
             (!value.is_empty()).then_some(value.as_str()),
@@ -160,9 +263,9 @@ impl Default for AppsView {
 impl AppsView {
     pub fn load() -> Self {
         Self::from_values(
-            rc::get(APPS, KEY_GROUPED),
-            rc::get(APPS, KEY_KERNEL),
-            rc::get(APPS, KEY_HIDDEN),
+            file().get(APPS, KEY_GROUPED),
+            file().get(APPS, KEY_KERNEL),
+            file().get(APPS, KEY_HIDDEN),
         )
     }
 
@@ -180,15 +283,15 @@ impl AppsView {
     }
 
     pub fn save_grouped(on: bool) -> io::Result<()> {
-        rc::set(APPS, KEY_GROUPED, Some(if on { "true" } else { "false" }))
+        file().set(APPS, KEY_GROUPED, Some(if on { "true" } else { "false" }))
     }
 
     pub fn save_kernel_threads(on: bool) -> io::Result<()> {
-        rc::set(APPS, KEY_KERNEL, Some(if on { "true" } else { "false" }))
+        file().set(APPS, KEY_KERNEL, Some(if on { "true" } else { "false" }))
     }
 
     pub fn save_hidden(roles: &[String]) -> io::Result<()> {
-        rc::set(APPS, KEY_HIDDEN, Some(&roles.join(",")))
+        file().set(APPS, KEY_HIDDEN, Some(&roles.join(",")))
     }
 }
 
@@ -205,10 +308,10 @@ pub struct WindowState {
 impl WindowState {
     pub fn load() -> Self {
         Self::from_values(
-            rc::get(WINDOW, KEY_WIDTH),
-            rc::get(WINDOW, KEY_HEIGHT),
-            rc::get(WINDOW, KEY_MAXIMIZED),
-            rc::get(WINDOW, KEY_PAGE),
+            file().get(WINDOW, KEY_WIDTH),
+            file().get(WINDOW, KEY_HEIGHT),
+            file().get(WINDOW, KEY_MAXIMIZED),
+            file().get(WINDOW, KEY_PAGE),
         )
     }
 
@@ -234,29 +337,30 @@ impl WindowState {
     }
 
     /// A maximized window keeps the size it had before, to come back to.
-    pub fn save_size(width: i32, height: i32, maximized: bool) -> io::Result<()> {
+    /// Written later, as [`save_later`] says; so are the page and the folds.
+    pub fn save_size(width: i32, height: i32, maximized: bool) {
+        let mut changes = Vec::new();
         if !maximized {
-            rc::set(WINDOW, KEY_WIDTH, Some(&width.to_string()))?;
-            rc::set(WINDOW, KEY_HEIGHT, Some(&height.to_string()))?;
+            changes.push((WINDOW, KEY_WIDTH, Some(width.to_string())));
+            changes.push((WINDOW, KEY_HEIGHT, Some(height.to_string())));
         }
-        rc::set(
-            WINDOW,
-            KEY_MAXIMIZED,
-            Some(if maximized { "true" } else { "false" }),
-        )
+        changes.push((WINDOW, KEY_MAXIMIZED, Some(maximized.to_string())));
+        save_later(changes);
     }
 
-    pub fn save_page(page: &str) -> io::Result<()> {
-        rc::set(WINDOW, KEY_PAGE, Some(page))
+    pub fn save_page(page: &str) {
+        save_later(vec![(WINDOW, KEY_PAGE, Some(page.to_owned()))]);
     }
 
     /// The sections folded shut, by their ids (`cpu.cores`).
     pub fn load_folded() -> Vec<String> {
-        rc::get(WINDOW, KEY_FOLDED).map_or_else(Vec::new, |v| list(&v))
+        file()
+            .get(WINDOW, KEY_FOLDED)
+            .map_or_else(Vec::new, |v| list(&v))
     }
 
-    pub fn save_folded(ids: &[String]) -> io::Result<()> {
-        rc::set(WINDOW, KEY_FOLDED, Some(&ids.join(",")))
+    pub fn save_folded(ids: &[String]) {
+        save_later(vec![(WINDOW, KEY_FOLDED, Some(ids.join(",")))]);
     }
 }
 
@@ -310,6 +414,25 @@ pub extern "C" fn atlas_settings_gpu_rendering() -> bool {
 mod tests {
     use super::*;
 
+    #[test]
+    fn queued_saves_keep_each_keys_last_value() {
+        let c = |k: &'static str, v: &str| (WINDOW, k, Some(v.to_owned()));
+        let mut pending = vec![c(KEY_PAGE, "cpu"), c(KEY_WIDTH, "900")];
+        merge(
+            &mut pending,
+            vec![c(KEY_PAGE, "apps"), c(KEY_HEIGHT, "700")],
+        );
+        merge(&mut pending, vec![c(KEY_PAGE, "about")]);
+        assert_eq!(
+            pending,
+            [
+                c(KEY_WIDTH, "900"),
+                c(KEY_HEIGHT, "700"),
+                c(KEY_PAGE, "about")
+            ]
+        );
+    }
+
     fn s(v: &str) -> Option<String> {
         Some(v.to_string())
     }
@@ -350,11 +473,8 @@ mod tests {
         assert_eq!(got.hidden, ["gpu", "pid"]);
         // Saved empty: every column shown, not the default.
         assert!(AppsView::from_values(None, None, s("")).hidden.is_empty());
-        let text = crate::rc::set_in("", APPS, KEY_HIDDEN, Some(""));
-        assert_eq!(
-            crate::rc::get_in(&text, APPS, KEY_HIDDEN).as_deref(),
-            Some("")
-        );
+        let text = rc::set_in("", APPS, KEY_HIDDEN, Some(""));
+        assert_eq!(rc::get_in(&text, APPS, KEY_HIDDEN).as_deref(), Some(""));
     }
 
     #[test]

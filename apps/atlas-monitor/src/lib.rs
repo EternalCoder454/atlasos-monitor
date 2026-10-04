@@ -4,14 +4,11 @@
 
 mod backend;
 mod battery;
-mod crash;
 mod details;
 mod devices;
 mod energy;
 mod graphics;
-mod logging;
 mod processes;
-mod rc;
 mod rows;
 mod sampler;
 mod sampling;
@@ -30,6 +27,15 @@ use cxx_qt::{CxxQtType, Threading};
 // cxx-qt-build's generated initializer calls into cxx-qt-lib; keep the crate
 // linked even while no bridge uses one of its types.
 extern crate cxx_qt_lib;
+
+// Who this app is, for atlas-framework: `main.cpp`'s `atlas_app_init` and
+// `atlas_app_ready` take the names, the logger and the crash hooks from it.
+// The ID is the desktop file, the icon and the single-instance D-Bus name.
+atlas_framework_ui::app! {
+    name: "Atlas Monitor",
+    id: "net.eterneon.atlas.monitor",
+    repo: "atlasos-monitor",
+}
 
 /// The QObjects QML sees, handed to the engine as `Main.qml`'s initial
 /// properties. The caller owns them all; see `atlas_objects_new`.

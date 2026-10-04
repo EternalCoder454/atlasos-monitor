@@ -65,7 +65,7 @@ jobs:
           restore-keys: cargo-f44-
       - name: Format
         run: cargo fmt --all --check
-      # --locked: also fails when Cargo.lock and the atlas-core rev disagree.
+      # --locked: also fails when Cargo.lock and the atlas-framework rev disagree.
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Tests

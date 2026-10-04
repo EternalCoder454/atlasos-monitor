@@ -9,19 +9,17 @@
 #include <QPointer>
 #include <QQmlApplicationEngine>
 #include <QQmlEngine>
-#include <QQuickStyle>
 #include <QQuickWindow>
 #include <QSGRendererInterface>
 #include <QSocketNotifier>
 
 #include <cerrno>
 #include <csignal>
-#include <cstdio>
 #include <fcntl.h>
 #include <unistd.h>
 #include <utility>
 
-// Rust, see src/lib.rs, src/crash.rs, src/logging.rs and src/settings.rs.
+// Rust, see src/lib.rs and src/settings.rs.
 struct AtlasObjects {
     void *backend;
     void *sampler;
@@ -42,10 +40,11 @@ struct AtlasObjects {
 };
 extern "C" AtlasObjects atlas_objects_new(const char *iconTheme);
 extern "C" const char *atlas_icon_search_paths(const char *iconTheme);
-extern "C" void atlas_log_init();
-extern "C" void atlas_crash_install();
-extern "C" void atlas_crash_fatal(const char *msg);
 extern "C" bool atlas_settings_gpu_rendering();
+extern "C" void atlas_settings_flush();
+// atlas-framework-ui (include/atlas/app.h), linked in with the Rust library.
+extern "C" void atlas_app_init();
+extern "C" void atlas_app_ready();
 
 // Tells the sampler when the window can't be seen: minimized, hidden, or
 // not exposed (KWin suspends a minimized window, or one on another desktop,
@@ -143,24 +142,6 @@ public:
     }
 };
 
-static QtMessageHandler s_previousHandler = nullptr;
-
-static void messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
-{
-    if (type == QtFatalMsg) {
-        // Let the Rust side save a crash report (if the user enabled them).
-        atlas_crash_fatal(msg.toUtf8().constData());
-    }
-    if (s_previousHandler) {
-        s_previousHandler(type, context, msg);
-    } else {
-        // Qt's built-in handler is not returned by qInstallMessageHandler:
-        // print the message ourselves, so warnings and fatal errors are not lost.
-        fprintf(stderr, "%s\n", qPrintable(qFormatLogMessage(type, context, msg)));
-        fflush(stderr);
-    }
-}
-
 int main(int argc, char *argv[])
 {
     // First, before anything can start a thread: Qt's raster engine hands
@@ -178,11 +159,14 @@ int main(int argc, char *argv[])
     if (qEnvironmentVariableIsEmpty("QSG_SOFTWARE_RENDERER_FORCE_PARTIAL_UPDATES")) {
         qputenv("QSG_SOFTWARE_RENDERER_FORCE_PARTIAL_UPDATES", "1");
     }
-    atlas_log_init();
-    atlas_crash_install(); // Rust panic hook, before anything can panic.
-    // Before QApplication: its constructor raises the most common fatal
-    // errors (no display, no platform plugin).
-    s_previousHandler = qInstallMessageHandler(messageHandler);
+    // Before QApplication, whose constructor raises the most common fatal
+    // errors (no display, no platform plugin): the journal logger, the crash
+    // hooks for Rust panics and fatal Qt messages (a report only when the
+    // user turned them on, in Atlas Updater), the app ID as organization
+    // domain and application name (together the single-instance D-Bus name
+    // net.eterneon.atlas.monitor) and desktop file name, the version, and
+    // the org.kde.desktop style.
+    atlas_app_init();
 
     // Draw on the CPU (Qt Quick's software backend) unless the user turned on
     // "Use the graphics card" in Settings: the GPU path loads Mesa and LLVM,
@@ -192,18 +176,8 @@ int main(int argc, char *argv[])
     }
 
     QApplication app(argc, argv);
-    // Together these give the single-instance D-Bus name net.eterneon.atlas.monitor
-    // (the app ID); do not change either without changing that name.
-    QApplication::setOrganizationDomain(QStringLiteral("atlas.eterneon.net"));
-    QApplication::setApplicationName(QStringLiteral("monitor"));
-    QApplication::setApplicationDisplayName(QStringLiteral("Atlas Monitor"));
-    QApplication::setApplicationVersion(QStringLiteral(ATLAS_MONITOR_VERSION));
-    QApplication::setDesktopFileName(QStringLiteral("net.eterneon.atlas.monitor"));
-    QApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral("net.eterneon.atlas.monitor")));
-
-    if (qEnvironmentVariableIsEmpty("QT_QUICK_CONTROLS_STYLE")) {
-        QQuickStyle::setStyle(QStringLiteral("org.kde.desktop"));
-    }
+    // The display name, the window icon, and what Atlas.Ui's AtlasApp shows.
+    atlas_app_ready();
 
     // One instance per session: a second launch asks this one to show its
     // window (activateRequested) and exits.
@@ -281,6 +255,9 @@ int main(int argc, char *argv[])
     for (const auto &[name, object] : objects) {
         delete static_cast<QObject *>(object);
     }
+    // The window's last saves (its size, the page) are written on a thread
+    // of their own: wait for them.
+    atlas_settings_flush();
     return rc;
 }
 

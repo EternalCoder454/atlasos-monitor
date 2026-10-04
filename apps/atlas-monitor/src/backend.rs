@@ -170,15 +170,11 @@ impl qobject::Backend {
     }
 
     pub fn save_window_size(&self, width: i32, height: i32, maximized: bool) {
-        if let Err(e) = WindowState::save_size(width, height, maximized) {
-            log::warn!("saving the window's size: {e}");
-        }
+        WindowState::save_size(width, height, maximized);
     }
 
     pub fn save_page(&self, page: &QString) {
-        if let Err(e) = WindowState::save_page(&page.to_string()) {
-            log::warn!("saving the page on screen: {e}");
-        }
+        WindowState::save_page(&page.to_string());
     }
 
     pub fn set_folded(mut self: Pin<&mut Self>, id: &QString, fold: bool) {
@@ -191,10 +187,9 @@ impl qobject::Backend {
         if folded == self.rust().folded {
             return;
         }
-        // A save that fails still folds it for this run.
-        if let Err(e) = WindowState::save_folded(&folded) {
-            log::warn!("saving the folded sections: {e}");
-        }
+        // Saved in the background; a save that fails still folds it for
+        // this run.
+        WindowState::save_folded(&folded);
         self.as_mut().set_folded_sections(string_list(&folded));
         self.as_mut().rust_mut().folded = folded;
     }

@@ -7,7 +7,9 @@ privilege. Change it only together with the code that implements the change.
 The roadmap is the Atlas Notes note "AtlasOS/Atlas Monitor/Roadmap".
 
 The stack, build and look are Atlas Updater's (`~/Documents/Atlas Updater`,
-github.com/EternalCoder454/atlasos-updater). When in doubt, do what it does.
+github.com/EternalCoder454/atlasos-updater). When in doubt, do what it does,
+except for what atlas-framework provides (startup, settings file, logging,
+crash reports), which the Monitor takes from there.
 The Go/GTK4 Atlas Monitor (`~/Documents/Atlas Monitor`) is the reference for
 behaviour and numbers; it is frozen, so don't change it from here.
 
@@ -31,8 +33,9 @@ behaviour and numbers; it is frozen, so don't change it from here.
   (`~/Documents/Atlas Framework`, github.com/EternalCoder454/atlas-framework),
   not part of this build. Never fork or copy Atlas.Ui components into this
   repo: shared UI goes into atlas-framework `ui/` first, under its
-  compatibility rules (DESIGN.md, Shared code). atlas-core still comes from
-  the atlasos-updater `rev` in the workspace `Cargo.toml`.
+  compatibility rules (DESIGN.md, Shared code). The Rust side (startup,
+  settings file, logging, crash reports) is the `atlas-framework-ui` crate,
+  pinned by `rev` in the workspace `Cargo.toml`.
 - **The GUI thread never blocks.** Readers live in `crates/atlas-sysinfo` (no
   Qt) and run on a worker thread; results come back with `qt_thread().queue`.
 - **Rendering defaults to the CPU** (Qt Quick software backend). Charts are
@@ -66,9 +69,9 @@ needs `ATLAS_LOCAL_RPMS=<dir>` holding atlas-framework's RPMs; delete that
 image after changing the spec's BuildRequires or to take a newer atlas-ui.
 Cold builds compile CXX-Qt and Qt bindings for a few minutes.
 
-## Moving the atlasos-updater pin
+## Moving the atlas-framework pin
 
-1. The commit must be pushed to atlasos-updater `main`.
+1. The commit must be pushed to atlas-framework `main`.
 2. Change `rev` in `Cargo.toml` (full 40-character hash), then
-   `scripts/dev.sh cargo update -p atlas-core`.
+   `scripts/dev.sh cargo update -p atlas-framework-ui`.
 3. Commit `Cargo.toml` and `Cargo.lock` together.

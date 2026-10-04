@@ -9,8 +9,8 @@ for AtlasOS (Fedora Kinoite 44) only. For other distributions, see the
 [original Atlas Monitor](https://github.com/EternalCoder454/atlas-monitor).
 
 Rust + Qt 6 + Kirigami. Its look is Atlas.Ui from
-[atlas-framework](https://github.com/EternalCoder454/atlas-framework), and its
-core library is shared with [Atlas Updater](https://github.com/EternalCoder454/atlasos-updater). How it is
+[atlas-framework](https://github.com/EternalCoder454/atlas-framework), which
+also gives it its start, settings file, logging and crash reports. How it is
 put together: [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Build

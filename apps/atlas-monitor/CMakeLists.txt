@@ -18,7 +18,7 @@ find_package(Corrosion REQUIRED)
 
 set(WORKSPACE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 
-# Rust library (CXX-Qt QObjects, atlas-core, atlas-sysinfo). cxx-qt-build
+# Rust library (CXX-Qt QObjects, atlas-framework, atlas-sysinfo). cxx-qt-build
 # finds Qt via $QMAKE.
 find_program(QMAKE6 NAMES qmake6 qmake REQUIRED)
 corrosion_import_crate(MANIFEST_PATH ${WORKSPACE_DIR}/Cargo.toml
@@ -34,7 +34,6 @@ endif()
 
 qt_add_executable(atlas-monitor-app cpp/main.cpp)
 set_target_properties(atlas-monitor-app PROPERTIES OUTPUT_NAME atlas-monitor)
-target_compile_definitions(atlas-monitor-app PRIVATE ATLAS_MONITOR_VERSION="${PROJECT_VERSION}")
 
 # qmlcachegen compiles every QML file to C++ at build time; the app reads no
 # .qml from disk at run time.

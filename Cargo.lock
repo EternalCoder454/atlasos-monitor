@@ -64,25 +64,45 @@ dependencies = [
 ]
 
 [[package]]
-name = "atlas-core"
-version = "0.1.0"
-source = "git+https://github.com/EternalCoder454/atlasos-updater?rev=20ff489e5e00c0efaf565bf650e84994277dde6d#20ff489e5e00c0efaf565bf650e84994277dde6d"
+name = "atlas-framework-core"
+version = "1.0.0"
+source = "git+https://github.com/EternalCoder454/atlas-framework?rev=e62871811d07f112b4739b8926e2ec4e70ab21fc#e62871811d07f112b4739b8926e2ec4e70ab21fc"
 dependencies = [
+ "libc",
+ "log",
+ "serde",
+]
+
+[[package]]
+name = "atlas-framework-system"
+version = "1.0.0"
+source = "git+https://github.com/EternalCoder454/atlas-framework?rev=e62871811d07f112b4739b8926e2ec4e70ab21fc#e62871811d07f112b4739b8926e2ec4e70ab21fc"
+dependencies = [
+ "atlas-framework-core",
  "getrandom 0.3.4",
  "libc",
- "rustix",
  "serde",
  "serde_json",
- "tokio",
  "unicode-normalization",
- "zbus",
+]
+
+[[package]]
+name = "atlas-framework-ui"
+version = "1.0.0"
+source = "git+https://github.com/EternalCoder454/atlas-framework?rev=e62871811d07f112b4739b8926e2ec4e70ab21fc#e62871811d07f112b4739b8926e2ec4e70ab21fc"
+dependencies = [
+ "atlas-framework-core",
+ "atlas-framework-system",
+ "cxx-qt-build",
+ "libc",
+ "log",
 ]
 
 [[package]]
 name = "atlas-monitor"
 version = "0.1.0"
 dependencies = [
- "atlas-core",
+ "atlas-framework-ui",
  "atlas-sysinfo",
  "cxx",
  "cxx-qt",

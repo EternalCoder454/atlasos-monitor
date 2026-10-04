@@ -15,14 +15,14 @@ Supports Fedora 44 Kinoite only (Qt 6.11.2, KF6 6.30, Rust 1.98).
 ## Layout
 
 ```
-Cargo.toml                    workspace; pins atlas-core (see "Shared code")
+Cargo.toml                    workspace; pins atlas-framework (see "Shared code")
 crates/atlas-sysinfo/         the readers: /proc, /sys, hwmon, D-Bus. No Qt.
   src/<reader>.rs             one module per Go package (stats, process, gpu, ...)
   tests/fixtures/             recorded /proc and /sys files for the parsers
 apps/atlas-monitor/           the app
   CMakeLists.txt              Corrosion + qt_add_qml_module; checks Atlas.Ui is installed
   build.rs                    cxx-qt-build: one entry per #[cxx_qt::bridge] file
-  src/                        QObjects and models (CXX-Qt), settings, crash, logging
+  src/                        QObjects and models (CXX-Qt), settings
   cpp/                        main.cpp, and C++ Qt Quick items (the chart)
   qml/                        pages
   data/                       .desktop, metainfo, icon
@@ -35,13 +35,18 @@ and benchmarked without Qt. `apps/atlas-monitor/src` turns its results into
 QObjects and models and owns the threads. QML only displays and calls
 invokables.
 
-## Shared code: atlas-core and Atlas.Ui
+## Shared code: atlas-framework
 
-- atlas-core comes from the atlasos-updater repo:
-  `[workspace.dependencies] atlas-core = { git, rev }` in the workspace
-  `Cargo.toml`. Cargo.lock records the same commit. Moving the pin: push the
-  atlasos-updater commit, change `rev`, run `cargo update -p atlas-core`,
-  commit `Cargo.toml` and `Cargo.lock` together. CI fails if they disagree.
+- The Rust side is the `atlas-framework-ui` crate (which brings
+  `atlas-framework-core` and `atlas-framework-system`):
+  `[workspace.dependencies] atlas-framework-ui = { git, rev }` in the
+  workspace `Cargo.toml`. Cargo.lock records the same commit. It gives the
+  start (`app!` in `lib.rs`; `atlas_app_init` and `atlas_app_ready` in
+  `main.cpp`), the settings file, logging and crash reports. It is compiled
+  in, so a change reaches the app when the pin moves: push the
+  atlas-framework commit, change `rev`, run
+  `cargo update -p atlas-framework-ui`, commit `Cargo.toml` and `Cargo.lock`
+  together. CI fails if they disagree.
 - Atlas.Ui comes from [atlas-framework](https://github.com/EternalCoder454/atlas-framework)
   (read its `docs/DESIGN.md`, "How apps use it"). It is installed like Kirigami, by the `atlas-ui` RPM, at
   `/usr/lib64/qt6/qml/Atlas/Ui`: the QML imports it and nothing links it.
@@ -67,8 +72,9 @@ its compatibility rules. Code that only Atlas Monitor needs stays here.
 - **Nothing runs unless the window is open.** No tray, no autostart, no
   daemon. Closing the window quits the app. Automatic easing (Energy Saver)
   works only while the window is open and is undone when it closes.
-- `main.cpp` is glue only: logging and the crash hook first, the Qt Quick
-  backend, the single-instance service, the QML engine. All logic is Rust.
+- `main.cpp` is glue only: `atlas_app_init` first (logging, crash hooks,
+  the app ID), the Qt Quick backend, `atlas_app_ready`, the
+  single-instance service, the QML engine. All logic is Rust.
 
 ### Rendering
 
@@ -551,7 +557,8 @@ it.
 ## Settings
 
 `~/.config/atlas-monitorrc` (KConfig INI), read and written by
-`src/settings.rs` (atomic write through a temp file and rename):
+`src/settings.rs`, through atlas-framework's settings (atomic write through
+a temp file and rename, synced to disk):
 
 ```ini
 [General]
@@ -561,20 +568,23 @@ GpuRendering=false     ; applies on the next start
 
 Missing or unparseable values fall back to the defaults; an interval that
 isn't offered snaps to the nearest one. A failed save is logged and the
-setting keeps its old value on screen.
+setting keeps its old value on screen. What the window saves as it is used
+(the page, folded sections, its size) goes to a writer thread instead, so
+the GUI thread never waits for the disk; `main()` waits for it at the end.
 
 ## Crash reports and logging
 
-- `atlas_core::crash`: `crash::install` is the first call in `main()`, and the
-  Qt message handler calls `record_fatal` on `QtFatalMsg`. Reports are saved
-  only when the user turned crash reports on, which happens in Atlas Updater;
-  Atlas Updater is also where they are reviewed and sent. Atlas Monitor
-  collects nothing else. See "Privacy and crash reports" in Atlas Updater's
-  DESIGN.md.
-- Logging: the Rust `log` macros write one line per message to stderr, which
-  ends up in the user's journal when Plasma starts the app. Level from `ATLAS_MONITOR_LOG`
-  (`error`, `warn` (default), `info`, `debug`, `trace`, `off`). Qt's messages
-  go to stderr through the same handler that records fatal ones.
+- atlas-framework's crash reports: `atlas_app_init`, called first in
+  `main()` after two environment variables are set, installs the panic hook and a Qt message handler that saves a
+  report on `QtFatalMsg`. Reports are saved only when the user turned crash
+  reports on, which happens in Atlas Updater; Atlas Updater is also where
+  they are reviewed and sent. Atlas Monitor collects nothing else. See
+  "Privacy and crash reports" in Atlas Updater's DESIGN.md.
+- Logging: the Rust `log` macros go to the systemd journal, identifier
+  `atlas-monitor` (`journalctl --user -t atlas-monitor`), or to stderr when
+  there is no journal. Level from `ATLAS_LOG` (`error`, `warn`, `info`
+  (default), `debug`, `trace`, `off`). Qt's messages go where Qt sends them,
+  through the same handler that records fatal ones.
 
 ## System app (AtlasOS side)
 

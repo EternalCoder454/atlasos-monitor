@@ -10,9 +10,10 @@ repository = "https://github.com/EternalCoder454/atlasos-monitor"
 rust-version = "1.89"
 
 [workspace.dependencies]
-# atlas-core comes from atlasos-updater; to move the pin, see CLAUDE.md.
-# (Atlas.Ui is no longer tied to it: it is the installed atlas-ui package.)
-atlas-core = { git = "https://github.com/EternalCoder454/atlasos-updater", rev = "20ff489e5e00c0efaf565bf650e84994277dde6d" }
+# The atlas-framework crates (startup, settings, logging, crash reports); to
+# move the pin, see CLAUDE.md. Atlas.Ui is not pinned here: it is the
+# installed atlas-ui package.
+atlas-framework-ui = { git = "https://github.com/EternalCoder454/atlas-framework", rev = "e62871811d07f112b4739b8926e2ec4e70ab21fc" }
 
 [profile.release]
 lto = "thin"

@@ -21,7 +21,7 @@ BuildRequires:  gcc-c++
 BuildRequires:  cmake
 BuildRequires:  ninja-build
 BuildRequires:  corrosion
-# Cargo fetches atlas-core from atlasos-updater.
+# Cargo fetches the atlas-framework crates from GitHub.
 BuildRequires:  git-core
 BuildRequires:  desktop-file-utils
 BuildRequires:  libappstream-glib
@@ -59,13 +59,20 @@ start and stop services, and choose what starts when you log in.
 
 %build
 # NETWORK: cargo (Corrosion runs it with --locked) fetches crates.io and the
-# pinned atlas-core during %%build. That works in podman and with `rpmbuild`
+# pinned atlas-framework crates during %%build. That works in podman and with `rpmbuild`
 # on a networked machine, not in an offline mock/Koji build.
 # CARGO_HOME from the environment keeps a crate cache between builds
 # (CLAUDE.md mounts one); otherwise a fresh one in the build dir.
 export CARGO_HOME=${CARGO_HOME:-%{_builddir}/cargo-home}
 # Fedora's Rust flags (hardening, build-id, ...), also used by Corrosion's cargo.
-export RUSTFLAGS="%{build_rustflags}"
+# The remaps keep build paths (panic locations, assert file names) out of the
+# package, as atlas-framework's DESIGN.md asks of apps using its crates.
+# HOST_CXXFLAGS reaches only the C++ that cargo's build scripts compile
+# (cc-rs reads HOST_ when not cross-compiling; CMake ignores it), which
+# otherwise gets no flags from here. (cc-rs then ignores a plain CXXFLAGS,
+# which this spec doesn't export.)
+export RUSTFLAGS="%{build_rustflags} --remap-path-prefix=$PWD=. --remap-path-prefix=$CARGO_HOME=cargo"
+export HOST_CXXFLAGS="-ffile-prefix-map=$PWD=. -ffile-prefix-map=$CARGO_HOME=cargo"
 export CARGO_PROFILE_RELEASE_STRIP=none
 # (checked with rpmspec --eval: %%cmake honours _vpath_srcdir, not __cmake_source_dir)
 %global _vpath_srcdir apps/atlas-monitor
