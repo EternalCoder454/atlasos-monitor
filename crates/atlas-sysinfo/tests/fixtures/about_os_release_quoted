@@ -1,0 +1,9 @@
+# Quoting as os-release(5) allows it.
+NAME='Odd "Linux"'
+VERSION="1.0 \"Dusk\" \\ \$x"
+PRETTY_NAME=Unquoted\ Name
+LOGO="odd-logo" # trailing comment
+HOME_URL=https://example.org/
+NOT A LINE
+=novalue
+HOME_URL="https://example.org/override"

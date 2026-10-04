@@ -8,6 +8,7 @@ mod details;
 mod devices;
 mod energy;
 mod graphics;
+mod hardware;
 mod processes;
 mod rows;
 mod sampler;
@@ -18,6 +19,7 @@ mod services;
 mod settings;
 mod startup;
 mod stats;
+mod sysinfo;
 
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::sync::OnceLock;
@@ -57,6 +59,8 @@ pub struct AtlasObjects {
     pub services: *mut c_void,
     pub details: *mut c_void,
     pub energy: *mut c_void,
+    pub system: *mut c_void,
+    pub hardware: *mut c_void,
 }
 
 /// Called once from `main.cpp`. Makes every QObject and starts the sampling
@@ -87,6 +91,9 @@ pub unsafe extern "C" fn atlas_objects_new(icon_theme: *const c_char) -> AtlasOb
     let mut services = services::qobject::service_model_make_unique();
     let mut details = details::qobject::process_details_make_unique();
     let mut energy = energy::qobject::energy_saver_make_unique();
+    // Read when their pages first open.
+    let system = sysinfo::qobject::system_info_make_unique();
+    let hardware = hardware::qobject::hardware_list_make_unique();
     sensors
         .pin_mut()
         .set_available(atlas_sysinfo::sensors::available());
@@ -132,6 +139,8 @@ pub unsafe extern "C" fn atlas_objects_new(icon_theme: *const c_char) -> AtlasOb
         services: services.into_raw().cast(),
         details: details.into_raw().cast(),
         energy: energy.into_raw().cast(),
+        system: system.into_raw().cast(),
+        hardware: hardware.into_raw().cast(),
     }
 }
 

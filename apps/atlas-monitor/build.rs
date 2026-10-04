@@ -16,5 +16,7 @@ fn main() {
         .file("src/sensors.rs")
         .file("src/sampler.rs")
         .file("src/stats.rs")
+        .file("src/sysinfo.rs")
+        .file("src/hardware.rs")
         .build();
 }

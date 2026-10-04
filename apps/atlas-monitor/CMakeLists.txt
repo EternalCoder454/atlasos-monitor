@@ -12,6 +12,7 @@ include(GNUInstallDirs)
 find_package(Qt6 6.11 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Widgets)
 qt_policy(SET QTP0001 NEW)
 qt_policy(SET QTP0004 NEW)
+find_package(KF6CoreAddons REQUIRED)
 find_package(KF6DBusAddons REQUIRED)
 find_package(KF6WindowSystem REQUIRED)
 find_package(Corrosion REQUIRED)
@@ -44,13 +45,13 @@ qt_add_qml_module(atlas-monitor-app
     QML_FILES
         qml/Main.qml qml/Format.qml qml/OverviewPage.qml qml/CpuPage.qml qml/MemoryPage.qml
         qml/DiskPage.qml qml/NetworkPage.qml qml/GpuPage.qml qml/BatteryPage.qml qml/SensorsPage.qml qml/AppsPage.qml qml/StartupPage.qml qml/ServicesPage.qml qml/DetailsDialog.qml qml/EnergyPage.qml
-        qml/SettingsPage.qml qml/AboutPage.qml
+        qml/SettingsPage.qml qml/AboutPage.qml qml/SystemPage.qml qml/DevicesPage.qml
 )
 
 target_link_libraries(atlas-monitor-app PRIVATE
     atlas_monitor
     Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::Widgets
-    KF6::DBusAddons KF6::WindowSystem)
+    KF6::CoreAddons KF6::DBusAddons KF6::WindowSystem)
 
 install(TARGETS atlas-monitor-app RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES data/net.eterneon.atlas.monitor.desktop

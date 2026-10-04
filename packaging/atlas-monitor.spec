@@ -33,6 +33,7 @@ BuildRequires:  cmake(Qt6QuickControls2)
 BuildRequires:  cmake(Qt6Widgets)
 BuildRequires:  cmake(Qt6QmlTools)
 BuildRequires:  qt6-qtbase-devel
+BuildRequires:  cmake(KF6CoreAddons)
 BuildRequires:  cmake(KF6DBusAddons)
 BuildRequires:  cmake(KF6WindowSystem)
 # QML modules qmlcachegen resolves at build time (not linked). atlas-ui comes
@@ -52,7 +53,8 @@ Requires:       qt6-qtsvg
 %description
 Atlas Monitor shows your apps and what they use, the processor, memory, disks,
 network, graphics card, battery and sensors, with live charts. It can end apps,
-start and stop services, and choose what starts when you log in.
+start and stop services, and choose what starts when you log in. System Info
+and Devices show what the computer is made of and what is connected to it.
 
 %prep
 %autosetup -n atlas-monitor-%{version}

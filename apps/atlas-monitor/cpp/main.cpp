@@ -1,9 +1,12 @@
 // Starts Qt, makes the app single-instance, picks the Qt Quick backend and
 // loads the window. All app logic is in Rust (src/); this file only glues.
+#include <KCoreAddons>
 #include <KDBusService>
 #include <KWindowSystem>
 
 #include <QApplication>
+#include <QClipboard>
+#include <QCommandLineParser>
 #include <QEvent>
 #include <QIcon>
 #include <QPointer>
@@ -37,6 +40,8 @@ struct AtlasObjects {
     void *services;
     void *details;
     void *energy;
+    void *system;
+    void *hardware;
 };
 extern "C" AtlasObjects atlas_objects_new(const char *iconTheme);
 extern "C" const char *atlas_icon_search_paths(const char *iconTheme);
@@ -142,6 +147,58 @@ public:
     }
 };
 
+// What QML can't find out itself, for System Info: the versions of Qt and
+// KDE Frameworks this process runs on, the window system, and copying its
+// details to the clipboard.
+class Platform : public QObject
+{
+    Q_OBJECT
+    Q_PROPERTY(QString qtVersion READ qtVersion CONSTANT)
+    Q_PROPERTY(QString frameworksVersion READ frameworksVersion CONSTANT)
+    Q_PROPERTY(QString windowSystem READ windowSystem CONSTANT)
+public:
+    using QObject::QObject;
+    QString qtVersion() const
+    {
+        return QString::fromLatin1(qVersion());
+    }
+    QString frameworksVersion() const
+    {
+        return KCoreAddons::versionString();
+    }
+    QString windowSystem() const
+    {
+        const QString p = QGuiApplication::platformName();
+        if (p.startsWith(QLatin1String("wayland"))) {
+            return QStringLiteral("Wayland");
+        }
+        if (p == QLatin1String("xcb")) {
+            return QStringLiteral("X11");
+        }
+        return p;
+    }
+    Q_INVOKABLE void copy(const QString &text) const
+    {
+        QGuiApplication::clipboard()->setText(text);
+    }
+};
+
+// The page asked for with --page, as Main.qml's showPage takes it ("system",
+// "disk:nvme0n1"); "" for none. Main.qml checks it is a page: anything else
+// opens Overview. Only the length is bounded here, as no page key is long.
+static QString pageOption(const QCommandLineParser &parser, const QCommandLineOption &page)
+{
+    const QString name = parser.value(page).trimmed();
+    return name.size() <= 256 ? name : QString();
+}
+
+static QCommandLineOption pageOptionSpec()
+{
+    return QCommandLineOption(QStringLiteral("page"),
+                              QCoreApplication::translate("main", "Open the page <name>: overview, cpu, memory, system, devices, apps, services, …"),
+                              QStringLiteral("name"));
+}
+
 int main(int argc, char *argv[])
 {
     // First, before anything can start a thread: Qt's raster engine hands
@@ -178,6 +235,15 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
     // The display name, the window icon, and what Atlas.Ui's AtlasApp shows.
     atlas_app_ready();
+
+    // Before the single-instance check, so --help and --version answer
+    // here; --page goes to the running window if there is one.
+    QCommandLineParser parser;
+    parser.addHelpOption();
+    parser.addVersionOption();
+    const QCommandLineOption page = pageOptionSpec();
+    parser.addOption(page);
+    parser.process(app);
 
     // One instance per session: a second launch asks this one to show its
     // window (activateRequested) and exits.
@@ -216,11 +282,17 @@ int main(int argc, char *argv[])
         {"services", made.services},
         {"details", made.details},
         {"energy", made.energy},
+        {"system", made.system},
+        {"hardware", made.hardware},
     };
     ThemeIcons themeIcons;
     QQmlEngine::setObjectOwnership(&themeIcons, QQmlEngine::CppOwnership);
     QVariantMap initial;
     initial.insert(QStringLiteral("themeIcons"), QVariant::fromValue(static_cast<QObject *>(&themeIcons)));
+    Platform platform;
+    QQmlEngine::setObjectOwnership(&platform, QQmlEngine::CppOwnership);
+    initial.insert(QStringLiteral("platform"), QVariant::fromValue(static_cast<QObject *>(&platform)));
+    initial.insert(QStringLiteral("startPage"), pageOption(parser, page));
     for (const auto &[name, object] : objects) {
         auto *o = static_cast<QObject *>(object);
         QQmlEngine::setObjectOwnership(o, QQmlEngine::CppOwnership);
@@ -238,7 +310,20 @@ int main(int argc, char *argv[])
         if (window) {
             new PauseWhenUnseen(window, static_cast<QObject *>(made.sampler));
             closeOnQuitSignals(window);
-            QObject::connect(&service, &KDBusService::activateRequested, window, [window](const QStringList &, const QString &) {
+            QObject::connect(&service, &KDBusService::activateRequested, window, [window](const QStringList &args, const QString &) {
+                // The second launch's arguments, its own name first. A
+                // --page among them opens that page; parse() never exits.
+                QCommandLineParser second;
+                second.addHelpOption();
+                second.addVersionOption();
+                const QCommandLineOption page = pageOptionSpec();
+                second.addOption(page);
+                if (!args.isEmpty() && second.parse(args)) {
+                    const QString name = pageOption(second, page);
+                    if (!name.isEmpty()) {
+                        QMetaObject::invokeMethod(window, "openPage", Q_ARG(QVariant, name));
+                    }
+                }
                 // KDBusService put the second launch's activation token in the
                 // environment; on Wayland, KWin only lets a window take focus
                 // with one.

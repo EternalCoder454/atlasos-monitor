@@ -7,6 +7,7 @@
   <summary>See what your computer is doing and what is slowing it down</summary>
   <description>
     <p>Atlas Monitor shows your apps and what they use, the processor, memory, disks, network, graphics card, battery and sensors, with live charts. It can end apps that stop responding, start and stop services, and choose what starts when you log in.</p>
+    <p>System Info shows what the computer is: its system, desktop, hardware and how well its firmware protects it. Devices lists the keyboards, mice, USB devices and everything inside on the PCI bus.</p>
     <p>It never collects usage data. If it crashes, it can save a report with system information and resource use, but nothing is sent unless you choose to send it in Atlas Updater.</p>
   </description>
   <launchable type="desktop-id">net.eterneon.atlas.monitor.desktop</launchable>

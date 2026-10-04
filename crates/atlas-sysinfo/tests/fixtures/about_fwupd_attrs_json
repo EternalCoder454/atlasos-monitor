@@ -1,0 +1,1641 @@
+{
+  "type": "aa{sv}",
+  "data": [
+    [
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.Cet.Active"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "CET OS Support"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Control-flow Enforcement Technology"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "cpu"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.Cet.Active"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 1025
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 13
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 13
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.Fwupd.Plugins"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "fwupd plugins"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Firmware Updater Verification"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "core"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.Fwupd.Plugins"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 1025
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 10
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 10
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.Kernel.Tainted"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "Linux kernel"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Linux Kernel Verification"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "linux_tainted"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.Kernel.Tainted"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 1025
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 10
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 10
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.Kernel.Lockdown"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "Linux kernel lockdown"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Linux Kernel Lockdown"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "linux_lockdown"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.Kernel.Lockdown"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 9216
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 2
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 1
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.Kernel.Swap"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "Linux swap"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Linux Swap"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "linux_swap"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.Kernel.Swap"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 9216
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 8
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 7
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.Uefi.NxCompat"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "UEFI NX protection"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "UEFI NX Protection"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "uefi_mok"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.Uefi.NxCompat"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 9216
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 2
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 1
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.Uefi.SecureBoot"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "UEFI secure boot"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "UEFI Secure Boot"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "uefi_capsule"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.Uefi.SecureBoot"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 5120
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 2
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 1
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.Bios.CapsuleUpdates"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "BIOS firmware updates"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "BIOS Firmware Updates"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "uefi_esrt"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.9.6"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.Bios.CapsuleUpdates"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 1
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 1
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 1
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 1
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.Mei.OverrideStrap"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "csme16 override"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Intel Management Engine Override"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "intel_me_pci"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.5.0"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.Mei.OverrideStrap"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 1
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 1
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 5
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 5
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.Mei.Version"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "csme16 v16.1.30.2264"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Intel Management Engine Version"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "intel_me_pci"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.5.0"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.Mei.Version"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 1
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 1
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 3
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 3
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.PlatformDebugEnabled"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "Platform debugging"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Platform Debugging"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "msr"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.5.0"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.PlatformDebugEnabled"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 1
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 1
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 2
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 2
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.Spi.Bioswe"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "SPI write"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Firmware Write Protection"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "pci_bcr"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.5.0"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.Spi.Bioswe"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 1
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 1
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 2
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 2
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.SupportedCpu"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "Supported CPU"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Processor Security Checks"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "core"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.8.0"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.SupportedCpu"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 2049
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 1
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 3
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 3
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.Tpm.EmptyPcr"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "TPM empty PCRs"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "TPM Platform Configuration"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "tpm"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.7.2"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.Tpm.EmptyPcr"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 1
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 1
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 3
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 3
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.Tpm.Version20"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "TPM v2.0"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "TPM v2.0"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "tpm"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.5.0"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.Tpm.Version20"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 1
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 1
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 11
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 11
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.Uefi.BootserviceVars"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "UEFI bootservice variables"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "UEFI Bootservice Variables"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "uefi_capsule"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.9.3"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.Uefi.BootserviceVars"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 1
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 1
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 5
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 5
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.Spi.Ble"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "SPI lock"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Firmware Write Protection Lock"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "pci_bcr"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.5.0"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.Spi.Ble"
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 1
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 2
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 1
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.Spi.Descriptor"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "SPI BIOS Descriptor"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Firmware BIOS Descriptor"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "mtd"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.6.0"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.Spi.Descriptor"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 2048
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 1
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 4
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 5
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.Spi.SmmBwp"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "SPI BIOS region"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Firmware BIOS Region"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "pci_bcr"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.5.0"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.Spi.SmmBwp"
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 1
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 6
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 5
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.IntelBootguard.Enabled"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "Intel BootGuard"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Intel BootGuard"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "intel_me_pci"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.5.0"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.IntelBootguard.Enabled"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 1
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 2
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 1
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 1
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.IntelGds"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "Intel GDS mitigation"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Intel GDS Mitigation"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "msr"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.9.4"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.IntelGds"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 1
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 2
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 1
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 1
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.PlatformDebugLocked"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "Platform debugging"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Platform Debugging"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "msr"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.8.0"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.PlatformDebugLocked"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 1
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 2
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 5
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 5
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.Tpm.ReconstructionPcr0"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "TPM PCR0 reconstruction"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "TPM Reconstruction"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "tpm"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.5.0"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.Tpm.ReconstructionPcr0"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 2049
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 2
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 3
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 3
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.IntelBootguard.Acm"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "Intel BootGuard ACM protected"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Intel BootGuard ACM Protected"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "intel_me_pci"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.5.0"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.IntelBootguard.Acm"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 2048
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 2
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 4
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 3
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.IntelBootguard.Otp"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "Intel BootGuard OTP fuse"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Intel BootGuard Fuse"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "intel_me_pci"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.5.0"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.IntelBootguard.Otp"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 2048
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 2
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 4
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 3
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.IntelBootguard.Verified"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "Intel BootGuard verified boot"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Intel BootGuard Verified Boot"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "intel_me_pci"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.5.0"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.IntelBootguard.Verified"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 2048
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 2
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 4
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 3
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.Iommu"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "IOMMU"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "IOMMU Protection"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "iommu"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.5.0"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.Iommu"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 14336
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 2
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 12
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 1
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.Mtd.Locked"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "Locked MTD"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Locked MTD"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "mtd"
+        },
+        "Version": {
+          "type": "s",
+          "data": "2.1.7"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.Mtd.Locked"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 2048
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 2
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 6
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 5
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.Cet.Enabled"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "CET Platform"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Control-flow Enforcement Technology"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "cpu"
+        },
+        "Version": {
+          "type": "s",
+          "data": "2.0.0"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.Cet.Enabled"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 1
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 3
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 13
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 13
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.PrebootDma"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "Pre-boot DMA protection"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Pre-boot DMA Protection"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "acpi_dmar"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.8.0"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.PrebootDma"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 1
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 3
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 1
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 1
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.IntelBootguard.Policy"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "Intel BootGuard error policy"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Intel BootGuard Error Policy"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "intel_me_pci"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.5.0"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.IntelBootguard.Policy"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 2048
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 3
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 4
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 3
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.SuspendToIdle"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "Suspend-to-idle"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Suspend To Idle"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "acpi_facp"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.5.0"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.SuspendToIdle"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 12288
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 3
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 2
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 1
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.SuspendToRam"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "Suspend-to-ram"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Suspend To RAM"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "linux_sleep"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.5.0"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.SuspendToRam"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 12288
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 3
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 1
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 2
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.Uefi.MemoryProtection"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "UEFI memory protection"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "UEFI Memory Protection"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "uefi_mok"
+        },
+        "Version": {
+          "type": "s",
+          "data": "2.0.7"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.Uefi.MemoryProtection"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 2048
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 3
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 6
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 5
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.Smap"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "SMAP"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Supervisor Mode Access Prevention"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "cpu"
+        },
+        "Version": {
+          "type": "s",
+          "data": "2.0.0"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.Smap"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 1
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 4
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 1
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 1
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.EncryptedRam"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "Encrypted RAM"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Encrypted RAM"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "cpu"
+        },
+        "Version": {
+          "type": "s",
+          "data": "1.5.0"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.EncryptedRam"
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 4
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 14
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 1
+        }
+      },
+      {
+        "AppstreamId": {
+          "type": "s",
+          "data": "org.fwupd.hsi.HwDiskEncryption"
+        },
+        "Created": {
+          "type": "t",
+          "data": 1791083515
+        },
+        "Name": {
+          "type": "s",
+          "data": "Hardware disk encryption"
+        },
+        "Summary": {
+          "type": "s",
+          "data": "Hardware Disk Encryption"
+        },
+        "Plugin": {
+          "type": "s",
+          "data": "nvme"
+        },
+        "Version": {
+          "type": "s",
+          "data": "2.1.7"
+        },
+        "Uri": {
+          "type": "s",
+          "data": "https://fwupd.github.io/libfwupdplugin/hsi.html#org.fwupd.hsi.HwDiskEncryption"
+        },
+        "Flags": {
+          "type": "t",
+          "data": 4096
+        },
+        "HsiLevel": {
+          "type": "u",
+          "data": 4
+        },
+        "HsiResult": {
+          "type": "u",
+          "data": 14
+        },
+        "HsiResultSuccess": {
+          "type": "u",
+          "data": 1
+        }
+      }
+    ]
+  ]
+}

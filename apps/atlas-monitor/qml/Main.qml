@@ -26,7 +26,14 @@ QQC2.ApplicationWindow {
     required property var services
     required property var details
     required property var energy
+    required property var system
+    required property var hardware
     required property var themeIcons
+    // Qt's and KDE Frameworks' versions, the window system, the clipboard
+    // (main.cpp's Platform).
+    required property var platform
+    // The page --page asked for, "" for the one left open last time.
+    required property string startPage
 
     // Each page's icon, all from one set so they match. Dracula (AtlasOS's
     // theme) draws the usual names in a mix of outline, solid and colour, and
@@ -35,6 +42,13 @@ QQC2.ApplicationWindow {
     // Others get Breeze's monochrome names. Breeze's chip is named for GPU
     // effects, and it has no graphics card, so the GPU gets the display.
     readonly property var icons: {
+        // Pages that came after the sets, each from the first name the
+        // theme has, outside the all-or-nothing check below.
+        const first = names => names.find(n => themeIcons.has(n)) ?? names[names.length - 1];
+        const later = {
+            system: first(["documentinfo-symbolic", "dialog-information-symbolic", "help-about-symbolic"]),
+            devices: first(["device-notifier-symbolic", "drive-removable-media-usb-symbolic", "computer-symbolic"])
+        };
         const solid = {
             overview: "gpm-monitor",
             cpu: "cpu-frequency-indicator",
@@ -53,9 +67,9 @@ QQC2.ApplicationWindow {
             about: "hb-activity"
         };
         if (Object.values(solid).every(name => themeIcons.has(name))) {
-            return solid;
+            return Object.assign(solid, later);
         }
-        return {
+        return Object.assign({
             overview: "dashboard-show",
             cpu: "show-gpu-effects-symbolic",
             memory: "media-flash-memory-stick-symbolic",
@@ -71,7 +85,7 @@ QQC2.ApplicationWindow {
             services: "network-server-symbolic",
             settings: "configure",
             about: "help-about-symbolic"
-        };
+        }, later);
     }
 
     title: qsTr("Atlas Monitor")
@@ -117,6 +131,8 @@ QQC2.ApplicationWindow {
             "startup": startupPage,
             "services": servicesPage,
             "energy": energyPage,
+            "system": systemPage,
+            "devices": devicesPage,
             "settings": settingsPage,
             "about": aboutPage
         })
@@ -340,6 +356,16 @@ QQC2.ApplicationWindow {
                 }
                 NavHeading {
                     text: qsTr("System")
+                }
+                NavItem {
+                    page: "system"
+                    text: qsTr("System Info")
+                    icon.name: root.icons.system
+                }
+                NavItem {
+                    page: "devices"
+                    text: qsTr("Devices")
+                    icon.name: root.icons.devices
                 }
                 NavItem {
                     page: "apps"
@@ -594,6 +620,20 @@ QQC2.ApplicationWindow {
         }
     }
     Component {
+        id: systemPage
+        SystemPage {
+            system: root.system
+            platform: root.platform
+            cards: root.gpu.cardLabels
+        }
+    }
+    Component {
+        id: devicesPage
+        DevicesPage {
+            hardware: root.hardware
+        }
+    }
+    Component {
         id: settingsPage
         SettingsPage {
             backend: root.backend
@@ -639,11 +679,10 @@ QQC2.ApplicationWindow {
         onTriggered: root.pendingPage = ""
     }
 
-    Component.onCompleted: {
-        if (backend.windowMaximized) {
-            showMaximized();
-        }
-        const last = backend.lastPage;
+    // A page by name, from --page or the one left open last time: a device's
+    // page waits for its list if that hasn't come yet, and anything that
+    // isn't a page opens Overview.
+    function restore(last) {
         const colon = last.indexOf(":");
         const lists = {
             "disk": devices.diskNames,
@@ -668,7 +707,24 @@ QQC2.ApplicationWindow {
                 forgetPending.start();
             }
         }
+    }
+
+    // --page from a second launch, which main.cpp passes on.
+    function openPage(name) {
+        restore(String(name));
+    }
+
+    Component.onCompleted: {
+        if (backend.windowMaximized) {
+            showMaximized();
+        }
+        restore(startPage !== "" ? startPage : backend.lastPage);
         started = true;
+        // A page asked for is saved as if picked, as it is from a second
+        // launch.
+        if (startPage !== "") {
+            backend.savePage(currentPage);
+        }
     }
 
     // Size and maximized state are saved once a change settles: maximizing

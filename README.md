@@ -2,7 +2,11 @@
 
 The system monitor of [AtlasOS](https://github.com/EternalCoder454/AtlasOS):
 your apps and what they use, the processor, memory, disks, network, graphics
-card, battery and sensors, services and startup items.
+card, battery and sensors, services and startup items. Its System Info and
+Devices pages take the place of KDE Info Center.
+
+`atlas-monitor --page <name>` opens a page (`system`, `devices`, `apps`,
+`disk:nvme0n1`, ...), in the running window if there is one.
 
 It comes with AtlasOS and updates with it, through Atlas Updater. It is built
 for AtlasOS (Fedora Kinoite 44) only. For other distributions, see the

@@ -13,7 +13,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 /// Where Fedora (hwdata) and others keep the PCI ID database.
-const PCI_IDS: [&str; 3] = [
+pub(crate) const PCI_IDS: [&str; 3] = [
     "/usr/share/hwdata/pci.ids",
     "/usr/share/misc/pci.ids",
     "/usr/share/pci.ids",

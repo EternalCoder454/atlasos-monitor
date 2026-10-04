@@ -20,12 +20,16 @@
 //! - [`ease`]: Energy Saver, easing off busy applications and putting them back.
 //! - [`health`]: the short list of what is wrong with the machine.
 //! - [`sysmem`]: Atlas Monitor's own memory use, for Settings.
+//! - [`about`]: what this computer is, for System Info.
+//! - [`hardware`]: PCI, USB and input devices, for Devices.
 
+pub mod about;
 pub mod apps;
 pub mod autostart;
 pub mod ease;
 pub mod files;
 pub mod gpu;
+pub mod hardware;
 pub mod health;
 pub mod power;
 pub mod process;
@@ -35,3 +39,22 @@ pub mod smart;
 pub mod stats;
 pub mod sysfs;
 pub mod sysmem;
+
+/// A character that changes how text around it is shown without being seen
+/// itself: bidirectional overrides and isolates, zero-width characters, the
+/// byte order mark and the like (Unicode's format characters). A device
+/// could use them to make its name read as another's, so text from devices
+/// and firmware leaves them out.
+pub(crate) fn invisible(c: char) -> bool {
+    matches!(
+        c,
+        '\u{00AD}'
+            | '\u{061C}'
+            | '\u{180E}'
+            | '\u{200B}'..='\u{200F}'
+            | '\u{202A}'..='\u{202E}'
+            | '\u{2060}'..='\u{206F}'
+            | '\u{FEFF}'
+            | '\u{FFF9}'..='\u{FFFB}'
+    )
+}
