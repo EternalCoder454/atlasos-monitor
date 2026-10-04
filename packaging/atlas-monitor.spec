@@ -72,9 +72,16 @@ export CARGO_HOME=${CARGO_HOME:-%{_builddir}/cargo-home}
 # HOST_CXXFLAGS reaches only the C++ that cargo's build scripts compile
 # (cc-rs reads HOST_ when not cross-compiling; CMake ignores it), which
 # otherwise gets no flags from here. (cc-rs then ignores a plain CXXFLAGS,
-# which this spec doesn't export.)
+# which is only for CMake.)
+# CFLAGS and CXXFLAGS are Fedora's plus the same remap for the C++ CMake
+# builds (%%cmake keeps them when set). Without it the build dir, a random
+# mktemp one, goes into the debug info and so into the linker's build ID,
+# and two builds of one commit differ. These flags split on spaces, so
+# _topdir must have none (build-rpm.sh's hasn't).
 export RUSTFLAGS="%{build_rustflags} --remap-path-prefix=$PWD=. --remap-path-prefix=$CARGO_HOME=cargo"
 export HOST_CXXFLAGS="-ffile-prefix-map=$PWD=. -ffile-prefix-map=$CARGO_HOME=cargo"
+export CFLAGS="%{build_cflags} -ffile-prefix-map=$PWD=."
+export CXXFLAGS="%{build_cxxflags} -ffile-prefix-map=$PWD=."
 export CARGO_PROFILE_RELEASE_STRIP=none
 # (checked with rpmspec --eval: %%cmake honours _vpath_srcdir, not __cmake_source_dir)
 %global _vpath_srcdir apps/atlas-monitor
@@ -88,6 +95,14 @@ install -Dpm0644 apps/atlas-monitor/data/dnf/protected.d/atlas-monitor.conf \
     %{buildroot}%{_sysconfdir}/dnf/protected.d/atlas-monitor.conf
 
 %check
+# No path into the build tree (checked as well as set: see %%build).
+# grep: 0 = found, 1 = not found, anything else (no binary) fails too.
+rc=0
+grep -qF "%{_builddir}" %{buildroot}%{_bindir}/atlas-monitor || rc=$?
+if [ "$rc" != 1 ]; then
+    echo "atlas-monitor holds the build path %{_builddir} (grep status $rc)" >&2
+    exit 1
+fi
 desktop-file-validate %{buildroot}%{_datadir}/applications/net.eterneon.atlas.monitor.desktop
 appstream-util validate-relax --nonet \
     %{buildroot}%{_datadir}/metainfo/net.eterneon.atlas.monitor.metainfo.xml
