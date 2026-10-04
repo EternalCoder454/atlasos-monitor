@@ -179,22 +179,28 @@ QQC2.ApplicationWindow {
     }
 
     // A group's name above its entries; hidden when the sidebar is icons only.
+    // Small capitals, as the Go version's HARDWARE and SYSTEM.
     component NavHeading: QQC2.Label {
         Layout.fillWidth: true
-        Layout.topMargin: Kirigami.Units.largeSpacing
+        Layout.topMargin: Kirigami.Units.largeSpacing * 1.5
         Layout.bottomMargin: Kirigami.Units.smallSpacing
         Layout.leftMargin: Kirigami.Units.largeSpacing
         visible: !root.compact
-        font: Kirigami.Theme.smallFont
-        opacity: 0.6
+        font.family: Kirigami.Theme.smallFont.family
+        font.pointSize: Kirigami.Theme.smallFont.pointSize * 0.95
+        font.weight: Font.DemiBold
+        font.capitalization: Font.AllUppercase
+        font.letterSpacing: 0.7
+        opacity: 0.48
         elide: Text.ElideRight
+        Accessible.role: Accessible.Heading
     }
 
     // Disk and Network: a group with an entry and its live rate per device.
     // Graphics cards (load) and batteries (percent charged) are a group
     // when there are two or more.
     // Compact, the group is one icon that opens the first device.
-    component DeviceGroup: SidebarGroup {
+    component DeviceGroup: NavGroup {
         id: group
         required property string kind
         property list<string> names
@@ -212,7 +218,7 @@ QQC2.ApplicationWindow {
             // None while hidden: a lone card's group still has its name,
             // and the row would format its load every tick for nothing.
             model: group.visible ? group.names.length : 0
-            SidebarItem {
+            NavButton {
                 required property int index
                 readonly property string page: group.kind + ":" + group.names[index]
                 Layout.fillWidth: true
@@ -231,7 +237,7 @@ QQC2.ApplicationWindow {
         return isNaN(v) ? "" : Format.percent(v);
     }
 
-    component NavItem: SidebarItem {
+    component NavItem: NavButton {
         required property string page
         Layout.fillWidth: true
         compact: root.compact
@@ -250,7 +256,9 @@ QQC2.ApplicationWindow {
             id: sidebar
             Layout.fillHeight: true
             Layout.preferredWidth: root.compact ? Kirigami.Units.gridUnit * 3.6 : Kirigami.Units.gridUnit * 12.5
-            color: Qt.tint(Kirigami.Theme.backgroundColor, Qt.alpha(Kirigami.Theme.highlightColor, 0.07))
+            // A neutral shade off the page's, as the Go version and Task
+            // Manager: the pages' colours are the resources'.
+            color: Qt.tint(Kirigami.Theme.backgroundColor, Qt.alpha(Kirigami.Theme.textColor, 0.04))
 
             Behavior on Layout.preferredWidth {
                 NumberAnimation {

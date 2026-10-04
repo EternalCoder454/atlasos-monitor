@@ -253,6 +253,9 @@ Item {
                     role: "memory",
                     width: 5,
                     align: Qt.AlignRight,
+                    // Tinted as the Go version's: faint at a few hundred
+                    // megabytes, full at 4 GiB.
+                    heat: 4294967296,
                     text: v => Format.size(v)
                 },
                 {

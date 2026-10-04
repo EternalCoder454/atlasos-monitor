@@ -35,6 +35,15 @@ pub mod qobject {
         #[qproperty(f64, cpu_usage, cxx_name = "cpuUsage")]
         #[qproperty(f64, memory_usage, cxx_name = "memoryUsage")]
         #[qproperty(QList_f64, gpu_usages, cxx_name = "gpuUsages")]
+        /// The same figures' last minute, for the Overview's tiles: the
+        /// processor's and memory's, then one history per disk, interface
+        /// and card in the order of their lists, each padded at the front
+        /// with NaN to 60 samples so the page can cut them apart.
+        #[qproperty(QList_f64, cpu_trend, cxx_name = "cpuTrend")]
+        #[qproperty(QList_f64, memory_trend, cxx_name = "memoryTrend")]
+        #[qproperty(QList_f64, disk_trends, cxx_name = "diskTrends")]
+        #[qproperty(QList_f64, net_trends, cxx_name = "netTrends")]
+        #[qproperty(QList_f64, gpu_trends, cxx_name = "gpuTrends")]
         #[namespace = "atlas_monitor"]
         type DeviceList = super::DeviceListRust;
 
@@ -187,6 +196,16 @@ pub struct DeviceListRust {
     cpu_usage: f64,
     memory_usage: f64,
     gpu_usages: QList<f64>,
+    cpu_trend: QList<f64>,
+    memory_trend: QList<f64>,
+    disk_trends: QList<f64>,
+    net_trends: QList<f64>,
+    gpu_trends: QList<f64>,
+    cpu_series: Series,
+    memory_series: Series,
+    disk_series: Histories,
+    net_series: Histories,
+    gpu_series: Histories,
     /// The listed interfaces' kernel names, in order, to match rates to.
     interfaces: Vec<String>,
     /// The interfaces to list, in the system's order, and the default
@@ -211,6 +230,16 @@ impl Default for DeviceListRust {
             cpu_usage: f64::NAN,
             memory_usage: f64::NAN,
             gpu_usages: QList::default(),
+            cpu_trend: QList::default(),
+            memory_trend: QList::default(),
+            disk_trends: QList::default(),
+            net_trends: QList::default(),
+            gpu_trends: QList::default(),
+            cpu_series: Series::default(),
+            memory_series: Series::default(),
+            disk_series: Histories::default(),
+            net_series: Histories::default(),
+            gpu_series: Histories::default(),
             interfaces: Vec::new(),
             net_listed: Vec::new(),
             route: None,
@@ -226,6 +255,8 @@ impl qobject::DeviceList {
             let names = strings(disks.iter().map(|d| d.name.as_str()));
             let labels = strings(disks.iter().map(Disk::label));
             // Labels before names: a row is made per name and reads its label.
+            let listed: Vec<String> = disks.iter().map(|d| d.name.clone()).collect();
+            self.as_mut().rust_mut().disk_series.relist(&listed);
             if names != *self.disk_names() || labels != *self.disk_labels() {
                 self.as_mut().set_disk_labels(labels);
                 self.as_mut().set_disk_names(names);
@@ -255,24 +286,34 @@ impl qobject::DeviceList {
             let listed = active_first(&self.rust().net_listed, self.rust().route.as_deref());
             let names = strings(listed.iter().map(|(n, _)| n.as_str()));
             if names != *self.net_names() {
-                self.as_mut().rust_mut().interfaces =
-                    listed.iter().map(|(n, _)| n.clone()).collect();
+                let interfaces: Vec<String> = listed.iter().map(|(n, _)| n.clone()).collect();
+                self.as_mut().rust_mut().net_series.relist(&interfaces);
+                self.as_mut().rust_mut().interfaces = interfaces;
                 self.as_mut()
                     .set_net_labels(strings(listed.iter().map(|(_, l)| l.as_str())));
                 self.as_mut().set_net_names(names);
             }
         }
         // Rates every tick: the disks' come in the list's order.
-        self.as_mut().set_disk_rates(rates(
-            d.disk_io.iter().map(|io| io.read_rate + io.write_rate),
-        ));
-        let net = rates(self.rust().interfaces.iter().map(|name| {
-            d.net_io
-                .iter()
-                .find(|io| io.name == *name)
-                .map_or(f64::NAN, |io| io.rx_rate + io.tx_rate)
-        }));
-        self.as_mut().set_net_rates(net);
+        let disk: Vec<f64> = d
+            .disk_io
+            .iter()
+            .map(|io| io.read_rate + io.write_rate)
+            .collect();
+        let net: Vec<f64> = self
+            .rust()
+            .interfaces
+            .iter()
+            .map(|name| {
+                d.net_io
+                    .iter()
+                    .find(|io| io.name == *name)
+                    .map_or(f64::NAN, |io| io.rx_rate + io.tx_rate)
+            })
+            .collect();
+        self.as_mut().trend(&d, &disk, &net);
+        self.as_mut().set_disk_rates(rates(disk.into_iter()));
+        self.as_mut().set_net_rates(rates(net.into_iter()));
         let cpu = d.cpu_usage.unwrap_or(f64::NAN);
         if !same(*self.cpu_usage(), cpu) {
             self.as_mut().set_cpu_usage(cpu);
@@ -286,6 +327,84 @@ impl qobject::DeviceList {
         if old.iter().count() != gpus.len() || old.iter().zip(&gpus).any(|(a, b)| !same(*a, *b)) {
             self.as_mut().set_gpu_usages(rates(gpus.into_iter()));
         }
+    }
+}
+
+impl qobject::DeviceList {
+    /// Adds this tick to the Overview's histories and publishes them.
+    fn trend(mut self: Pin<&mut Self>, d: &Devices, disk: &[f64], net: &[f64]) {
+        let gpus = d.gpu_usages.len();
+        let rust = self.as_mut().rust_mut().get_mut();
+        rust.cpu_series.record(d.cpu_usage.unwrap_or(f64::NAN));
+        rust.memory_series
+            .record(d.memory_usage.unwrap_or(f64::NAN));
+        rust.disk_series.push(disk);
+        rust.net_series.push(net);
+        // Cards have no names here: by place, as the list of loads.
+        if rust.gpu_series.len() != gpus {
+            let names: Vec<String> = (0..gpus).map(|i| i.to_string()).collect();
+            rust.gpu_series.relist(&names);
+        }
+        let cards: Vec<f64> = d.gpu_usages.iter().map(|u| u.unwrap_or(f64::NAN)).collect();
+        rust.gpu_series.push(&cards);
+        let cpu = rust.cpu_series.to_qlist();
+        let memory = rust.memory_series.to_qlist();
+        let disks = rates(rust.disk_series.flat());
+        let nets = rates(rust.net_series.flat());
+        let cards = rates(rust.gpu_series.flat());
+        self.as_mut().set_cpu_trend(cpu);
+        self.as_mut().set_memory_trend(memory);
+        self.as_mut().set_disk_trends(disks);
+        self.as_mut().set_net_trends(nets);
+        self.as_mut().set_gpu_trends(cards);
+    }
+}
+
+/// One kind's devices' histories, in the order of its list.
+#[derive(Debug, Default)]
+struct Histories(Vec<(String, Series)>);
+
+impl Histories {
+    /// Follows a new list: a device listed before keeps its history.
+    fn relist(&mut self, names: &[String]) {
+        let mut old = std::mem::take(&mut self.0);
+        self.0 = names
+            .iter()
+            .map(|n| {
+                let kept = old
+                    .iter()
+                    .position(|(m, _)| m == n)
+                    .map(|i| old.swap_remove(i).1);
+                (n.clone(), kept.unwrap_or_default())
+            })
+            .collect();
+    }
+
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// A sample per device, in the list's order. The samples come with the
+    /// list they were read for, so the two have one length; if they ever
+    /// don't, the tick is skipped rather than a sample given to the wrong
+    /// device.
+    fn push(&mut self, values: &[f64]) {
+        if values.len() != self.0.len() {
+            log::debug!(
+                "trend: {} samples for {} devices, tick skipped",
+                values.len(),
+                self.0.len()
+            );
+            return;
+        }
+        for ((_, s), &v) in self.0.iter_mut().zip(values) {
+            s.record(v);
+        }
+    }
+
+    /// Every history one after another, each padded to 60 samples.
+    fn flat(&self) -> impl Iterator<Item = f64> + '_ {
+        self.0.iter().flat_map(|(_, s)| s.padded())
     }
 }
 
@@ -615,6 +734,26 @@ mod tests {
             loopback,
             ..NetInterface::default()
         }
+    }
+
+    #[test]
+    fn a_relisted_device_keeps_its_history() {
+        let names = |v: &[&str]| -> Vec<String> { v.iter().map(|s| s.to_string()).collect() };
+        let mut h = Histories::default();
+        h.relist(&names(&["sda", "sdb"]));
+        h.push(&[1.0, 2.0]);
+        h.relist(&names(&["sdb", "sdc"]));
+        h.push(&[3.0, 4.0]);
+        // A tick read for another list is not shared out.
+        h.push(&[5.0]);
+        let flat: Vec<f64> = h.flat().collect();
+        assert_eq!(flat.len(), 2 * crate::series::LEN);
+        // sdb kept its 2 and gained 3; sdc is new, with only 4.
+        let sdb = &flat[..crate::series::LEN];
+        let sdc = &flat[crate::series::LEN..];
+        assert_eq!(sdb[crate::series::LEN - 2..], [2.0, 3.0]);
+        assert!(sdc[crate::series::LEN - 2].is_nan());
+        assert_eq!(sdc[crate::series::LEN - 1], 4.0);
     }
 
     #[test]

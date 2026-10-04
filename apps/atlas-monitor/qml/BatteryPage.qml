@@ -1,13 +1,14 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import Atlas.Ui
 
 // A battery, or every pack summed: its charge and draw over the last
 // minute, what it is doing, and how worn it is.
-AtlasPage {
+ResourcePage {
     id: page
 
     required property var battery
@@ -25,6 +26,9 @@ AtlasPage {
         })[page.b.status] ?? qsTr("Unknown")
     // The draw chart means nothing on a machine that never reports a rate.
     readonly property bool hasRate: page.b.watts > 0 || page.b.timeLeft > 0
+    readonly property color hue: Hues.on(Hues.battery, Kirigami.Theme.backgroundColor)
+    readonly property color powerHue: Hues.on(Hues.power, Kirigami.Theme.backgroundColor)
+    readonly property string rateName: page.b.status === "charging" ? qsTr("Charging rate") : qsTr("Power draw")
 
     // What the battery is doing and, when it can be estimated, for how long.
     readonly property string caption: {
@@ -56,92 +60,75 @@ AtlasPage {
     }
 
     title: page.b.label
+    headline: Format.percent(page.b.percent)
+    name: page.b.label
 
-    Section {
-        title: qsTr("Charge")
-        footer: page.caption
-
-        LiveChart {
-            Layout.fillWidth: true
-            Layout.preferredHeight: Kirigami.Units.gridUnit * 10
-            Layout.margins: Kirigami.Units.largeSpacing
-            values: page.b.chargeHistory
-            maximum: 100
-            label: qsTr("Charged")
-            valueText: Format.percent(page.b.percent)
-            topText: "100%"
-            spanText: Format.span(page.interval)
-        }
+    // What the battery is doing and, when it can be estimated, for how long.
+    QQC2.Label {
+        Layout.fillWidth: true
+        wrapMode: Text.Wrap
+        opacity: 0.75
+        text: page.caption
     }
 
-    Section {
-        title: page.b.status === "charging" ? qsTr("Charging Rate") : qsTr("Power Draw")
+    LiveChart {
+        Layout.fillWidth: true
+        Layout.preferredHeight: Kirigami.Units.gridUnit * 11
+        color: page.hue
+        values: page.b.chargeHistory
+        maximum: 100
+        label: qsTr("Charge")
+        valueText: Format.percent(page.b.percent)
+        topText: "100%"
+        spanText: Format.span(page.interval)
+    }
+    LiveChart {
+        Layout.fillWidth: true
+        Layout.preferredHeight: Kirigami.Units.gridUnit * 7
         visible: page.b.present && page.hasRate
-
-        LiveChart {
-            Layout.fillWidth: true
-            Layout.preferredHeight: Kirigami.Units.gridUnit * 6
-            Layout.margins: Kirigami.Units.largeSpacing
-            values: page.b.drawHistory
-            // A laptop at idle still shows a scale of 10 W.
-            minimumScale: 10
-            label: qsTr("Now")
-            valueText: Format.watts(page.b.watts)
-            topText: Format.watts(scaleTop)
-            spanText: Format.span(page.interval)
-        }
+        color: page.powerHue
+        values: page.b.drawHistory
+        // A laptop at idle still shows a scale of 10 W.
+        minimumScale: 10
+        label: page.rateName
+        valueText: Format.watts(page.b.watts)
+        topText: Format.watts(scaleTop)
+        spanText: Format.span(page.interval)
     }
 
-    Section {
-        title: qsTr("Details")
+    Flow {
+        Layout.fillWidth: true
+        Layout.topMargin: Kirigami.Units.smallSpacing
         visible: page.b.present
+        spacing: Kirigami.Units.gridUnit * 2
 
-        SectionRow {
-            title: qsTr("Status")
-            value: page.statusText
+        GridLayout {
+            columns: 3
+            columnSpacing: Kirigami.Units.gridUnit * 1.5
+            rowSpacing: Kirigami.Units.largeSpacing
+
+            BigStat {
+                label: qsTr("Charge")
+                value: Format.percent(page.b.percent)
+                rule: page.hue
+            }
+            BigStat {
+                label: page.rateName
+                value: Format.watts(page.b.watts)
+                // Ties it to the draw chart, which is shown only with a rate.
+                rule: page.hasRate ? page.powerHue : "transparent"
+            }
+            BigStat {
+                label: page.b.status === "charging" ? qsTr("Time until full") : qsTr("Time remaining")
+                value: Format.duration(page.b.timeLeft)
+            }
         }
-        SectionRow {
-            title: page.b.status === "charging" ? qsTr("Charging Rate") : qsTr("Power Draw")
-            value: Format.watts(page.b.watts)
-        }
-        SectionRow {
-            title: page.b.status === "charging" ? qsTr("Time Until Full") : qsTr("Time Remaining")
-            value: Format.duration(page.b.timeLeft)
-        }
-        SectionRow {
-            title: qsTr("Energy")
-            value: page.b.full > 0 ? Format.shareFormat.arg(Format.wh(page.b.energy)).arg(Format.wh(page.b.full)) : Format.dash
-        }
-        SectionRow {
-            title: qsTr("Battery Health")
+
+        DetailGrid {
+            // No wider than the page: a long address elides.
+            width: Math.min(implicitWidth, parent.width)
             // As the Go version: worn from 70%, heavily worn below.
-            value: isNaN(page.b.health) ? Format.dash : [qsTr("%1 of original"), qsTr("%1 of original · worn"), qsTr("%1 of original · heavily worn")][page.b.wear].arg(Format.percent(page.b.health))
-        }
-        SectionRow {
-            title: qsTr("Design Capacity")
-            value: Format.wh(page.b.design)
-        }
-        SectionRow {
-            title: qsTr("Charge Cycles")
-            value: page.b.cycles > 0 ? Format.count(page.b.cycles) : Format.dash
-        }
-        SectionRow {
-            visible: page.b.chargeLimit > 0
-            title: qsTr("Charge Limit")
-            value: page.b.chargeLimit + "%"
-        }
-        SectionRow {
-            title: qsTr("Voltage")
-            value: page.b.volts > 0 ? qsTr("%1 V").arg(Number(page.b.volts).toLocaleString(Qt.locale(), "f", 2)) : Format.dash
-        }
-        SectionRow {
-            title: qsTr("Power Adapter")
-            value: !page.b.hasAdapter ? Format.dash : page.b.onAc ? (page.b.adapters || qsTr("Connected")) : qsTr("Disconnected")
-        }
-        SectionRow {
-            visible: page.b.identity.length > 0
-            title: qsTr("Battery")
-            value: page.b.identity
+            entries: [[qsTr("Status"), page.statusText], [qsTr("Energy"), page.b.full > 0 ? Format.shareFormat.arg(Format.wh(page.b.energy)).arg(Format.wh(page.b.full)) : Format.dash], [qsTr("Battery health"), isNaN(page.b.health) ? Format.dash : [qsTr("%1 of original"), qsTr("%1 of original · worn"), qsTr("%1 of original · heavily worn")][page.b.wear].arg(Format.percent(page.b.health))], [qsTr("Design capacity"), Format.wh(page.b.design)], [qsTr("Charge cycles"), page.b.cycles > 0 ? Format.count(page.b.cycles) : Format.dash], [qsTr("Charge limit"), page.b.chargeLimit > 0 ? page.b.chargeLimit + "%" : ""], [qsTr("Voltage"), page.b.volts > 0 ? qsTr("%1 V").arg(Number(page.b.volts).toLocaleString(Qt.locale(), "f", 2)) : Format.dash], [qsTr("Power adapter"), !page.b.hasAdapter ? Format.dash : page.b.onAc ? (page.b.adapters || qsTr("Connected")) : qsTr("Disconnected")], [qsTr("Battery"), page.b.identity]]
         }
     }
 }

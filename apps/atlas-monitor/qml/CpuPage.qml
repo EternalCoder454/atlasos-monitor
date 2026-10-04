@@ -3,104 +3,94 @@ import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import Atlas.Ui
 
-// The processor: load over the last minute, each logical processor's load,
-// then what it is (model, cores, caches) and how fast and warm it runs.
-AtlasPage {
+// The processor: its load over the last minute, each logical processor's
+// load, how fast and warm it runs now, and what it is (cores, caches).
+ResourcePage {
     id: page
 
     required property var cpu
-    // The app's settings object: which sections are folded.
+    // The app's settings object: which parts are folded.
     required property var backend
     // The refresh interval in ms, for the chart's time caption.
     required property int interval
 
     // Until the first tick, figures show as a dash, not as 0.
     readonly property bool measured: page.cpu.threads > 0
+    readonly property color hue: Hues.on(Hues.cpu, Kirigami.Theme.backgroundColor)
+    readonly property bool coresFolded: page.backend.foldedSections.includes("cpu.cores")
 
     title: qsTr("Processor")
+    headline: page.measured ? Format.percent(page.cpu.usage) : Format.dash
+    name: page.cpu.model
 
-    Section {
-        title: page.cpu.model
-
-        LiveChart {
-            Layout.fillWidth: true
-            Layout.preferredHeight: Kirigami.Units.gridUnit * 11
-            Layout.margins: Kirigami.Units.largeSpacing
-            values: page.cpu.usageHistory
-            maximum: 100
-            label: qsTr("Load")
-            valueText: page.measured ? Format.percent(page.cpu.usage) : ""
-            topText: "100%"
-            spanText: Format.span(page.interval)
-        }
+    LiveChart {
+        Layout.fillWidth: true
+        Layout.preferredHeight: Kirigami.Units.gridUnit * 12.5
+        color: page.hue
+        values: page.cpu.usageHistory
+        maximum: 100
+        label: qsTr("% Utilization")
+        valueText: page.measured ? Format.percent(page.cpu.usage) : ""
+        topText: "100%"
+        spanText: Format.span(page.interval)
     }
 
-    Section {
-        id: cores
-        title: qsTr("Each Processor")
+    SectionLabel {
         visible: page.cpu.coreUsage.length > 0
-        // On a 32-thread machine the bars are the page's biggest drawing.
-        // Folded, they aren't drawn, and their binding stops reading the
-        // loads (it reads `folded` first).
+        text: qsTr("Logical Processors")
+        // On a 32-thread machine the grid is the page's biggest drawing.
+        // Folded, it isn't drawn, and its binding stops reading the loads.
         foldable: true
-        folded: page.backend.foldedSections.includes("cpu.cores")
-        onFoldRequested: fold => page.backend.setFolded("cpu.cores", fold)
-
-        MiniBars {
-            Layout.fillWidth: true
-            Layout.margins: Kirigami.Units.largeSpacing
-            values: cores.folded ? [] : page.cpu.coreUsage
-            maximum: 100
-        }
+        folded: page.coresFolded
+        onClicked: page.backend.setFolded("cpu.cores", !page.coresFolded)
     }
 
-    Section {
-        title: qsTr("Now")
-
-        SectionRow {
-            title: qsTr("Speed")
-            value: Format.mhz(page.cpu.frequency)
-        }
-        SectionRow {
-            title: qsTr("Temperature")
-            value: Format.celsius(page.cpu.temperature)
-        }
+    CoreGrid {
+        Layout.fillWidth: true
+        Layout.preferredHeight: implicitHeight
+        visible: !page.coresFolded && page.cpu.coreUsage.length > 0
+        values: page.coresFolded ? [] : page.cpu.coreUsage
+        color: page.hue
+        textColor: Kirigami.Theme.textColor
+        font: Kirigami.Theme.smallFont
+        labelFormat: qsTr("CPU %1")
+        minimumCellWidth: Kirigami.Units.gridUnit * 6
+        columnSpacing: Kirigami.Units.largeSpacing * 1.5
+        rowSpacing: Kirigami.Units.largeSpacing
+        mirrored: LayoutMirroring.enabled
+        Accessible.role: Accessible.Chart
+        Accessible.name: qsTr("Each logical processor's load")
     }
 
-    Section {
-        title: qsTr("Details")
+    Flow {
+        Layout.fillWidth: true
+        Layout.topMargin: Kirigami.Units.smallSpacing
+        spacing: Kirigami.Units.gridUnit * 2
 
-        SectionRow {
-            title: qsTr("Base Speed")
-            value: Format.mhz(page.cpu.baseFrequency)
+        GridLayout {
+            columns: 3
+            columnSpacing: Kirigami.Units.gridUnit * 1.5
+            rowSpacing: Kirigami.Units.largeSpacing
+
+            BigStat {
+                label: qsTr("Utilization")
+                value: page.measured ? Format.percent(page.cpu.usage) : Format.dash
+                rule: page.hue
+            }
+            BigStat {
+                label: qsTr("Speed")
+                value: Format.mhz(page.cpu.frequency)
+            }
+            BigStat {
+                label: qsTr("Temperature")
+                value: Format.celsius(page.cpu.temperature)
+            }
         }
-        SectionRow {
-            title: qsTr("Sockets")
-            value: page.measured ? page.cpu.sockets : Format.dash
-        }
-        SectionRow {
-            title: qsTr("Cores")
-            value: page.measured ? page.cpu.cores : Format.dash
-        }
-        SectionRow {
-            title: qsTr("Logical Processors")
-            value: page.measured ? page.cpu.threads : Format.dash
-        }
-        SectionRow {
-            title: qsTr("L1 Data Cache")
-            value: Format.bytes(page.cpu.l1d)
-        }
-        SectionRow {
-            title: qsTr("L1 Instruction Cache")
-            value: Format.bytes(page.cpu.l1i)
-        }
-        SectionRow {
-            title: qsTr("L2 Cache")
-            value: Format.bytes(page.cpu.l2)
-        }
-        SectionRow {
-            title: qsTr("L3 Cache")
-            value: Format.bytes(page.cpu.l3)
+
+        DetailGrid {
+            // No wider than the page: a long address elides.
+            width: Math.min(implicitWidth, parent.width)
+            entries: [[qsTr("Base speed"), Format.mhz(page.cpu.baseFrequency)], [qsTr("Sockets"), page.measured ? String(page.cpu.sockets) : Format.dash], [qsTr("Cores"), page.measured ? String(page.cpu.cores) : Format.dash], [qsTr("Logical processors"), page.measured ? String(page.cpu.threads) : Format.dash], [qsTr("L1 data cache"), Format.bytes(page.cpu.l1d)], [qsTr("L1 instruction cache"), Format.bytes(page.cpu.l1i)], [qsTr("L2 cache"), Format.bytes(page.cpu.l2)], [qsTr("L3 cache"), Format.bytes(page.cpu.l3)]]
         }
     }
 }

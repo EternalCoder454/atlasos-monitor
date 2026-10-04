@@ -38,7 +38,7 @@ set_target_properties(atlas-monitor-app PROPERTIES OUTPUT_NAME atlas-monitor)
 
 # qmlcachegen compiles every QML file to C++ at build time; the app reads no
 # .qml from disk at run time.
-set_source_files_properties(qml/Format.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(qml/Format.qml qml/Hues.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 qt_add_qml_module(atlas-monitor-app
     URI net.eterneon.atlas.monitor
     VERSION 1.0
@@ -46,7 +46,12 @@ qt_add_qml_module(atlas-monitor-app
         qml/Main.qml qml/Format.qml qml/OverviewPage.qml qml/CpuPage.qml qml/MemoryPage.qml
         qml/DiskPage.qml qml/NetworkPage.qml qml/GpuPage.qml qml/BatteryPage.qml qml/SensorsPage.qml qml/AppsPage.qml qml/StartupPage.qml qml/ServicesPage.qml qml/DetailsDialog.qml qml/EnergyPage.qml
         qml/SettingsPage.qml qml/AboutPage.qml qml/SystemPage.qml qml/DevicesPage.qml
+        qml/Hues.qml qml/ResourcePage.qml qml/BigStat.qml qml/DetailGrid.qml qml/SectionLabel.qml
+        qml/OverviewTile.qml qml/NavButton.qml qml/NavGroup.qml
+    SOURCES
+        cpp/coregrid.h cpp/coregrid.cpp
 )
+target_include_directories(atlas-monitor-app PRIVATE cpp)
 
 target_link_libraries(atlas-monitor-app PRIVATE
     atlas_monitor
