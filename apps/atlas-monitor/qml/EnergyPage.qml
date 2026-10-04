@@ -84,23 +84,25 @@ AtlasPage {
         text: qsTr("Easing an app off puts it behind everything else on the processor. It keeps running and keeps its work; it just stops winning. This lasts until the app is restarted, and can be undone.")
     }
 
-    Kirigami.InlineMessage {
+    InfoBanner {
         Layout.fillWidth: true
-        type: Kirigami.MessageType.Warning
-        visible: page.energy.loaded && !page.usable
+        type: "warning"
+        shown: page.energy.loaded && !page.usable
         text: page.unavailableText(page.energy.unavailable)
     }
 
-    Kirigami.InlineMessage {
+    InfoBanner {
         id: notice
         Layout.fillWidth: true
-        type: Kirigami.MessageType.Warning
-        showCloseButton: true
+        type: "warning"
+        closable: true
+        // Shown by what it reports.
+        shown: false
 
         Timer {
             id: hide
             interval: 10000
-            onTriggered: notice.visible = false
+            onTriggered: notice.shown = false
         }
     }
 
@@ -109,7 +111,7 @@ AtlasPage {
 
         function onFailed(name, reason, detail) {
             notice.text = page.failure(reason, name, detail);
-            notice.visible = true;
+            notice.shown = true;
             hide.restart();
         }
     }
@@ -170,13 +172,11 @@ AtlasPage {
                     onClicked: row.eased ? page.energy.restore(row.appId) : page.energy.ease(row.appId)
                     Accessible.description: row.name
                 }
-                QQC2.ToolButton {
+                IconButton {
                     icon.name: "overflow-menu"
-                    display: QQC2.AbstractButton.IconOnly
                     text: qsTr("More Options for %1").arg(row.name)
                     QQC2.ToolTip.text: qsTr("More Options")
                     QQC2.ToolTip.visible: hovered && !options.visible
-                    QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
                     // Its right edge under the button's, so it stays over the card.
                     onClicked: options.popup(this, mirrored ? 0 : width - options.width, height + 4)
 

@@ -110,10 +110,10 @@ AtlasPage {
         }
     }
 
-    Kirigami.InlineMessage {
+    InfoBanner {
         Layout.fillWidth: true
-        type: Kirigami.MessageType.Warning
-        visible: page.s.error.length > 0
+        type: "warning"
+        shown: page.s.error.length > 0
         text: page.failure(page.s.error, page.s.errorName)
     }
 

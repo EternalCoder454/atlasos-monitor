@@ -14,8 +14,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # atlas-framework's design rules (no default buttons, no QML file named
+  # like an Atlas.Ui type), at the release the crates are pinned to.
+  atlas:
+    name: Atlas app checks
+    uses: EternalCoder454/atlas-framework/.github/workflows/app-checks.yml@v1.3.0
+    with:
+      framework-ref: v1.3.0
+
   # Atlas.Ui (atlas-ui), which the app builds against, is in no repository:
-  # build atlas-framework's RPMs from its main branch for the jobs below.
+  # build atlas-framework's RPMs, at the release the crates are pinned to,
+  # for the jobs below.
   framework:
     name: atlas-framework RPMs
     runs-on: ubuntu-latest
@@ -26,7 +35,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           repository: EternalCoder454/atlas-framework
-          ref: main
+          ref: v1.3.0
       - name: Build the RPMs
         run: packaging/build-rpm.sh "$GITHUB_WORKSPACE/out"
       - uses: actions/upload-artifact@v4

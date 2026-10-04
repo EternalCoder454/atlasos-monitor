@@ -71,7 +71,14 @@ Cold builds compile CXX-Qt and Qt bindings for a few minutes.
 
 ## Moving the atlas-framework pin
 
-1. The commit must be pushed to atlas-framework `main`.
-2. Change `rev` in `Cargo.toml` (full 40-character hash), then
+The crates are pinned to a release tag (`tag = "vX.Y.Z"`). Each
+atlas-framework release also opens a pull request here that moves it.
+1. Change `tag` in `Cargo.toml`, then
    `scripts/dev.sh cargo update -p atlas-framework-ui`.
-3. Commit `Cargo.toml` and `Cargo.lock` together.
+2. Move the same tag in `.github/workflows/ci.yml` (the app-checks job and
+   the framework RPM job), and when the app uses something new in Atlas.Ui,
+   `ui:` in `src/lib.rs` and `atlas-ui >=` in the spec (Requires and
+   BuildRequires) to that version.
+3. Rebuild the dev image against that release's RPMs (delete it, then
+   `ATLAS_LOCAL_RPMS=<dir> scripts/dev.sh ...`).
+4. Commit `Cargo.toml` and `Cargo.lock` together.

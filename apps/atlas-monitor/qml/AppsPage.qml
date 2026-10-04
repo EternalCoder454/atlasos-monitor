@@ -193,22 +193,24 @@ Item {
             }
         }
 
-        Kirigami.InlineMessage {
+        InfoBanner {
             id: notice
             Layout.fillWidth: true
-            type: Kirigami.MessageType.Warning
-            showCloseButton: true
+            type: "warning"
+            closable: true
+            // Shown by what it reports.
+            shown: false
 
             function show(message) {
                 notice.text = message;
-                notice.visible = true;
+                notice.shown = true;
                 hide.restart();
             }
 
             Timer {
                 id: hide
                 interval: 8000
-                onTriggered: notice.visible = false
+                onTriggered: notice.shown = false
             }
         }
 

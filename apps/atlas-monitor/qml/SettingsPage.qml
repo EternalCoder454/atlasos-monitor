@@ -87,15 +87,17 @@ AtlasPage {
         SectionRow {
             title: qsTr("Open Atlas Updater")
             chevron: true
-            onClicked: missing.visible = !page.backend.openUpdater()
+            onClicked: missing.shown = !page.backend.openUpdater()
         }
     }
 
-    Kirigami.InlineMessage {
+    InfoBanner {
         id: missing
         Layout.fillWidth: true
-        type: Kirigami.MessageType.Warning
-        showCloseButton: true
+        type: "warning"
+        closable: true
+        // Shown by what it reports.
+        shown: false
         text: qsTr("Atlas Updater isn't installed.")
     }
 }

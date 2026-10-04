@@ -254,14 +254,20 @@ QQC2.ApplicationWindow {
     }
 
     component NavItem: SidebarItem {
+        id: navItem
         required property string page
         Layout.fillWidth: true
         compact: root.compact
         selected: root.currentPage === page
-        QQC2.ToolTip.visible: compact && hovered
-        QQC2.ToolTip.text: badge.length > 0 ? qsTr("%1 · %2").arg(text).arg(badgeText) : text
-        QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
         onClicked: root.showPage(page)
+
+        // Icons only: the name beside the icon, on hover or keyboard focus.
+        AtlasToolTip {
+            text: navItem.badge.length > 0 ? qsTr("%1 · %2").arg(navItem.text).arg(navItem.badgeText) : navItem.text
+            shown: navItem.compact && (navItem.hovered || navItem.visualFocus)
+            x: navItem.mirrored ? -implicitWidth - Kirigami.Units.smallSpacing : navItem.width + Kirigami.Units.smallSpacing
+            y: Math.round((navItem.height - implicitHeight) / 2)
+        }
     }
 
     RowLayout {

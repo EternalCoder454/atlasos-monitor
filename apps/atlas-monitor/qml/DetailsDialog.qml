@@ -104,6 +104,10 @@ QQC2.Popup {
     anchors.centerIn: parent
     modal: true
     focus: true
+    // Each opening starts with the focus on the dialog itself: the button
+    // last used would otherwise keep it, unringed, and a Return would close
+    // the dialog again at once.
+    onOpened: dialogContent.forceActiveFocus()
     closePolicy: QQC2.Popup.CloseOnEscape | QQC2.Popup.CloseOnPressOutside
     width: Math.min(parent ? parent.width - Kirigami.Units.gridUnit * 2 : 0, Kirigami.Units.gridUnit * 30)
     height: Math.min(implicitHeight, parent ? parent.height - Kirigami.Units.gridUnit * 3 : implicitHeight)
@@ -176,6 +180,7 @@ QQC2.Popup {
     }
 
     contentItem: ColumnLayout {
+        id: dialogContent
         Accessible.role: Accessible.Dialog
         Accessible.name: dialog.details.title
         spacing: Kirigami.Units.largeSpacing
@@ -184,14 +189,10 @@ QQC2.Popup {
             Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
 
-            QQC2.ToolButton {
+            IconButton {
                 visible: dialog.details.canGoBack
                 icon.name: LayoutMirroring.enabled ? "go-next" : "go-previous"
-                display: QQC2.AbstractButton.IconOnly
                 text: qsTr("Back")
-                QQC2.ToolTip.text: text
-                QQC2.ToolTip.visible: hovered
-                QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
                 onClicked: dialog.details.back()
             }
             QQC2.Label {
@@ -203,13 +204,9 @@ QQC2.Popup {
                 textFormat: Text.PlainText
                 Accessible.role: Accessible.Heading
             }
-            QQC2.ToolButton {
+            IconButton {
                 icon.name: "window-close"
-                display: QQC2.AbstractButton.IconOnly
                 text: qsTr("Close")
-                QQC2.ToolTip.text: text
-                QQC2.ToolTip.visible: hovered
-                QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
                 onClicked: dialog.close()
             }
         }
@@ -229,10 +226,9 @@ QQC2.Popup {
                 width: scroll.availableWidth
                 spacing: Kirigami.Units.gridUnit
 
-                QQC2.BusyIndicator {
+                AtlasSpinner {
                     Layout.alignment: Qt.AlignHCenter
-                    visible: dialog.details.loading
-                    running: visible
+                    running: dialog.details.loading
                 }
                 QQC2.Label {
                     Layout.fillWidth: true

@@ -40,11 +40,11 @@ BuildRequires:  cmake(KF6WindowSystem)
 # from atlas-framework, which is in no repository: install its RPMs first
 # (build-rpm.sh does, given ATLAS_LOCAL_RPMS).
 BuildRequires:  kf6-kirigami-devel
-BuildRequires:  atlas-ui
+BuildRequires:  atlas-ui >= 1.3.0
 
 Requires:       kf6-kirigami
-# Atlas.Ui, the shared look (atlas-framework)
-Requires:       atlas-ui
+# Atlas.Ui, the shared look (atlas-framework); 1.3.0 for AtlasSpinner and AtlasFocusRing
+Requires:       atlas-ui >= 1.3.0
 Requires:       kf6-qqc2-desktop-style
 Requires:       qt6-qtdeclarative
 # the app icon and Breeze's icons are SVG

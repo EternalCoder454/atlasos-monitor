@@ -109,9 +109,9 @@ Item {
 
     function act(action) {
         if (page.services.busy) {
-            notice.show(qsTr("Wait for the change under way to finish."), Kirigami.MessageType.Information);
+            notice.show(qsTr("Wait for the change under way to finish."), "info");
         } else if (!page.services.act(page.target, action)) {
-            notice.show(qsTr("That didn't work for %1.").arg(page.target), Kirigami.MessageType.Warning);
+            notice.show(qsTr("That didn't work for %1.").arg(page.target), "warning");
         }
     }
 
@@ -131,7 +131,7 @@ Item {
         function onActed(name, action, result, detail) {
             const text = page.failure(result, name, detail);
             if (text.length > 0) {
-                notice.show(text, result === "stillRunning" ? Kirigami.MessageType.Information : Kirigami.MessageType.Warning);
+                notice.show(text, result === "stillRunning" ? "info" : "warning");
             }
         }
     }
@@ -196,36 +196,38 @@ Item {
             }
         }
 
-        Kirigami.InlineMessage {
+        InfoBanner {
             id: notice
             Layout.fillWidth: true
-            showCloseButton: true
+            closable: true
+            // Shown by what it reports.
+            shown: false
 
             function show(message, kind) {
                 notice.type = kind;
                 notice.text = message;
-                notice.visible = true;
+                notice.shown = true;
                 hide.restart();
             }
 
             Timer {
                 id: hide
                 interval: 10000
-                onTriggered: notice.visible = false
+                onTriggered: notice.shown = false
             }
         }
 
-        Kirigami.InlineMessage {
+        InfoBanner {
             Layout.fillWidth: true
-            type: Kirigami.MessageType.Information
-            visible: page.services.busy
+            type: "info"
+            shown: page.services.busy
             text: qsTr("Waiting for systemd. If it asks for your password, the change goes ahead once you give it.")
         }
 
-        Kirigami.InlineMessage {
+        InfoBanner {
             Layout.fillWidth: true
-            type: Kirigami.MessageType.Warning
-            visible: page.services.loaded && !page.services.available && page.services.count > 0
+            type: "warning"
+            shown: page.services.loaded && !page.services.available && page.services.count > 0
             text: qsTr("systemd didn't answer, so this list may be out of date.")
         }
 
