@@ -20,8 +20,9 @@ ResourcePage {
     readonly property string memoryName: page.gpu.integrated ? qsTr("Reserved memory") : qsTr("Video memory")
 
     title: page.gpu.label
-    headline: Format.percent(page.gpu.usage)
-    name: page.gpu.label
+    subtitle: [page.gpu.driver, page.hasMemory ? qsTr("%1 %2").arg(Format.bytes(page.gpu.memoryTotal)).arg(page.memoryName.toLowerCase()) : ""].filter(t => t.length > 0).join(" · ")
+    figure: Format.percent(page.gpu.usage)
+    figureColor: page.hue
 
     // A sleeping card is left asleep: reading it would wake it and cost
     // more power than the figures are worth.
@@ -33,75 +34,64 @@ ResourcePage {
         text: qsTr("This card is asleep because nothing is using it. Atlas Monitor leaves it asleep rather than wake it to read it, so the figures below are from when it was last awake.")
     }
 
-    LiveChart {
-        Layout.fillWidth: true
-        Layout.preferredHeight: Kirigami.Units.gridUnit * 11
-        color: page.hue
-        values: page.gpu.usageHistory
-        maximum: 100
-        label: qsTr("% Utilization")
-        valueText: Format.percent(page.gpu.usage)
-        topText: "100%"
-        spanText: Format.span(page.interval)
+    MonitorCard {
+        LiveChart {
+            Layout.fillWidth: true
+            Layout.preferredHeight: Kirigami.Units.gridUnit * 9
+            color: page.hue
+            values: page.gpu.usageHistory
+            maximum: 100
+            label: qsTr("Utilization")
+            valueText: Format.percent(page.gpu.usage)
+            topText: "100%"
+            spanText: Format.span(page.interval)
+        }
     }
-    LiveChart {
-        Layout.fillWidth: true
-        Layout.preferredHeight: Kirigami.Units.gridUnit * 8.5
+
+    MonitorCard {
         visible: page.hasMemory
-        color: page.hue
-        values: page.gpu.memoryHistory
-        maximum: 100
-        label: page.memoryName
-        valueText: page.gpu.memoryUsed >= 0 ? Format.share(page.gpu.memoryUsed, page.gpu.memoryTotal) : ""
-        topText: "100%"
-        spanText: Format.span(page.interval)
+        title: page.memoryName
+
+        LiveChart {
+            Layout.fillWidth: true
+            Layout.preferredHeight: Kirigami.Units.gridUnit * 5.5
+            color: page.hue
+            values: page.gpu.memoryHistory
+            maximum: 100
+            label: qsTr("In use")
+            valueText: page.gpu.memoryUsed >= 0 ? Format.share(page.gpu.memoryUsed, page.gpu.memoryTotal) : ""
+            topText: "100%"
+            spanText: Format.span(page.interval)
+        }
     }
 
-    Flow {
-        Layout.fillWidth: true
-        Layout.topMargin: Kirigami.Units.smallSpacing
-        spacing: Kirigami.Units.gridUnit * 2
-
-        GridLayout {
-            columns: 3
-            columnSpacing: Kirigami.Units.gridUnit * 1.5
-            rowSpacing: Kirigami.Units.largeSpacing
-
-            BigStat {
-                label: qsTr("Utilization")
-                value: Format.percent(page.gpu.usage)
-                rule: page.hue
-            }
-            BigStat {
-                visible: page.hasMemory
-                label: page.memoryName
-                value: page.gpu.memoryUsed >= 0 ? Format.size(page.gpu.memoryUsed) : Format.dash
-                rule: page.hue
-                dashed: true
-            }
-            BigStat {
-                label: qsTr("Temperature")
-                value: Format.celsius(page.gpu.temperature)
-            }
-            BigStat {
-                label: qsTr("Power draw")
-                value: Format.watts(page.gpu.power)
-            }
-            BigStat {
-                label: qsTr("GPU clock")
-                value: Format.mhz(page.gpu.coreClock)
-            }
-            BigStat {
-                label: qsTr("Fan speed")
-                // amdgpu counts the fan's turns; NVIDIA gives its duty cycle.
-                value: page.gpu.fanRpm > 0 ? qsTr("%1 RPM").arg(Format.count(page.gpu.fanRpm)) : page.gpu.fanPercent > 0 ? Format.percent(page.gpu.fanPercent) : Format.dash
-            }
+    FigureCard {
+        BigStat {
+            label: qsTr("Utilization")
+            value: Format.percent(page.gpu.usage)
         }
-
-        DetailGrid {
-            // No wider than the page: a long address elides.
-            width: Math.min(implicitWidth, parent.width)
-            entries: [[qsTr("Memory clock"), Format.mhz(page.gpu.memoryClock)], [qsTr("Hotspot"), isNaN(page.gpu.hotspot) ? "" : Format.celsius(page.gpu.hotspot)], [qsTr("Memory temperature"), isNaN(page.gpu.memoryTemperature) ? "" : Format.celsius(page.gpu.memoryTemperature)], [qsTr("Power limit"), page.gpu.powerLimit > 0 ? Format.watts(page.gpu.powerLimit) : ""], [qsTr("%1 total").arg(page.memoryName), page.hasMemory ? Format.bytes(page.gpu.memoryTotal) : ""], [qsTr("Shared memory"), page.gpu.gttUsed < 0 ? "" : page.gpu.gttTotal > 0 ? Format.share(page.gpu.gttUsed, page.gpu.gttTotal) : Format.size(page.gpu.gttUsed)], [qsTr("Driver"), page.gpu.driver], [qsTr("PCI slot"), page.gpu.slot]]
+        BigStat {
+            visible: page.hasMemory
+            label: page.memoryName
+            value: page.gpu.memoryUsed >= 0 ? Format.size(page.gpu.memoryUsed) : Format.dash
         }
+        BigStat {
+            label: qsTr("Temperature")
+            value: Format.celsius(page.gpu.temperature)
+        }
+        BigStat {
+            label: qsTr("Power draw")
+            value: Format.watts(page.gpu.power)
+        }
+        BigStat {
+            label: qsTr("GPU clock")
+            value: Format.mhz(page.gpu.coreClock)
+        }
+        BigStat {
+            label: qsTr("Fan speed")
+            // amdgpu counts the fan's turns; NVIDIA gives its duty cycle.
+            value: page.gpu.fanRpm > 0 ? qsTr("%1 RPM").arg(Format.count(page.gpu.fanRpm)) : page.gpu.fanPercent > 0 ? Format.percent(page.gpu.fanPercent) : Format.dash
+        }
+        details: [[qsTr("Memory clock"), Format.mhz(page.gpu.memoryClock)], [qsTr("Hotspot"), isNaN(page.gpu.hotspot) ? "" : Format.celsius(page.gpu.hotspot)], [qsTr("Memory temperature"), isNaN(page.gpu.memoryTemperature) ? "" : Format.celsius(page.gpu.memoryTemperature)], [qsTr("Power limit"), page.gpu.powerLimit > 0 ? Format.watts(page.gpu.powerLimit) : ""], [qsTr("Shared memory"), page.gpu.gttUsed < 0 ? "" : page.gpu.gttTotal > 0 ? Format.share(page.gpu.gttUsed, page.gpu.gttTotal) : Format.size(page.gpu.gttUsed)], [qsTr("Driver"), page.gpu.driver], [qsTr("PCI slot"), page.gpu.slot]]
     }
 }

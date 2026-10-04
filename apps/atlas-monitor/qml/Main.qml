@@ -115,6 +115,28 @@ QQC2.ApplicationWindow {
     }
 
     property string currentPage: ""
+
+    // A sidebar entry reached with the keyboard scrolls into view.
+    onActiveFocusItemChanged: {
+        const item = root.activeFocusItem;
+        if (!item || !navFlick.interactive) {
+            return;
+        }
+        let p = item;
+        while (p && p !== nav) {
+            p = p.parent;
+        }
+        if (!p) {
+            return;
+        }
+        const top = item.mapToItem(navFlick.contentItem, 0, 0).y;
+        const bottom = top + item.height;
+        if (top < navFlick.contentY) {
+            navFlick.contentY = Math.max(0, top - Kirigami.Units.smallSpacing);
+        } else if (bottom > navFlick.contentY + navFlick.height) {
+            navFlick.contentY = Math.min(navFlick.contentHeight - navFlick.height, bottom - navFlick.height + Kirigami.Units.smallSpacing);
+        }
+    }
     // Icons only when the window is narrow.
     readonly property bool compact: width < Kirigami.Units.gridUnit * 40
 
@@ -179,28 +201,22 @@ QQC2.ApplicationWindow {
     }
 
     // A group's name above its entries; hidden when the sidebar is icons only.
-    // Small capitals, as the Go version's HARDWARE and SYSTEM.
     component NavHeading: QQC2.Label {
         Layout.fillWidth: true
-        Layout.topMargin: Kirigami.Units.largeSpacing * 1.5
+        Layout.topMargin: Kirigami.Units.largeSpacing
         Layout.bottomMargin: Kirigami.Units.smallSpacing
         Layout.leftMargin: Kirigami.Units.largeSpacing
         visible: !root.compact
-        font.family: Kirigami.Theme.smallFont.family
-        font.pointSize: Kirigami.Theme.smallFont.pointSize * 0.95
-        font.weight: Font.DemiBold
-        font.capitalization: Font.AllUppercase
-        font.letterSpacing: 0.7
-        opacity: 0.48
+        font: Kirigami.Theme.smallFont
+        opacity: 0.6
         elide: Text.ElideRight
-        Accessible.role: Accessible.Heading
     }
 
     // Disk and Network: a group with an entry and its live rate per device.
     // Graphics cards (load) and batteries (percent charged) are a group
     // when there are two or more.
     // Compact, the group is one icon that opens the first device.
-    component DeviceGroup: NavGroup {
+    component DeviceGroup: SidebarGroup {
         id: group
         required property string kind
         property list<string> names
@@ -218,7 +234,7 @@ QQC2.ApplicationWindow {
             // None while hidden: a lone card's group still has its name,
             // and the row would format its load every tick for nothing.
             model: group.visible ? group.names.length : 0
-            NavButton {
+            SidebarItem {
                 required property int index
                 readonly property string page: group.kind + ":" + group.names[index]
                 Layout.fillWidth: true
@@ -237,7 +253,7 @@ QQC2.ApplicationWindow {
         return isNaN(v) ? "" : Format.percent(v);
     }
 
-    component NavItem: NavButton {
+    component NavItem: SidebarItem {
         required property string page
         Layout.fillWidth: true
         compact: root.compact
@@ -256,9 +272,7 @@ QQC2.ApplicationWindow {
             id: sidebar
             Layout.fillHeight: true
             Layout.preferredWidth: root.compact ? Kirigami.Units.gridUnit * 3.6 : Kirigami.Units.gridUnit * 12.5
-            // A neutral shade off the page's, as the Go version and Task
-            // Manager: the pages' colours are the resources'.
-            color: Qt.tint(Kirigami.Theme.backgroundColor, Qt.alpha(Kirigami.Theme.textColor, 0.04))
+            color: Qt.tint(Kirigami.Theme.backgroundColor, Qt.alpha(Kirigami.Theme.highlightColor, 0.07))
 
             Behavior on Layout.preferredWidth {
                 NumberAnimation {
@@ -274,139 +288,162 @@ QQC2.ApplicationWindow {
                 color: Qt.alpha(Kirigami.Theme.textColor, 0.12)
             }
 
-            ColumnLayout {
+            // Scrolls when the window is too short for every entry (a large
+            // scale, a short window); otherwise Settings and About sit at
+            // the bottom.
+            Flickable {
+                id: navFlick
                 anchors.fill: parent
-                anchors.margins: Kirigami.Units.largeSpacing
-                anchors.rightMargin: Kirigami.Units.largeSpacing + 1
-                anchors.topMargin: Kirigami.Units.gridUnit
-                spacing: 2
+                anchors.rightMargin: 1
+                clip: contentHeight > height
+                interactive: contentHeight > height
+                boundsBehavior: Flickable.StopAtBounds
+                contentWidth: width
+                contentHeight: nav.implicitHeight + Kirigami.Units.gridUnit + Kirigami.Units.largeSpacing
+                QQC2.ScrollBar.vertical: QQC2.ScrollBar {
+                    id: navBar
+                    // Not in the icons-only sidebar, which has no room for
+                    // it: the wheel and the keyboard still scroll.
+                    policy: navFlick.interactive && !root.compact ? QQC2.ScrollBar.AlwaysOn : QQC2.ScrollBar.AlwaysOff
+                }
 
-                // Energy Saver, Startup and Services join System with their
-                // pages; see docs/DESIGN.md.
-                // The badge stands in for Go's title-bar warning button: the
-                // Overview's list is a click away from any page.
-                NavItem {
-                    page: "overview"
-                    text: qsTr("Overview")
-                    icon.name: root.icons.overview
-                    badge: root.health.level === 2 ? "dialog-error" : root.health.level === 1 ? "dialog-warning" : ""
-                    badgeText: root.health.titles.length === 1 ? root.health.titles[0] : root.health.titles.length > 1 ? qsTr("%1 things need attention").arg(root.health.titles.length) : qsTr("Something needs attention")
-                }
-                NavHeading {
-                    text: qsTr("Hardware")
-                }
-                NavItem {
-                    page: "cpu"
-                    text: qsTr("Processor")
-                    value: root.load(root.devices.cpuUsage)
-                    icon.name: root.icons.cpu
-                }
-                NavItem {
-                    page: "memory"
-                    text: qsTr("Memory")
-                    value: root.load(root.devices.memoryUsage)
-                    icon.name: root.icons.memory
-                }
-                DeviceGroup {
-                    kind: "disk"
-                    text: qsTr("Disk")
-                    iconName: root.icons.disk
-                    names: root.devices.diskNames
-                    labels: root.devices.diskLabels
-                    rates: root.devices.diskRates
-                }
-                DeviceGroup {
-                    kind: "network"
-                    text: qsTr("Network")
-                    iconName: root.devices.routeWireless ? root.icons.wireless : root.icons.wired
-                    names: root.devices.netNames
-                    labels: root.devices.netLabels
-                    rates: root.devices.netRates
-                }
-                // One card is one entry; two or more are a group.
-                NavItem {
-                    visible: root.gpu.cardNames.length === 1
-                    page: "gpu:" + (root.gpu.cardNames[0] ?? "")
-                    text: qsTr("Graphics")
-                    value: root.load(root.devices.gpuUsages[0] ?? NaN)
-                    icon.name: root.icons.gpu
-                }
-                DeviceGroup {
-                    visible: names.length > 1
-                    kind: "gpu"
-                    text: qsTr("Graphics")
-                    iconName: root.icons.gpu
-                    names: root.gpu.cardNames
-                    labels: root.gpu.cardLabels
-                    loads: root.devices.gpuUsages
-                }
-                NavItem {
-                    visible: root.battery.packNames.length === 1
-                    page: "battery:" + (root.battery.packNames[0] ?? "")
-                    text: qsTr("Battery")
-                    value: Format.percent(root.battery.packPercents[0] ?? NaN)
-                    icon.name: root.icons.battery
-                }
-                DeviceGroup {
-                    visible: names.length > 1
-                    kind: "battery"
-                    text: qsTr("Battery")
-                    iconName: root.icons.battery
-                    names: root.battery.packNames
-                    labels: root.battery.packLabels
-                    percents: root.battery.packPercents
-                }
-                NavItem {
-                    visible: root.sensors.available
-                    page: "sensors"
-                    text: qsTr("Sensors")
-                    icon.name: root.icons.sensors
-                }
-                NavHeading {
-                    text: qsTr("System")
-                }
-                NavItem {
-                    page: "system"
-                    text: qsTr("System Info")
-                    icon.name: root.icons.system
-                }
-                NavItem {
-                    page: "devices"
-                    text: qsTr("Devices")
-                    icon.name: root.icons.devices
-                }
-                NavItem {
-                    page: "apps"
-                    text: qsTr("Apps")
-                    icon.name: root.icons.apps
-                }
-                NavItem {
-                    page: "energy"
-                    text: qsTr("Energy Saver")
-                    icon.name: root.icons.energy
-                }
-                NavItem {
-                    page: "startup"
-                    text: qsTr("Startup")
-                    icon.name: root.icons.startup
-                }
-                NavItem {
-                    page: "services"
-                    text: qsTr("Services")
-                    icon.name: root.icons.services
-                }
-                Item {
-                    Layout.fillHeight: true
-                }
-                NavItem {
-                    page: "settings"
-                    text: qsTr("Settings")
-                    icon.name: root.icons.settings
-                }
-                NavItem {
-                    page: "about"
-                    text: qsTr("About")
-                    icon.name: root.icons.about
+                ColumnLayout {
+                    id: nav
+                    // Right to left, the bar is at the left.
+                    x: Kirigami.Units.largeSpacing + (navBar.visible && nav.LayoutMirroring.enabled ? navBar.width : 0)
+                    y: Kirigami.Units.gridUnit
+                    // Clear of the scroll bar, when there is one.
+                    width: navFlick.width - Kirigami.Units.largeSpacing * 2 - (navBar.visible ? navBar.width : 0)
+                    height: Math.max(implicitHeight, navFlick.height - Kirigami.Units.gridUnit - Kirigami.Units.largeSpacing)
+                    spacing: 2
+
+                    // Energy Saver, Startup and Services join System with their
+                    // pages; see docs/DESIGN.md.
+                    // The badge stands in for Go's title-bar warning button: the
+                    // Overview's list is a click away from any page.
+                    NavItem {
+                        page: "overview"
+                        text: qsTr("Overview")
+                        icon.name: root.icons.overview
+                        badge: root.health.level === 2 ? "dialog-error" : root.health.level === 1 ? "dialog-warning" : ""
+                        badgeText: root.health.titles.length === 1 ? root.health.titles[0] : root.health.titles.length > 1 ? qsTr("%1 things need attention").arg(root.health.titles.length) : qsTr("Something needs attention")
+                    }
+                    NavHeading {
+                        text: qsTr("Hardware")
+                    }
+                    NavItem {
+                        page: "cpu"
+                        text: qsTr("Processor")
+                        value: root.load(root.devices.cpuUsage)
+                        icon.name: root.icons.cpu
+                    }
+                    NavItem {
+                        page: "memory"
+                        text: qsTr("Memory")
+                        value: root.load(root.devices.memoryUsage)
+                        icon.name: root.icons.memory
+                    }
+                    DeviceGroup {
+                        kind: "disk"
+                        text: qsTr("Disk")
+                        iconName: root.icons.disk
+                        names: root.devices.diskNames
+                        labels: root.devices.diskLabels
+                        rates: root.devices.diskRates
+                    }
+                    DeviceGroup {
+                        kind: "network"
+                        text: qsTr("Network")
+                        iconName: root.devices.routeWireless ? root.icons.wireless : root.icons.wired
+                        names: root.devices.netNames
+                        labels: root.devices.netLabels
+                        rates: root.devices.netRates
+                    }
+                    // One card is one entry; two or more are a group.
+                    NavItem {
+                        visible: root.gpu.cardNames.length === 1
+                        page: "gpu:" + (root.gpu.cardNames[0] ?? "")
+                        text: qsTr("Graphics")
+                        value: root.load(root.devices.gpuUsages[0] ?? NaN)
+                        icon.name: root.icons.gpu
+                    }
+                    DeviceGroup {
+                        visible: names.length > 1
+                        kind: "gpu"
+                        text: qsTr("Graphics")
+                        iconName: root.icons.gpu
+                        names: root.gpu.cardNames
+                        labels: root.gpu.cardLabels
+                        loads: root.devices.gpuUsages
+                    }
+                    NavItem {
+                        visible: root.battery.packNames.length === 1
+                        page: "battery:" + (root.battery.packNames[0] ?? "")
+                        text: qsTr("Battery")
+                        value: Format.percent(root.battery.packPercents[0] ?? NaN)
+                        icon.name: root.icons.battery
+                    }
+                    DeviceGroup {
+                        visible: names.length > 1
+                        kind: "battery"
+                        text: qsTr("Battery")
+                        iconName: root.icons.battery
+                        names: root.battery.packNames
+                        labels: root.battery.packLabels
+                        percents: root.battery.packPercents
+                    }
+                    NavItem {
+                        visible: root.sensors.available
+                        page: "sensors"
+                        text: qsTr("Sensors")
+                        icon.name: root.icons.sensors
+                    }
+                    NavHeading {
+                        text: qsTr("System")
+                    }
+                    NavItem {
+                        page: "system"
+                        text: qsTr("System Info")
+                        icon.name: root.icons.system
+                    }
+                    NavItem {
+                        page: "devices"
+                        text: qsTr("Devices")
+                        icon.name: root.icons.devices
+                    }
+                    NavItem {
+                        page: "apps"
+                        text: qsTr("Apps")
+                        icon.name: root.icons.apps
+                    }
+                    NavItem {
+                        page: "energy"
+                        text: qsTr("Energy Saver")
+                        icon.name: root.icons.energy
+                    }
+                    NavItem {
+                        page: "startup"
+                        text: qsTr("Startup")
+                        icon.name: root.icons.startup
+                    }
+                    NavItem {
+                        page: "services"
+                        text: qsTr("Services")
+                        icon.name: root.icons.services
+                    }
+                    Item {
+                        Layout.fillHeight: true
+                    }
+                    NavItem {
+                        page: "settings"
+                        text: qsTr("Settings")
+                        icon.name: root.icons.settings
+                    }
+                    NavItem {
+                        page: "about"
+                        text: qsTr("About")
+                        icon.name: root.icons.about
+                    }
                 }
             }
         }

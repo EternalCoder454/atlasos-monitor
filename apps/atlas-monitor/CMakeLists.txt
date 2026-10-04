@@ -46,10 +46,10 @@ qt_add_qml_module(atlas-monitor-app
         qml/Main.qml qml/Format.qml qml/OverviewPage.qml qml/CpuPage.qml qml/MemoryPage.qml
         qml/DiskPage.qml qml/NetworkPage.qml qml/GpuPage.qml qml/BatteryPage.qml qml/SensorsPage.qml qml/AppsPage.qml qml/StartupPage.qml qml/ServicesPage.qml qml/DetailsDialog.qml qml/EnergyPage.qml
         qml/SettingsPage.qml qml/AboutPage.qml qml/SystemPage.qml qml/DevicesPage.qml
-        qml/Hues.qml qml/ResourcePage.qml qml/BigStat.qml qml/DetailGrid.qml qml/SectionLabel.qml
-        qml/OverviewTile.qml qml/NavButton.qml qml/NavGroup.qml
+        qml/Hues.qml qml/ResourcePage.qml qml/BigStat.qml qml/DetailGrid.qml qml/MonitorCard.qml
+        qml/FigureCard.qml
     SOURCES
-        cpp/coregrid.h cpp/coregrid.cpp
+        cpp/coregrid.h cpp/coregrid.cpp cpp/sparkline.h cpp/sparkline.cpp
 )
 target_include_directories(atlas-monitor-app PRIVATE cpp)
 

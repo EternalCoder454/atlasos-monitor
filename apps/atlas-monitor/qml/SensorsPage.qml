@@ -8,9 +8,8 @@ import Atlas.Ui
 
 // Every temperature, fan and power reading the hardware offers, grouped by
 // what it belongs to. A processor's many per-core temperatures fold behind
-// one "Cores" row that names the hottest. The whole width, as the Go
-// version's and the other hardware pages.
-ResourcePage {
+// one "Cores" row that names the hottest.
+AtlasPage {
     id: page
 
     required property var sensors
@@ -36,11 +35,10 @@ ResourcePage {
     }
 
     title: qsTr("Sensors")
-    headline: qsTr("Sensors")
-    headlineScale: 2.1
 
     QQC2.Label {
         Layout.fillWidth: true
+        Layout.bottomMargin: Kirigami.Units.largeSpacing
         wrapMode: Text.Wrap
         opacity: 0.7
         text: page.s.names.length > 0 ? qsTr("Temperatures, fans and power, as the hardware reports them.") : qsTr("Reading the sensors…")

@@ -60,75 +60,59 @@ ResourcePage {
     }
 
     title: page.b.label
-    headline: Format.percent(page.b.percent)
-    name: page.b.label
-
     // What the battery is doing and, when it can be estimated, for how long.
-    QQC2.Label {
-        Layout.fillWidth: true
-        wrapMode: Text.Wrap
-        opacity: 0.75
-        text: page.caption
+    subtitle: page.caption
+    figure: Format.percent(page.b.percent)
+    figureColor: page.hue
+
+    MonitorCard {
+        LiveChart {
+            Layout.fillWidth: true
+            Layout.preferredHeight: Kirigami.Units.gridUnit * 9
+            color: page.hue
+            values: page.b.chargeHistory
+            maximum: 100
+            label: qsTr("Charge")
+            valueText: Format.percent(page.b.percent)
+            topText: "100%"
+            spanText: Format.span(page.interval)
+        }
     }
 
-    LiveChart {
-        Layout.fillWidth: true
-        Layout.preferredHeight: Kirigami.Units.gridUnit * 11
-        color: page.hue
-        values: page.b.chargeHistory
-        maximum: 100
-        label: qsTr("Charge")
-        valueText: Format.percent(page.b.percent)
-        topText: "100%"
-        spanText: Format.span(page.interval)
-    }
-    LiveChart {
-        Layout.fillWidth: true
-        Layout.preferredHeight: Kirigami.Units.gridUnit * 7
+    MonitorCard {
         visible: page.b.present && page.hasRate
-        color: page.powerHue
-        values: page.b.drawHistory
-        // A laptop at idle still shows a scale of 10 W.
-        minimumScale: 10
-        label: page.rateName
-        valueText: Format.watts(page.b.watts)
-        topText: Format.watts(scaleTop)
-        spanText: Format.span(page.interval)
+        title: page.rateName
+
+        LiveChart {
+            Layout.fillWidth: true
+            Layout.preferredHeight: Kirigami.Units.gridUnit * 5.5
+            color: page.powerHue
+            values: page.b.drawHistory
+            // A laptop at idle still shows a scale of 10 W.
+            minimumScale: 10
+            label: page.rateName
+            valueText: Format.watts(page.b.watts)
+            topText: Format.watts(scaleTop)
+            spanText: Format.span(page.interval)
+        }
     }
 
-    Flow {
-        Layout.fillWidth: true
-        Layout.topMargin: Kirigami.Units.smallSpacing
+    FigureCard {
         visible: page.b.present
-        spacing: Kirigami.Units.gridUnit * 2
 
-        GridLayout {
-            columns: 3
-            columnSpacing: Kirigami.Units.gridUnit * 1.5
-            rowSpacing: Kirigami.Units.largeSpacing
-
-            BigStat {
-                label: qsTr("Charge")
-                value: Format.percent(page.b.percent)
-                rule: page.hue
-            }
-            BigStat {
-                label: page.rateName
-                value: Format.watts(page.b.watts)
-                // Ties it to the draw chart, which is shown only with a rate.
-                rule: page.hasRate ? page.powerHue : "transparent"
-            }
-            BigStat {
-                label: page.b.status === "charging" ? qsTr("Time until full") : qsTr("Time remaining")
-                value: Format.duration(page.b.timeLeft)
-            }
+        BigStat {
+            label: qsTr("Charge")
+            value: Format.percent(page.b.percent)
         }
-
-        DetailGrid {
-            // No wider than the page: a long address elides.
-            width: Math.min(implicitWidth, parent.width)
-            // As the Go version: worn from 70%, heavily worn below.
-            entries: [[qsTr("Status"), page.statusText], [qsTr("Energy"), page.b.full > 0 ? Format.shareFormat.arg(Format.wh(page.b.energy)).arg(Format.wh(page.b.full)) : Format.dash], [qsTr("Battery health"), isNaN(page.b.health) ? Format.dash : [qsTr("%1 of original"), qsTr("%1 of original · worn"), qsTr("%1 of original · heavily worn")][page.b.wear].arg(Format.percent(page.b.health))], [qsTr("Design capacity"), Format.wh(page.b.design)], [qsTr("Charge cycles"), page.b.cycles > 0 ? Format.count(page.b.cycles) : Format.dash], [qsTr("Charge limit"), page.b.chargeLimit > 0 ? page.b.chargeLimit + "%" : ""], [qsTr("Voltage"), page.b.volts > 0 ? qsTr("%1 V").arg(Number(page.b.volts).toLocaleString(Qt.locale(), "f", 2)) : Format.dash], [qsTr("Power adapter"), !page.b.hasAdapter ? Format.dash : page.b.onAc ? (page.b.adapters || qsTr("Connected")) : qsTr("Disconnected")], [qsTr("Battery"), page.b.identity]]
+        BigStat {
+            label: page.rateName
+            value: Format.watts(page.b.watts)
         }
+        BigStat {
+            label: page.b.status === "charging" ? qsTr("Time until full") : qsTr("Time remaining")
+            value: Format.duration(page.b.timeLeft)
+        }
+        // As the Go version: worn from 70%, heavily worn below.
+        details: [[qsTr("Status"), page.statusText], [qsTr("Energy"), page.b.full > 0 ? Format.shareFormat.arg(Format.wh(page.b.energy)).arg(Format.wh(page.b.full)) : Format.dash], [qsTr("Battery health"), isNaN(page.b.health) ? Format.dash : [qsTr("%1 of original"), qsTr("%1 of original · worn"), qsTr("%1 of original · heavily worn")][page.b.wear].arg(Format.percent(page.b.health))], [qsTr("Design capacity"), Format.wh(page.b.design)], [qsTr("Charge cycles"), page.b.cycles > 0 ? Format.count(page.b.cycles) : Format.dash], [qsTr("Charge limit"), page.b.chargeLimit > 0 ? page.b.chargeLimit + "%" : ""], [qsTr("Voltage"), page.b.volts > 0 ? qsTr("%1 V").arg(Number(page.b.volts).toLocaleString(Qt.locale(), "f", 2)) : Format.dash], [qsTr("Power adapter"), !page.b.hasAdapter ? Format.dash : page.b.onAc ? (page.b.adapters || qsTr("Connected")) : qsTr("Disconnected")], [qsTr("Battery"), page.b.identity]]
     }
 }

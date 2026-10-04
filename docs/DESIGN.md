@@ -9,8 +9,8 @@ System Monitor, which the image removes.
 Stack: Rust + Qt 6.11 + Kirigami 6.30 through CXX-Qt 0.10, built with CMake
 and Corrosion, QML compiled ahead of time by `qt_add_qml_module`. Same stack
 and build as [Atlas Updater](https://github.com/EternalCoder454/atlasos-updater),
-and its look for the lists and settings; the hardware pages look like a
-monitor (see "Look");
+and its look for the lists and settings; the hardware pages are denser,
+with colour for their data (see "Look");
 its `docs/DESIGN.md` is the reference for anything this file doesn't cover.
 Supports Fedora 44 Kinoite only (Qt 6.11.2, KF6 6.30, Rust 1.98).
 
@@ -66,28 +66,33 @@ its compatibility rules. Code that only Atlas Monitor needs stays here.
 
 ## Look
 
-The hardware pages and the sidebar follow the Go version and Windows' Task
-Manager, not Atlas Updater's settings look:
+Atlas.Ui's design throughout (bold titles, rounded cards, the sidebar's
+pills, the theme's colours), made denser where it shows hardware, with a
+colour per part for its data:
 
 - Each kind of thing has its colour (`qml/Hues.qml`): processor cyan, memory
   blue, disk green, network pink, graphics purple, battery green, power
-  yellow, darkened to 72% on a light theme. Its page's charts and bars and
-  its Overview tile use it.
-- `ResourcePage` takes the whole width: a large light headline at the top
-  left (the load, or a drive's or adapter's name) and what it is at the
-  right, then full-width charts (separate ones for read and write, receive
-  and send), then `BigStat`s (a muted name over a large figure, with a rule
-  in the chart's colour, dashed for the second series) beside a
-  `DetailGrid` of names and values.
-- The processor's logical processors are a `CoreGrid` (`cpp/coregrid.*`):
-  one painted item, "CPU 3" and its percent over a slim bar, as many columns
-  as fit and preferably as fill every row.
-- The Overview is a status line and a tile per part with a sparkline of its
-  last minute (`DeviceList`'s `*Trend(s)` properties, kept on every page).
-- The sidebar (`NavButton`, `NavGroup`) has small-capital headings, icons in
-  the text's colour, and a neutral tint with an accent bar for the page open.
+  yellow, darkened to 72% on a light theme. Only data takes it: charts, bars,
+  sparklines and a page's figure. Everything else is the theme's.
+- `ResourcePage` is `AtlasPage`'s bold title with what the part is under it
+  and its figure now at the right, in a centred column wider than
+  `AtlasPage`'s (54 grid units). Its content is `MonitorCard`s: an Atlas.Ui
+  `Section` with room inside, for a chart or a grid. Read and write (receive
+  and send) charts sit side by side in one card where there is room.
+- `FigureCard` holds a part's figures: a few `BigStat`s (a muted name over
+  the value) across the top, then a `DetailGrid` of names and values in two
+  equal columns where there is room.
+- The processor's logical processors are a `CoreGrid` (`cpp/coregrid.*`) in
+  a card that folds: one painted item, "CPU 3" and its percent over a slim
+  bar, as many columns as fit and preferably as fill every row.
+- The Overview is an `AtlasPage` list: a status row, then a row per part
+  with its figure and a `Sparkline` (`cpp/sparkline.*`) of its last minute
+  (`DeviceList`'s `*Trend(s)` properties). The sparkline is one painted item
+  with no grid, and skips a repaint when its samples haven't changed.
+- The sidebar is Atlas.Ui's `SidebarItem` and `SidebarGroup`, with live
+  figures.
 - Apps, Startup, Services, Energy Saver, System Info, Devices, Sensors,
-  Settings and About keep Atlas.Ui's `AtlasPage` and sections.
+  Settings and About are `AtlasPage`s of sections.
 
 ## Process and window
 

@@ -18,9 +18,10 @@ ResourcePage {
     readonly property color hue: Hues.on(Hues.disk, Kirigami.Theme.backgroundColor)
 
     title: page.disk.label
-    headline: page.disk.label
-    headlineScale: 2.1
-    name: [Format.bytes(page.disk.size), page.disk.name].filter(t => t.length > 0 && t !== Format.dash).join(" · ")
+    subtitle: [Format.bytes(page.disk.size), page.disk.name].filter(t => t.length > 0 && t !== Format.dash).join(" · ")
+    // As the Overview and the sidebar: reading and writing together.
+    figure: Format.rate(page.disk.readRate + page.disk.writeRate)
+    figureColor: page.hue
 
     // zram is RAM, not a drive: say what it is instead of a capacity.
     QQC2.Label {
@@ -31,113 +32,110 @@ ResourcePage {
         text: qsTr("Swap (zram) is a compressed pool carved out of your RAM that acts as overflow memory: when RAM fills up, the kernel compresses rarely used pages and parks them here instead of writing them to your SSD. That keeps the system responsive under pressure and spares the drive.")
     }
 
-    SectionLabel {
+    MonitorCard {
         visible: !page.disk.swap
-        text: qsTr("Capacity")
-    }
-    UsageBar {
-        Layout.fillWidth: true
-        visible: !page.disk.swap && page.disk.mounted
-        barHeight: Math.round(Kirigami.Units.gridUnit * 1.2)
-        colors: [page.hue]
-        total: page.disk.used + page.disk.free
-        values: [page.disk.used]
-        labels: [qsTr("Used"), qsTr("Free")]
-        texts: [Format.size(page.disk.used), Format.size(page.disk.free)]
-    }
-    // Not mounted: there is no usage to show, and 0 B used would read as an
-    // empty drive.
-    QQC2.Label {
-        visible: !page.disk.swap && !page.disk.mounted
-        Layout.fillWidth: true
-        wrapMode: Text.Wrap
-        opacity: 0.7
-        text: qsTr("Not mounted, so there is no usage to show. Mount the drive in your file manager and its capacity will appear here.")
+        title: qsTr("Capacity")
+
+        UsageBar {
+            Layout.fillWidth: true
+            visible: page.disk.mounted
+            barHeight: Math.round(Kirigami.Units.gridUnit * 0.9)
+            colors: [page.hue]
+            total: page.disk.used + page.disk.free
+            values: [page.disk.used]
+            labels: [qsTr("Used"), qsTr("Free")]
+            texts: [Format.size(page.disk.used), Format.size(page.disk.free)]
+        }
+        // Not mounted: there is no usage to show, and 0 B used would read
+        // as an empty drive.
+        QQC2.Label {
+            visible: !page.disk.mounted
+            Layout.fillWidth: true
+            wrapMode: Text.Wrap
+            opacity: 0.7
+            text: qsTr("Not mounted, so there is no usage to show. Mount the drive in your file manager and its capacity will appear here.")
+        }
     }
 
-    LiveChart {
-        Layout.fillWidth: true
-        Layout.preferredHeight: Kirigami.Units.gridUnit * 8.5
-        color: page.hue
-        values: page.disk.readHistory
-        // A quiet drive still shows a scale of a megabyte a second, so a
-        // few kilobytes don't fill the chart.
-        minimumScale: 1048576
-        label: qsTr("Read speed")
-        valueText: Format.rate(page.disk.readRate)
-        topText: Format.rate(scaleTop)
-        spanText: Format.span(page.interval)
-    }
-    LiveChart {
-        Layout.fillWidth: true
-        Layout.preferredHeight: Kirigami.Units.gridUnit * 8.5
-        color: page.hue
-        values: page.disk.writeHistory
-        minimumScale: 1048576
-        label: qsTr("Write speed")
-        valueText: Format.rate(page.disk.writeRate)
-        topText: Format.rate(scaleTop)
-        spanText: Format.span(page.interval)
-    }
-
-    Flow {
-        Layout.fillWidth: true
-        Layout.topMargin: Kirigami.Units.smallSpacing
-        spacing: Kirigami.Units.gridUnit * 2
+    // Reading and writing side by side where there is room.
+    MonitorCard {
+        title: qsTr("Activity")
 
         GridLayout {
-            columns: 2
-            columnSpacing: Kirigami.Units.gridUnit * 1.5
-            rowSpacing: Kirigami.Units.largeSpacing
+            Layout.fillWidth: true
+            columns: page.width > Kirigami.Units.gridUnit * 40 ? 2 : 1
+            columnSpacing: Kirigami.Units.gridUnit
+            rowSpacing: Kirigami.Units.largeSpacing * 1.5
 
-            BigStat {
-                label: qsTr("Read speed")
-                value: Format.rate(page.disk.readRate)
-                rule: page.hue
+            LiveChart {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Kirigami.Units.gridUnit * 7
+                color: page.hue
+                values: page.disk.readHistory
+                // A quiet drive still shows a scale of a megabyte a second,
+                // so a few kilobytes don't fill the chart.
+                minimumScale: 1048576
+                label: qsTr("Read")
+                valueText: Format.rate(page.disk.readRate)
+                topText: Format.rate(scaleTop)
+                spanText: Format.span(page.interval)
             }
-            BigStat {
-                label: qsTr("Write speed")
-                value: Format.rate(page.disk.writeRate)
-                rule: page.hue
-                dashed: true
-            }
-            BigStat {
-                visible: !page.disk.swap && page.disk.mounted
-                label: qsTr("Used")
-                value: page.disk.mounted ? Format.size(page.disk.used) : Format.dash
-            }
-            BigStat {
-                visible: !page.disk.swap && page.disk.mounted
-                label: qsTr("Free")
-                value: page.disk.mounted ? Format.size(page.disk.free) : Format.dash
+            LiveChart {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Kirigami.Units.gridUnit * 7
+                color: page.hue
+                values: page.disk.writeHistory
+                minimumScale: 1048576
+                label: qsTr("Write")
+                valueText: Format.rate(page.disk.writeRate)
+                topText: Format.rate(scaleTop)
+                spanText: Format.span(page.interval)
             }
         }
+    }
 
+    FigureCard {
+        BigStat {
+            label: qsTr("Read speed")
+            value: Format.rate(page.disk.readRate)
+        }
+        BigStat {
+            label: qsTr("Write speed")
+            value: Format.rate(page.disk.writeRate)
+        }
+        BigStat {
+            visible: !page.disk.swap && page.disk.mounted
+            label: qsTr("Used")
+            value: page.disk.mounted ? Format.size(page.disk.used) : Format.dash
+        }
+        BigStat {
+            visible: !page.disk.swap && page.disk.mounted
+            label: qsTr("Free")
+            value: page.disk.mounted ? Format.size(page.disk.free) : Format.dash
+        }
+        details: [[qsTr("Total size"), Format.bytes(page.disk.size)], [qsTr("Read since startup"), Format.size(page.disk.readTotal)], [qsTr("Written since startup"), Format.size(page.disk.writeTotal)], [qsTr("Device"), "/dev/" + page.disk.name]]
+    }
+
+    MonitorCard {
+        // Not an empty card when the drive reports nothing worth showing yet.
+        visible: page.disk.smart && (page.disk.warning.length > 0 || health.shown.length > 0)
+        title: qsTr("Health")
+
+        QQC2.Label {
+            visible: page.disk.warning.length > 0
+            Layout.fillWidth: true
+            wrapMode: Text.Wrap
+            color: Kirigami.Theme.negativeTextColor
+            text: page.disk.warning
+        }
         DetailGrid {
-            // No wider than the page: a long address elides.
-            width: Math.min(implicitWidth, parent.width)
-            entries: [[qsTr("Total size"), Format.bytes(page.disk.size)], [qsTr("Read since startup"), Format.size(page.disk.readTotal)], [qsTr("Written since startup"), Format.size(page.disk.writeTotal)], [qsTr("Device"), "/dev/" + page.disk.name]]
+            id: health
+            Layout.fillWidth: true
+            visible: health.shown.length > 0
+            pairs: page.width >= Kirigami.Units.gridUnit * 34 ? 2 : 1
+            // As the Go version: a figure the drive reports as 0 says nothing
+            // yet, and the error counts show only once there are some.
+            entries: [[qsTr("Life remaining"), isNaN(page.disk.life) ? "" : page.disk.life <= 10 ? qsTr("%1 · replace it").arg(Format.percent(page.disk.life)) : page.disk.life <= 30 ? qsTr("%1 · wearing out").arg(Format.percent(page.disk.life)) : Format.percent(page.disk.life)], [qsTr("Temperature"), isNaN(page.disk.temperature) ? "" : Format.celsius(page.disk.temperature)], [qsTr("Powered on"), page.disk.powerOnHours > 0 ? Format.hours(page.disk.powerOnHours) : ""], [qsTr("Written in total"), page.disk.written > 0 ? Format.size(page.disk.written) : ""], [qsTr("Power cycles"), page.disk.powerCycles > 0 ? Format.count(page.disk.powerCycles) : ""], [qsTr("Unsafe shutdowns"), page.disk.unsafeShutdowns > 0 ? Format.count(page.disk.unsafeShutdowns) : ""], [qsTr("Media errors"), page.disk.mediaErrors > 0 ? Format.count(page.disk.mediaErrors) : ""]]
         }
-    }
-
-    SectionLabel {
-        visible: page.disk.smart
-        Layout.topMargin: Kirigami.Units.largeSpacing
-        text: qsTr("Health")
-    }
-    QQC2.Label {
-        visible: page.disk.smart && page.disk.warning.length > 0
-        Layout.fillWidth: true
-        wrapMode: Text.Wrap
-        color: Kirigami.Theme.negativeTextColor
-        text: page.disk.warning
-    }
-    DetailGrid {
-        Layout.fillWidth: true
-        visible: page.disk.smart
-        pairs: page.width >= Kirigami.Units.gridUnit * 34 ? 2 : 1
-        // As the Go version: a figure the drive reports as 0 says nothing
-        // yet, and the error counts show only once there are some.
-        entries: [[qsTr("Life remaining"), isNaN(page.disk.life) ? "" : page.disk.life <= 10 ? qsTr("%1 · replace it").arg(Format.percent(page.disk.life)) : page.disk.life <= 30 ? qsTr("%1 · wearing out").arg(Format.percent(page.disk.life)) : Format.percent(page.disk.life)], [qsTr("Temperature"), isNaN(page.disk.temperature) ? "" : Format.celsius(page.disk.temperature)], [qsTr("Powered on"), page.disk.powerOnHours > 0 ? Format.hours(page.disk.powerOnHours) : ""], [qsTr("Written in total"), page.disk.written > 0 ? Format.size(page.disk.written) : ""], [qsTr("Power cycles"), page.disk.powerCycles > 0 ? Format.count(page.disk.powerCycles) : ""], [qsTr("Unsafe shutdowns"), page.disk.unsafeShutdowns > 0 ? Format.count(page.disk.unsafeShutdowns) : ""], [qsTr("Media errors"), page.disk.mediaErrors > 0 ? Format.count(page.disk.mediaErrors) : ""]]
     }
 }

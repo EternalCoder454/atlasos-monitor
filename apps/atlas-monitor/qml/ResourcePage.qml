@@ -3,24 +3,23 @@ import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
-// A hardware page as the Go version and Task Manager lay it out: the whole
-// width, a large headline at the top left (the load, or the device's name)
-// and what it is at the right, then charts and figures. The pages that are
-// lists and settings keep Atlas.Ui's AtlasPage.
+// A hardware page: AtlasPage's bold title, with what the part is under it
+// and its figure now at the right, then cards of charts and figures. Wider
+// than AtlasPage, as charts want, and tighter, as a monitor shows a lot.
+// The pages that are lists and settings keep AtlasPage.
 Item {
     id: root
 
-    // Large and light at the top left: "89%", or a drive's name.
-    property string headline
-    // A figure is larger than a name.
-    property real headlineScale: 2.5
-    // Muted at the top right: the model, or the size and device.
-    property string name
-    // For screen readers and the window: what the page is about.
-    property string title: root.name
+    // Bold at the top left: "Processor", or a drive's name.
+    property string title
+    // Muted under the title: the model, or the size and device.
+    property string subtitle
+    // At the right of the title, in the part's colour: "19%". "" for none.
+    property string figure
+    property color figureColor: Kirigami.Theme.textColor
     default property alias content: col.data
 
-    readonly property real margin: Kirigami.Units.gridUnit
+    readonly property real maxContentWidth: Kirigami.Units.gridUnit * 54
 
     QQC2.ScrollView {
         id: scroll
@@ -57,45 +56,56 @@ Item {
 
         Item {
             width: scroll.width
-            implicitHeight: col.implicitHeight + root.margin * 2
+            implicitHeight: col.implicitHeight + Kirigami.Units.gridUnit * 2.4
 
             ColumnLayout {
                 id: col
-                x: root.margin
-                y: root.margin * 0.8
-                width: parent.width - root.margin * 2
+                y: Kirigami.Units.gridUnit * 1.2
+                width: Math.min(parent.width - Kirigami.Units.gridUnit * 2, root.maxContentWidth)
+                x: Math.round((parent.width - width) / 2)
                 spacing: Kirigami.Units.largeSpacing * 1.5
 
                 RowLayout {
                     Layout.fillWidth: true
+                    Layout.bottomMargin: -Kirigami.Units.smallSpacing
                     spacing: Kirigami.Units.gridUnit
 
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+
+                        QQC2.Label {
+                            Layout.fillWidth: true
+                            text: root.title
+                            font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.6
+                            font.bold: true
+                            textFormat: Text.PlainText
+                            elide: Text.ElideRight
+                            Accessible.role: Accessible.Heading
+                            Accessible.description: root.figure
+                        }
+                        QQC2.Label {
+                            Layout.fillWidth: true
+                            visible: root.subtitle.length > 0
+                            text: root.subtitle
+                            opacity: 0.65
+                            textFormat: Text.PlainText
+                            elide: Text.ElideRight
+                        }
+                    }
                     QQC2.Label {
-                        Layout.alignment: Qt.AlignBaseline
-                        // A long drive name gives way to the size beside it
-                        // only so far.
-                        Layout.maximumWidth: col.width * 0.7
-                        text: root.headline
-                        font.pointSize: Kirigami.Theme.defaultFont.pointSize * root.headlineScale
-                        font.weight: Font.Light
+                        Layout.alignment: Qt.AlignTop
+                        visible: root.figure.length > 0
+                        text: root.figure
+                        color: root.figureColor
+                        font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.6
+                        font.weight: Font.DemiBold
+                        // Figures of one width, so a changing value doesn't jiggle.
                         font.features: ({
                                 "tnum": 1
                             })
                         textFormat: Text.PlainText
-                        elide: Text.ElideRight
-                        Accessible.role: Accessible.Heading
-                        Accessible.name: root.title
-                        Accessible.description: root.headline
-                    }
-                    QQC2.Label {
-                        Layout.alignment: Qt.AlignBaseline
-                        Layout.fillWidth: true
-                        horizontalAlignment: Text.AlignRight
-                        text: root.name
-                        font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.15
-                        opacity: 0.85
-                        textFormat: Text.PlainText
-                        elide: Text.ElideRight
+                        Accessible.ignored: true
                     }
                 }
             }

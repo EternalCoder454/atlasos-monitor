@@ -5,45 +5,65 @@ import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
-// Names and values in columns, as the Go version's details: a muted name,
-// its value beside it, `pairs` of them to a line. A row whose value is ""
-// (or undefined) is left out.
+// Names and values: a muted name, its value beside it, in `pairs` columns
+// of equal width that read across (the first two entries side by side). A
+// row whose value is "" (or undefined) is left out.
 //
 //   DetailGrid {
+//       Layout.fillWidth: true
 //       entries: [[qsTr("Sockets"), "1"], [qsTr("Cores"), "24"]]
 //   }
-GridLayout {
+//
+// Give it a width (fill it): a name's widest is half its column, so a grid
+// sized by its contents would size itself in a loop.
+RowLayout {
     id: grid
 
-    // (Not `rows`: GridLayout has one.)
     property var entries: []
     property int pairs: 1
 
     readonly property var shown: grid.entries.filter(r => r[1] !== undefined && r[1] !== "")
+    readonly property int count: Math.max(1, grid.pairs)
 
-    columns: Math.max(1, grid.pairs) * 2
-    columnSpacing: Kirigami.Units.largeSpacing * 2
-    rowSpacing: Kirigami.Units.smallSpacing + 2
+    spacing: Kirigami.Units.gridUnit * 1.5
 
     Repeater {
-        model: grid.shown.length * 2
+        model: grid.count
 
-        QQC2.Label {
+        GridLayout {
+            id: column
             required property int index
-            readonly property bool isValue: index % 2 === 1
-            // The last value of a line takes what width is left.
-            readonly property bool last: Math.floor(index / 2) % grid.pairs === grid.pairs - 1
+            // Every count-th entry, from this column's own.
+            readonly property var own: grid.shown.filter((r, i) => i % grid.count === column.index)
 
-            Layout.fillWidth: isValue && last
-            // The gap between pairs is wider than within one.
-            Layout.rightMargin: isValue && !last ? Kirigami.Units.gridUnit * 1.5 : 0
-            text: grid.shown[Math.floor(index / 2)]?.[isValue ? 1 : 0] ?? ""
-            opacity: isValue ? 1 : 0.62
-            font.features: ({
-                    "tnum": 1
-                })
-            textFormat: Text.PlainText
-            elide: isValue ? Text.ElideRight : Text.ElideNone
+            Layout.alignment: Qt.AlignTop
+            Layout.fillWidth: true
+            Layout.preferredWidth: 1
+            Layout.minimumWidth: 0
+            columns: 2
+            columnSpacing: Kirigami.Units.largeSpacing * 2
+            rowSpacing: Kirigami.Units.smallSpacing + 2
+
+            Repeater {
+                model: column.own.length * 2
+
+                QQC2.Label {
+                    required property int index
+                    readonly property bool isValue: index % 2 === 1
+
+                    Layout.fillWidth: isValue
+                    Layout.minimumWidth: 0
+                    // A long name gives way to its value in a narrow column.
+                    Layout.maximumWidth: isValue ? Number.POSITIVE_INFINITY : grid.width / grid.count * 0.5
+                    text: column.own[Math.floor(index / 2)]?.[isValue ? 1 : 0] ?? ""
+                    opacity: isValue ? 1 : 0.62
+                    font.features: ({
+                            "tnum": 1
+                        })
+                    textFormat: Text.PlainText
+                    elide: Text.ElideRight
+                }
+            }
         }
     }
 }

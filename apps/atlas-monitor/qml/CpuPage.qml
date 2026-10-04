@@ -20,77 +20,63 @@ ResourcePage {
     readonly property bool coresFolded: page.backend.foldedSections.includes("cpu.cores")
 
     title: qsTr("Processor")
-    headline: page.measured ? Format.percent(page.cpu.usage) : Format.dash
-    name: page.cpu.model
+    subtitle: page.cpu.model
+    figure: page.measured ? Format.percent(page.cpu.usage) : Format.dash
+    figureColor: page.hue
 
-    LiveChart {
-        Layout.fillWidth: true
-        Layout.preferredHeight: Kirigami.Units.gridUnit * 12.5
-        color: page.hue
-        values: page.cpu.usageHistory
-        maximum: 100
-        label: qsTr("% Utilization")
-        valueText: page.measured ? Format.percent(page.cpu.usage) : ""
-        topText: "100%"
-        spanText: Format.span(page.interval)
+    MonitorCard {
+        LiveChart {
+            Layout.fillWidth: true
+            Layout.preferredHeight: Kirigami.Units.gridUnit * 9
+            color: page.hue
+            values: page.cpu.usageHistory
+            maximum: 100
+            label: qsTr("Utilization")
+            valueText: page.measured ? Format.percent(page.cpu.usage) : ""
+            topText: "100%"
+            spanText: Format.span(page.interval)
+        }
     }
 
-    SectionLabel {
+    MonitorCard {
         visible: page.cpu.coreUsage.length > 0
-        text: qsTr("Logical Processors")
+        title: qsTr("Logical Processors")
         // On a 32-thread machine the grid is the page's biggest drawing.
         // Folded, it isn't drawn, and its binding stops reading the loads.
         foldable: true
         folded: page.coresFolded
-        onClicked: page.backend.setFolded("cpu.cores", !page.coresFolded)
-    }
+        onFoldRequested: fold => page.backend.setFolded("cpu.cores", fold)
 
-    CoreGrid {
-        Layout.fillWidth: true
-        Layout.preferredHeight: implicitHeight
-        visible: !page.coresFolded && page.cpu.coreUsage.length > 0
-        values: page.coresFolded ? [] : page.cpu.coreUsage
-        color: page.hue
-        textColor: Kirigami.Theme.textColor
-        font: Kirigami.Theme.smallFont
-        labelFormat: qsTr("CPU %1")
-        minimumCellWidth: Kirigami.Units.gridUnit * 6
-        columnSpacing: Kirigami.Units.largeSpacing * 1.5
-        rowSpacing: Kirigami.Units.largeSpacing
-        mirrored: LayoutMirroring.enabled
-        Accessible.role: Accessible.Chart
-        Accessible.name: qsTr("Each logical processor's load")
-    }
-
-    Flow {
-        Layout.fillWidth: true
-        Layout.topMargin: Kirigami.Units.smallSpacing
-        spacing: Kirigami.Units.gridUnit * 2
-
-        GridLayout {
-            columns: 3
-            columnSpacing: Kirigami.Units.gridUnit * 1.5
+        CoreGrid {
+            Layout.fillWidth: true
+            Layout.preferredHeight: implicitHeight
+            values: page.coresFolded ? [] : page.cpu.coreUsage
+            color: page.hue
+            textColor: Kirigami.Theme.textColor
+            font: Kirigami.Theme.smallFont
+            labelFormat: qsTr("CPU %1")
+            minimumCellWidth: Kirigami.Units.gridUnit * 5.5
+            columnSpacing: Kirigami.Units.largeSpacing * 1.5
             rowSpacing: Kirigami.Units.largeSpacing
-
-            BigStat {
-                label: qsTr("Utilization")
-                value: page.measured ? Format.percent(page.cpu.usage) : Format.dash
-                rule: page.hue
-            }
-            BigStat {
-                label: qsTr("Speed")
-                value: Format.mhz(page.cpu.frequency)
-            }
-            BigStat {
-                label: qsTr("Temperature")
-                value: Format.celsius(page.cpu.temperature)
-            }
+            mirrored: LayoutMirroring.enabled
+            Accessible.role: Accessible.Chart
+            Accessible.name: qsTr("Each logical processor's load")
         }
+    }
 
-        DetailGrid {
-            // No wider than the page: a long address elides.
-            width: Math.min(implicitWidth, parent.width)
-            entries: [[qsTr("Base speed"), Format.mhz(page.cpu.baseFrequency)], [qsTr("Sockets"), page.measured ? String(page.cpu.sockets) : Format.dash], [qsTr("Cores"), page.measured ? String(page.cpu.cores) : Format.dash], [qsTr("Logical processors"), page.measured ? String(page.cpu.threads) : Format.dash], [qsTr("L1 data cache"), Format.bytes(page.cpu.l1d)], [qsTr("L1 instruction cache"), Format.bytes(page.cpu.l1i)], [qsTr("L2 cache"), Format.bytes(page.cpu.l2)], [qsTr("L3 cache"), Format.bytes(page.cpu.l3)]]
+    FigureCard {
+        BigStat {
+            label: qsTr("Utilization")
+            value: page.measured ? Format.percent(page.cpu.usage) : Format.dash
         }
+        BigStat {
+            label: qsTr("Speed")
+            value: Format.mhz(page.cpu.frequency)
+        }
+        BigStat {
+            label: qsTr("Temperature")
+            value: Format.celsius(page.cpu.temperature)
+        }
+        details: [[qsTr("Base speed"), Format.mhz(page.cpu.baseFrequency)], [qsTr("Sockets"), page.measured ? String(page.cpu.sockets) : Format.dash], [qsTr("Cores"), page.measured ? String(page.cpu.cores) : Format.dash], [qsTr("Logical processors"), page.measured ? String(page.cpu.threads) : Format.dash], [qsTr("L1 data cache"), Format.bytes(page.cpu.l1d)], [qsTr("L1 instruction cache"), Format.bytes(page.cpu.l1i)], [qsTr("L2 cache"), Format.bytes(page.cpu.l2)], [qsTr("L3 cache"), Format.bytes(page.cpu.l3)]]
     }
 }
