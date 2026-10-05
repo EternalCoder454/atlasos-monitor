@@ -37,8 +37,9 @@ atlas_framework_ui::app! {
     name: "Atlas Monitor",
     id: "net.eterneon.atlas.monitor",
     repo: "atlasos-monitor",
-    // AtlasSpinner and AtlasFocusRing; the spec's Requires says the same.
-    ui: "1.3.0",
+    // AtlasCard, AtlasStat, AtlasDetailGrid, AtlasSparkline, AtlasDialog and
+    // AtlasSidebar; the spec's Requires says the same.
+    ui: "1.4.0",
 }
 
 /// The QObjects QML sees, handed to the engine as `Main.qml`'s initial

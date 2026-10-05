@@ -65,8 +65,8 @@ dependencies = [
 
 [[package]]
 name = "atlas-framework-core"
-version = "1.3.0"
-source = "git+https://github.com/EternalCoder454/atlas-framework?tag=v1.3.0#b09455f51ec7ab68c9b47d61a8b2f8bfaf99a178"
+version = "1.4.0"
+source = "git+https://github.com/EternalCoder454/atlas-framework?tag=v1.4.0#7a114a112bd1fff4fe3d6facc81b0a81e5d2db30"
 dependencies = [
  "libc",
  "log",
@@ -75,8 +75,8 @@ dependencies = [
 
 [[package]]
 name = "atlas-framework-system"
-version = "1.3.0"
-source = "git+https://github.com/EternalCoder454/atlas-framework?tag=v1.3.0#b09455f51ec7ab68c9b47d61a8b2f8bfaf99a178"
+version = "1.4.0"
+source = "git+https://github.com/EternalCoder454/atlas-framework?tag=v1.4.0#7a114a112bd1fff4fe3d6facc81b0a81e5d2db30"
 dependencies = [
  "atlas-framework-core",
  "getrandom 0.3.4",
@@ -89,8 +89,8 @@ dependencies = [
 
 [[package]]
 name = "atlas-framework-ui"
-version = "1.3.0"
-source = "git+https://github.com/EternalCoder454/atlas-framework?tag=v1.3.0#b09455f51ec7ab68c9b47d61a8b2f8bfaf99a178"
+version = "1.4.0"
+source = "git+https://github.com/EternalCoder454/atlas-framework?tag=v1.4.0#7a114a112bd1fff4fe3d6facc81b0a81e5d2db30"
 dependencies = [
  "atlas-framework-core",
  "atlas-framework-system",

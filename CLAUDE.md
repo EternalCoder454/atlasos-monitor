@@ -35,7 +35,7 @@ behaviour and numbers; it is frozen, so don't change it from here.
   repo: shared UI goes into atlas-framework `ui/` first, under its
   compatibility rules (DESIGN.md, Shared code). The Rust side (startup,
   settings file, logging, crash reports) is the `atlas-framework-ui` crate,
-  pinned by `rev` in the workspace `Cargo.toml`.
+  pinned by release `tag` in the workspace `Cargo.toml`.
 - **The GUI thread never blocks.** Readers live in `crates/atlas-sysinfo` (no
   Qt) and run on a worker thread; results come back with `qt_thread().queue`.
 - **Rendering defaults to the CPU** (Qt Quick software backend). Charts are
