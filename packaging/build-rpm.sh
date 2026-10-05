@@ -16,16 +16,8 @@ main() {
     spec=$here/atlas-monitor.spec
     version=$(awk '/^Version:/ {print $2; exit}' "$spec")
 
-    dnf -y install rpm-build dnf5-plugins tar gzip >&2
-    if [ -n "${ATLAS_LOCAL_RPMS:-}" ]; then
-        # Atlas.Ui and its fonts, not the gallery. dnf brings their
-        # dependencies; rpm then puts these exact files in place even when a
-        # build of the same version is installed already.
-        local_rpms=("$ATLAS_LOCAL_RPMS"/atlas-ui-[0-9]*.rpm "$ATLAS_LOCAL_RPMS"/atlas-symbols-fonts-[0-9]*.rpm)
-        dnf -y install "${local_rpms[@]}" >&2
-        rpm -U --replacepkgs --replacefiles "${local_rpms[@]}" >&2
-    fi
-    dnf -y builddep "$spec" >&2
+    # ATLAS_LOCAL_RPMS goes to it in the environment.
+    bash "$here/install-builddeps.sh"
 
     # ATLAS_BUILD_CACHE=<dir> keeps the CMake build (Corrosion's cargo target
     # in it) in <dir>, at a fixed path, so a rebuild only compiles what

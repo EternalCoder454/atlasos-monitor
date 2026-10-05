@@ -8,13 +8,18 @@ on:
   pull_request:
     paths-ignore: ['**.md', 'docs/**', 'LICENSE', '.gitignore']
   workflow_dispatch:
+  # Weekly on main: Fedora's updates, and a fresh dev image (the image job).
+  schedule:
+    - cron: '17 4 * * 1'
 
 permissions:
   contents: read
 
+# A newer push cancels a branch's or PR's run, but not main's: its runs are
+# the release check, and the image job must not stop between its pushes.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -23,6 +28,107 @@ env:
 # app checks are at the commit of the release tag Cargo.toml pins the crates
 # to; the framework job checks that they agree.
 jobs:
+  # The CI dev image (ci/Containerfile), rebuilt from main only, when the
+  # Containerfile, the spec or the week changed. The only job that may write
+  # packages; GITHUB_TOKEN is used at run time only, nothing goes in the image.
+  image:
+    name: Dev image
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build, check and push it when it changed
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          image=ghcr.io/eternalcoder454/atlas-monitor-dev
+          stamp=f44-$(cat ci/Containerfile packaging/atlas-monitor.spec | sha256sum | cut -c1-16)-$(date -u +%G-%V)
+          digest() {
+            local d
+            d=$(docker buildx imagetools inspect "$1" --format '{{.Manifest.Digest}}') || return 1
+            [[ $d =~ ^sha256:[0-9a-f]{64}$ ]] || return 1
+            printf '%s\n' "$d"
+          }
+          trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          printf '%s\n' "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+          # Built already (this week, from these files): :f44 must be it.
+          # It may not be after a run cancelled between the two pushes, or
+          # when the files went back to an earlier state this week.
+          if built=$(digest "$image:$stamp" 2>/dev/null); then
+            if [ "$(digest "$image:f44" 2>/dev/null || true)" != "$built" ]; then
+              docker buildx imagetools create -t "$image:f44" "$image@$built"
+              echo "$image:f44 moved to $image:$stamp"
+            else
+              echo "$image:$stamp is current"
+            fi
+            exit 0
+          fi
+          docker build --pull -f ci/Containerfile -t "$image:$stamp" -t "$image:f44" packaging
+          # It is public: no GitHub token, and no build argument or environment
+          # variable that names one, may be in it. Each output is taken first,
+          # so a failing docker command fails the step instead of passing.
+          history=$(docker history --no-trunc --format '{{.CreatedBy}}' "$image:$stamp")
+          if grep -iE 'token|secret|password|gh[opsur]_|github_pat_' <<<"$history"; then
+            echo "::error::the image's history mentions a secret"; exit 1
+          fi
+          env=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$image:$stamp")
+          if grep -iE 'token|secret|password' <<<"$env"; then
+            echo "::error::the image's environment names a secret"; exit 1
+          fi
+          # Every file of the image's own filesystem (-xdev leaves out the
+          # mounted /proc, /sys and /dev). It ends by printing "scan
+          # finished" when find listed them all and xargs ran grep on all
+          # (123: some grep found nothing, which is fine; above that, xargs
+          # itself failed).
+          scan=$(docker run --rm --network none "$image:$stamp" bash -c '
+              find / -xdev -type f -print0 |
+                xargs -0 grep -lsE "gh[opsur]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}"
+              status=("${PIPESTATUS[@]}")
+              [ "${status[0]}" -eq 0 ] && [ "${status[1]}" -le 123 ] && echo "scan finished"') || true
+          if [ "$(tail -n1 <<<"$scan")" != "scan finished" ]; then
+            echo "::error::the token scan did not finish"; echo "$scan"; exit 1
+          fi
+          found=$(sed '$d' <<<"$scan")
+          if [ -n "$found" ]; then
+            echo "::error::these files in the image hold what looks like a GitHub token:"; echo "$found"; exit 1
+          fi
+          echo "Secret check: no token in the image's files, history or environment"
+          docker push "$image:$stamp"
+          docker push "$image:f44"
+
+  # Which image the build jobs run in: the dev image when it can be pulled
+  # without credentials (it is public), by digest so one run uses one image;
+  # else plain Fedora 44, where they install everything with dnf. No token is
+  # sent to any registry.
+  devimage:
+    name: Dev image to use
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      image: ${{ steps.probe.outputs.image }}
+    steps:
+      - name: Probe
+        id: probe
+        run: |
+          image=ghcr.io/eternalcoder454/atlas-monitor-dev
+          # The digest is checked by pulling its manifest back by it.
+          if digest=$(timeout 60 docker buildx imagetools inspect "$image:f44" --format '{{.Manifest.Digest}}' 2>/dev/null) &&
+              [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]] &&
+              timeout 60 docker buildx imagetools inspect "$image@$digest" >/dev/null 2>&1; then
+            echo "Using $image:f44, $digest"
+            echo "image=$image@$digest" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::$image:f44 can't be pulled (not built yet, or not public): plain Fedora 44"
+            echo "image=registry.fedoraproject.org/fedora:44" >> "$GITHUB_OUTPUT"
+          fi
+
   # atlas-framework's design rules (no default buttons, no QML file named
   # like an Atlas.Ui type), at the release the crates are pinned to.
   atlas:
@@ -102,16 +208,16 @@ jobs:
 
   check:
     name: fmt, clippy, tests
-    needs: framework
+    needs: [framework, devimage]
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    container: registry.fedoraproject.org/fedora:44
+    container: ${{ needs.devimage.outputs.image }}
     env:
       # No debug info: faster links and a smaller cache; tests don't need it.
       CARGO_PROFILE_DEV_DEBUG: 0
     steps:
       - name: Tools for checkout and cache
-        run: dnf -y install git-core tar zstd cargo rustfmt
+        run: rpm -q git-core tar zstd cargo rustfmt >/dev/null || dnf -y install git-core tar zstd cargo rustfmt
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -124,18 +230,21 @@ jobs:
           # In the container: runner.temp would be the host's path.
           path: /tmp/atlas-framework-rpms
       - name: Build dependencies
+        run: ATLAS_LOCAL_RPMS=/tmp/atlas-framework-rpms packaging/install-builddeps.sh clippy
+      # cxx-qt's build scripts compile against Qt and atlas-ui without
+      # watching their versions: a cache from another toolchain is not used.
+      - name: Toolchain
+        id: toolchain
         run: |
-          dnf -y install dnf5-plugins clippy \
-            /tmp/atlas-framework-rpms/atlas-ui-[0-9]*.rpm \
-            /tmp/atlas-framework-rpms/atlas-symbols-fonts-[0-9]*.rpm
-          dnf -y builddep packaging/atlas-monitor.spec
+          versions=$(rpm -q gcc-c++ qt6-qtbase-devel qt6-qtdeclarative-devel kf6-kirigami-devel atlas-ui)
+          echo "hash=$(sha256sum <<<"$versions" | cut -c1-16)" >> "$GITHUB_OUTPUT"
       # The crate downloads and the dependencies' build output (not the
       # workspace's own crates), keyed on Cargo.lock and the rustc version.
       # Saved from main and beta only, so pull requests can't evict them.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          key: f44
-          save-if: ${{ github.event_name == 'push' }}
+          key: f44-${{ steps.toolchain.outputs.hash }}
+          save-if: ${{ github.event_name == 'push' || github.event_name == 'schedule' }}
       # --locked: also fails when Cargo.lock and the atlas-framework tag disagree.
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
@@ -146,16 +255,16 @@ jobs:
   # target in it) is cached, so it compiles only what changed.
   rpm:
     name: RPM
-    needs: framework
+    needs: [framework, devimage]
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    container: registry.fedoraproject.org/fedora:44
+    container: ${{ needs.devimage.outputs.image }}
     env:
       CARGO_HOME: /github/home/.cargo
       ATLAS_BUILD_CACHE: /github/home/rpm-build
     steps:
       - name: Tools for checkout and cache
-        run: dnf -y install git-core tar zstd
+        run: rpm -q git-core tar zstd >/dev/null || dnf -y install git-core tar zstd
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -185,7 +294,7 @@ jobs:
       - name: Build the RPM
         run: ATLAS_LOCAL_RPMS=/tmp/atlas-framework-rpms packaging/build-rpm.sh "$GITHUB_WORKSPACE/out"
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: github.event_name == 'push' && steps.cache.outputs.cache-hit != 'true'
+        if: (github.event_name == 'push' || github.event_name == 'schedule') && steps.cache.outputs.cache-hit != 'true'
         with:
           path: |
             /github/home/.cargo/registry
