@@ -35,7 +35,7 @@ AtlasPage {
         return qsTr("%1% of a core").arg(Number(v).toLocaleString(Qt.locale(), "f", 1));
     }
 
-    function statusText(key, cpu) {
+    function rowStatusText(key, cpu) {
         const share = page.ofACore(cpu);
         switch (key) {
         case "easedAuto":
@@ -161,7 +161,7 @@ AtlasPage {
 
                 iconName: row.icon
                 title: row.name
-                subtitle: page.statusText(row.status, row.cpu)
+                subtitle: page.rowStatusText(row.status, row.cpu)
 
                 SecondaryButton {
                     text: row.eased ? qsTr("Put Back") : qsTr("Ease Off")

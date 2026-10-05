@@ -17,7 +17,7 @@ ResourcePage {
     readonly property var b: page.battery
     readonly property bool limited: page.b.chargeLimit > 0
     // What the driver says, as the Go version's Status row.
-    readonly property string statusText: ({
+    readonly property string batteryStatus: ({
             "charging": qsTr("Charging"),
             "discharging": qsTr("Discharging"),
             "notCharging": qsTr("Not charging"),
@@ -55,7 +55,7 @@ ResourcePage {
         if (page.b.onAc) {
             return qsTr("Plugged in, not charging");
         }
-        return page.statusText;
+        return page.batteryStatus;
     }
 
     title: page.b.label
@@ -112,6 +112,6 @@ ResourcePage {
             value: Format.duration(page.b.timeLeft)
         }
         // As the Go version: worn from 70%, heavily worn below.
-        details: [[qsTr("Status"), page.statusText], [qsTr("Energy"), page.b.full > 0 ? Format.shareFormat.arg(Format.wh(page.b.energy)).arg(Format.wh(page.b.full)) : Format.dash], [qsTr("Battery health"), isNaN(page.b.health) ? Format.dash : [qsTr("%1 of original"), qsTr("%1 of original · worn"), qsTr("%1 of original · heavily worn")][page.b.wear].arg(Format.percent(page.b.health))], [qsTr("Design capacity"), Format.wh(page.b.design)], [qsTr("Charge cycles"), page.b.cycles > 0 ? Format.count(page.b.cycles) : Format.dash], [qsTr("Charge limit"), page.b.chargeLimit > 0 ? page.b.chargeLimit + "%" : ""], [qsTr("Voltage"), page.b.volts > 0 ? qsTr("%1 V").arg(Number(page.b.volts).toLocaleString(Qt.locale(), "f", 2)) : Format.dash], [qsTr("Power adapter"), !page.b.hasAdapter ? Format.dash : page.b.onAc ? (page.b.adapters || qsTr("Connected")) : qsTr("Disconnected")], [qsTr("Battery"), page.b.identity]]
+        details: [[qsTr("Status"), page.batteryStatus], [qsTr("Energy"), page.b.full > 0 ? Format.shareFormat.arg(Format.wh(page.b.energy)).arg(Format.wh(page.b.full)) : Format.dash], [qsTr("Battery health"), isNaN(page.b.health) ? Format.dash : [qsTr("%1 of original"), qsTr("%1 of original · worn"), qsTr("%1 of original · heavily worn")][page.b.wear].arg(Format.percent(page.b.health))], [qsTr("Design capacity"), Format.wh(page.b.design)], [qsTr("Charge cycles"), page.b.cycles > 0 ? Format.count(page.b.cycles) : Format.dash], [qsTr("Charge limit"), page.b.chargeLimit > 0 ? page.b.chargeLimit + "%" : ""], [qsTr("Voltage"), page.b.volts > 0 ? qsTr("%1 V").arg(Number(page.b.volts).toLocaleString(Qt.locale(), "f", 2)) : Format.dash], [qsTr("Power adapter"), !page.b.hasAdapter ? Format.dash : page.b.onAc ? (page.b.adapters || qsTr("Connected")) : qsTr("Disconnected")], [qsTr("Battery"), page.b.identity]]
     }
 }
