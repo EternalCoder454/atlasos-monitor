@@ -22,6 +22,10 @@ if [ ${#pages[@]} -eq 0 ]; then
     pages=(overview cpu memory apps services sensors energy startup settings)
 fi
 sock=wl-pages-$$
+# Each page gets measure.sh's warm-up (10 s), its window and at most a minute
+# more; past that the container is killed (a hung run held the machine-wide
+# heavy job queue for hours).
+budget=$((runs * ${#pages[@]} * (10 + seconds + 70) + 120))
 rt=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
 mkdir -p "$repo/out/pages"
 
@@ -30,8 +34,8 @@ mkdir -p "$repo/out/pages"
 # shellcheck disable=SC2016
 dbus-run-session --config-file="${PRIVATE_BUS_CONF:-$HOME/.claude/headless/private-bus.conf}" -- bash -c '
     set -uo pipefail
-    sock=$1 rt=$2 repo=$3 runs=$4 seconds=$5
-    shift 5
+    sock=$1 rt=$2 repo=$3 runs=$4 seconds=$5 budget=$6
+    shift 6
     kwin_wayland --virtual --no-lockscreen --width 2880 --height 1800 --socket "$sock" >"$repo/out/pages/kwin.log" 2>&1 &
     kwin=$!
     trap "kill $kwin 2>/dev/null; wait $kwin 2>/dev/null" EXIT INT TERM
@@ -41,7 +45,8 @@ dbus-run-session --config-file="${PRIVATE_BUS_CONF:-$HOME/.claude/headless/priva
         exit 1
     fi
     # PAGES_ENV is a list of podman arguments, split on purpose.
-    DBUS_SESSION_BUS_ADDRESS=unix:path=$rt/bus podman run --rm --security-opt label=disable \
+    DBUS_SESSION_BUS_ADDRESS=unix:path=$rt/bus timeout -k 30 $((budget + 60)) \
+        podman run --rm --timeout "$budget" --security-opt label=disable \
         --userns=keep-id --pid=host \
         -v "$repo":/src:ro -w /src \
         -v "$rt/$sock":/run/wl/wayland-0 \
@@ -50,4 +55,4 @@ dbus-run-session --config-file="${PRIVATE_BUS_CONF:-$HOME/.claude/headless/priva
         ${PAGES_ENV:-} \
         localhost/atlas-monitor-dev:44 bash /src/bench/pages/measure.sh "$runs" "$seconds" "$@" \
         2>"$repo/out/pages/app.log"
-' _ "$sock" "$rt" "$repo" "$runs" "$seconds" "${pages[@]}"
+' _ "$sock" "$rt" "$repo" "$runs" "$seconds" "$budget" "${pages[@]}"

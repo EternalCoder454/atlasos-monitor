@@ -5,6 +5,8 @@
 # Prints chartbench's JSON line on stdout and KWin's CPU (kwin_cpu_ms) on
 # stderr; KWin's and the app's logs go to out/chartbench/. Build first (see
 # README.md). Extra podman arguments go in CHART_ENV (e.g. "-e QT_SCALE_FACTOR=1.5").
+# CHART_TIMEOUT (seconds, default 900) kills a run that hangs; raise it for
+# a long --seconds.
 set -euo pipefail
 repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 scale=$1
@@ -12,6 +14,10 @@ shift
 sock=wl-chartbench-$$
 rt=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
 mkdir -p "$repo/out/chartbench"
+if [[ ! ${CHART_TIMEOUT:-900} =~ ^[0-9]+$ ]]; then
+    echo "CHART_TIMEOUT must be a number of seconds" >&2
+    exit 1
+fi
 
 # KWin runs on a private bus that cannot start services, so nothing it starts
 # outlives the run. podman itself (not the app) is given the real user bus,
@@ -30,12 +36,13 @@ dbus-run-session --config-file="${PRIVATE_BUS_CONF:-$HOME/.claude/headless/priva
         exit 1
     fi
     # CHART_ENV is a list of podman arguments, split on purpose.
-    out=$(DBUS_SESSION_BUS_ADDRESS=unix:path=$3/bus podman run --rm --security-opt label=disable \
+    out=$(DBUS_SESSION_BUS_ADDRESS=unix:path=$3/bus timeout -k 30 $(($5 + 60)) \
+        podman run --rm --timeout "$5" --security-opt label=disable \
         -v "$4":/src -w /src \
         -v "$3/$2":/run/wl/wayland-0 \
         -e XDG_RUNTIME_DIR=/run/wl -e WAYLAND_DISPLAY=wayland-0 -e QT_QPA_PLATFORM=wayland \
         ${CHART_ENV:-} \
-        localhost/atlas-monitor-dev:44 build/chartbench/chartbench "${@:5}" 2>"$4/out/chartbench/app.log")
+        localhost/atlas-monitor-dev:44 build/chartbench/chartbench "${@:6}" 2>"$4/out/chartbench/app.log")
     line=$(grep "^{" <<<"$out" || true)
     if [ -z "$line" ]; then
         echo "chartbench printed no result; see out/chartbench/app.log" >&2
@@ -45,4 +52,4 @@ dbus-run-session --config-file="${PRIVATE_BUS_CONF:-$HOME/.claude/headless/priva
     # KWin'"'"'s own CPU over the run (utime+stime, ms, startup included)
     read -r -a st < /proc/$kwin/stat
     echo "kwin_cpu_ms $(( (st[13] + st[14]) * 1000 / $(getconf CLK_TCK) ))" >&2
-' _ "$scale" "$sock" "$rt" "$repo" "$@"
+' _ "$scale" "$sock" "$rt" "$repo" "${CHART_TIMEOUT:-900}" "$@"

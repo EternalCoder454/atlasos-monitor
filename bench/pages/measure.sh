@@ -27,12 +27,14 @@ for run in $(seq "$runs"); do
         chmod 700 "$home/runtime"
         printf '[Window]\nPage=%s\nWidth=1100\nHeight=1150\n' "$page" >"$home/config/atlas-monitorrc"
         # The inner script is single-quoted on purpose; its arguments come in as $1..$4.
+        # A hung app (or bus) is stopped a minute after its window should end.
         # shellcheck disable=SC2016
         HOME=$home XDG_CONFIG_HOME=$home/config XDG_DATA_HOME=$home/data \
             XDG_CACHE_HOME=$home/cache XDG_RUNTIME_DIR=$home/runtime \
-            dbus-run-session -- bash -c '
+            timeout -k 10 $((warmup + seconds + 60)) dbus-run-session -- bash -c '
                 ${APP:-/src/build/release/atlas-monitor} &
                 app=$!
+                echo $app >"$HOME/app.pid"
                 sleep "$1"
                 if ! kill -0 $app 2>/dev/null; then
                     echo "{\"page\":\"$2\",\"run\":$3,\"error\":\"exited\"}"
@@ -45,8 +47,19 @@ for run in $(seq "$runs"); do
                     "$2" "$3" "$(per_s $c0 $c1 $4)" "$(per_s $r0 $r1 $4)" \
                     "$open" "$(rollup $app Rss)" "$(rollup $app Pss)"
                 kill $app
+                # SIGKILL when it has not quit 5 s later.
+                for _ in $(seq 50); do kill -0 $app 2>/dev/null || break; sleep 0.1; done
+                kill -9 $app 2>/dev/null
                 wait $app 2>/dev/null
+                exit 0  # 124 and 137 mean timeout'"'"'s own stop, below
             ' _ "$warmup" "$page" "$run" "$seconds"
+        status=$?
+        if [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
+            echo "{\"page\":\"$page\",\"run\":$run,\"error\":\"timed out\"}"
+            # timeout stops the bus and the script, not the app they started.
+            # (Not pkill: with --pid=host that could match the host's apps.)
+            app=$(cat "$home/app.pid" 2>/dev/null) && kill -9 "$app" 2>/dev/null
+        fi
         rm -rf "$home"
     done
 done
