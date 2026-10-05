@@ -289,7 +289,9 @@ jobs:
             /github/home/.cargo/registry
             /github/home/.cargo/git
             /github/home/rpm-build
-          key: rpm-f44-${{ needs.framework.outputs.ref }}-${{ steps.week.outputs.week }}-${{ hashFiles('Cargo.lock', 'packaging/atlas-monitor.spec') }}
+          # build-rpm.sh in the key: a change to how it builds (or to the
+          # source times it keeps in the cache) is saved as a new cache.
+          key: rpm-f44-${{ needs.framework.outputs.ref }}-${{ steps.week.outputs.week }}-${{ hashFiles('Cargo.lock', 'packaging/atlas-monitor.spec', 'packaging/build-rpm.sh') }}
           restore-keys: rpm-f44-${{ needs.framework.outputs.ref }}-${{ steps.week.outputs.week }}-
       - name: Build the RPM
         run: ATLAS_LOCAL_RPMS=/tmp/atlas-framework-rpms packaging/build-rpm.sh "$GITHUB_WORKSPACE/out"
