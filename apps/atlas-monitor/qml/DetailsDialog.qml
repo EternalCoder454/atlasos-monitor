@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import Atlas.Ui
@@ -11,7 +10,7 @@ import Atlas.Ui
 // of several processes, the application and its busiest members, each of
 // which opens here in turn. The figures are read once, as it opens
 // (src/details.rs).
-QQC2.Popup {
+AtlasDialog {
     id: dialog
 
     required property var details
@@ -86,60 +85,36 @@ QQC2.Popup {
         return qsTr("%1 of a core").arg(dialog.percent(v));
     }
 
-    // Each new thing shown starts at its top.
+    // The dialog's body scrolls in a Flickable that is its contentItem's only
+    // child; each new thing shown starts at its top.
+    function toTop() {
+        const flick = dialog.contentItem.children[0];
+        if (flick) {
+            flick.contentY = 0;
+        }
+    }
+
     Connections {
         target: dialog.details
         function onShown() {
-            scroll.QQC2.ScrollBar.vertical.position = 0;
+            dialog.toTop();
         }
         // Into a member; Back keeps the list where it was left.
         function onCanGoBackChanged() {
             if (dialog.details.canGoBack) {
-                scroll.QQC2.ScrollBar.vertical.position = 0;
+                dialog.toTop();
             }
         }
     }
 
-    parent: QQC2.Overlay.overlay
-    anchors.centerIn: parent
-    modal: true
-    focus: true
-    // Each opening starts with the focus on the dialog itself: the button
-    // last used would otherwise keep it, unringed, and a Return would close
+    title: dialog.details.title
+    showBack: dialog.details.canGoBack
+    preferredWidth: Kirigami.Units.gridUnit * 30
+    onBackRequested: dialog.details.back()
+    // Each opening starts with the focus on the dialog itself: AtlasDialog
+    // puts it on the first button (Back or Close), and a Return would close
     // the dialog again at once.
-    onOpened: dialogContent.forceActiveFocus()
-    closePolicy: QQC2.Popup.CloseOnEscape | QQC2.Popup.CloseOnPressOutside
-    width: Math.min(parent ? parent.width - Kirigami.Units.gridUnit * 2 : 0, Kirigami.Units.gridUnit * 30)
-    height: Math.min(implicitHeight, parent ? parent.height - Kirigami.Units.gridUnit * 3 : implicitHeight)
-    padding: Math.round(Kirigami.Units.gridUnit * 1.3)
-
-    enter: Transition {
-        NumberAnimation {
-            property: "opacity"
-            from: 0
-            to: 1
-            duration: Kirigami.Units.shortDuration
-        }
-    }
-    exit: Transition {
-        NumberAnimation {
-            property: "opacity"
-            from: 1
-            to: 0
-            duration: Kirigami.Units.shortDuration
-        }
-    }
-
-    QQC2.Overlay.modal: Rectangle {
-        color: Qt.rgba(0, 0, 0, 0.35)
-    }
-
-    background: Rectangle {
-        radius: 14
-        color: Kirigami.Theme.backgroundColor
-        border.width: 1
-        border.color: Qt.alpha(Kirigami.Theme.textColor, 0.16)
-    }
+    onOpened: dialog.contentItem.forceActiveFocus()
 
     // A label small above its value, which is what anyone is here for; the
     // value can be selected, so a path or a command line can be copied. An
@@ -158,11 +133,9 @@ QQC2.Popup {
         Accessible.role: Accessible.StaticText
         Accessible.name: label + ", " + value
 
-        QQC2.Label {
+        AtlasLabel {
             text: property.label
-            font: Kirigami.Theme.smallFont
-            opacity: 0.65
-            textFormat: Text.PlainText
+            textStyle: AtlasLabel.Caption
         }
         TextEdit {
             Layout.fillWidth: true
@@ -179,202 +152,157 @@ QQC2.Popup {
         }
     }
 
-    contentItem: ColumnLayout {
-        id: dialogContent
-        Accessible.role: Accessible.Dialog
-        Accessible.name: dialog.details.title
-        spacing: Kirigami.Units.largeSpacing
-
-        RowLayout {
+    ColumnLayout {
+        id: body
+        Layout.fillWidth: true
+        spacing: Kirigami.Units.gridUnit
+        AtlasSpinner {
+            Layout.alignment: Qt.AlignHCenter
+            running: dialog.details.loading
+        }
+        AtlasLabel {
             Layout.fillWidth: true
-            spacing: Kirigami.Units.smallSpacing
+            visible: dialog.details.gone && !dialog.details.loading
+            text: qsTr("Process %1 has exited.").arg(dialog.details.pid)
+            wrapMode: Text.Wrap
+            color: AtlasStyle.textMuted
+        }
 
-            IconButton {
-                visible: dialog.details.canGoBack
-                icon.name: LayoutMirroring.enabled ? "go-next" : "go-previous"
-                text: qsTr("Back")
-                onClicked: dialog.details.back()
+        // One process.
+        ColumnLayout {
+            Layout.fillWidth: true
+            visible: !dialog.details.group && !dialog.details.loading && !dialog.details.gone
+            spacing: Kirigami.Units.gridUnit
+
+            Section {
+                title: qsTr("Process")
+                Property {
+                    label: qsTr("Name")
+                    value: dialog.details.name
+                }
+                Property {
+                    label: qsTr("Process ID")
+                    value: String(dialog.details.pid)
+                }
+                Property {
+                    label: qsTr("Started By")
+                    value: dialog.details.parent <= 0 ? "" : dialog.details.parentName.length > 0 ? qsTr("%1 (%2)").arg(dialog.details.parentName).arg(dialog.details.parent) : String(dialog.details.parent)
+                }
+                Property {
+                    label: qsTr("User")
+                    value: dialog.details.user
+                }
+                Property {
+                    label: qsTr("Running Since")
+                    value: dialog.since(dialog.details.started)
+                }
+                Property {
+                    label: qsTr("State")
+                    value: dialog.capitalise(dialog.details.state)
+                }
+                Property {
+                    label: qsTr("Threads")
+                    value: dialog.details.threads > 0 ? String(dialog.details.threads) : ""
+                }
+                Property {
+                    label: qsTr("Priority")
+                    value: dialog.priority(dialog.details.nice)
+                }
             }
-            QQC2.Label {
-                Layout.fillWidth: true
-                text: dialog.details.title
-                font.bold: true
-                font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.15
-                elide: Text.ElideRight
-                textFormat: Text.PlainText
-                Accessible.role: Accessible.Heading
+            Section {
+                title: qsTr("Program")
+                Property {
+                    label: qsTr("Executable")
+                    value: dialog.details.executable
+                }
+                Property {
+                    label: qsTr("Command Line")
+                    value: dialog.details.commandLine
+                }
+                Property {
+                    label: qsTr("Application")
+                    value: dialog.details.application
+                }
+                Property {
+                    label: qsTr("Unit")
+                    value: dialog.details.unit
+                }
             }
-            IconButton {
-                icon.name: "window-close"
-                text: qsTr("Close")
-                onClicked: dialog.close()
+            Section {
+                title: qsTr("Resources")
+                Property {
+                    label: qsTr("Processor Time")
+                    value: dialog.cpuTime(dialog.details.cpuTime)
+                }
+                Property {
+                    label: qsTr("Resident Memory")
+                    value: dialog.size(dialog.details.memory)
+                }
+                Property {
+                    label: qsTr("Proportional Memory")
+                    value: dialog.size(dialog.details.pss)
+                }
+                Property {
+                    label: qsTr("Private Memory")
+                    value: dialog.size(dialog.details.privateMemory)
+                }
+                Property {
+                    label: qsTr("Swapped Out")
+                    value: dialog.size(dialog.details.swap)
+                }
+                Property {
+                    label: qsTr("Open Files")
+                    value: dialog.details.openFiles >= 0 ? String(dialog.details.openFiles) : ""
+                }
             }
         }
 
-        QQC2.ScrollView {
-            id: scroll
+        // An application of several processes.
+        ColumnLayout {
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            implicitHeight: body.implicitHeight
-            contentWidth: availableWidth
-            // The bar beside the cards, not over their edge.
-            rightPadding: QQC2.ScrollBar.vertical.visible ? QQC2.ScrollBar.vertical.width + Kirigami.Units.smallSpacing : 0
-            QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
+            visible: dialog.details.group
+            spacing: Kirigami.Units.gridUnit
 
-            ColumnLayout {
-                id: body
-                width: scroll.availableWidth
-                spacing: Kirigami.Units.gridUnit
-
-                AtlasSpinner {
-                    Layout.alignment: Qt.AlignHCenter
-                    running: dialog.details.loading
+            Section {
+                title: qsTr("Application")
+                Property {
+                    label: qsTr("Name")
+                    value: dialog.details.title
                 }
-                QQC2.Label {
-                    Layout.fillWidth: true
-                    visible: dialog.details.gone && !dialog.details.loading
-                    text: qsTr("Process %1 has exited.").arg(dialog.details.pid)
-                    wrapMode: Text.Wrap
-                    opacity: 0.8
+                Property {
+                    label: qsTr("Application ID")
+                    value: dialog.details.appId
                 }
-
-                // One process.
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    visible: !dialog.details.group && !dialog.details.loading && !dialog.details.gone
-                    spacing: Kirigami.Units.gridUnit
-
-                    Section {
-                        title: qsTr("Process")
-                        Property {
-                            label: qsTr("Name")
-                            value: dialog.details.name
-                        }
-                        Property {
-                            label: qsTr("Process ID")
-                            value: String(dialog.details.pid)
-                        }
-                        Property {
-                            label: qsTr("Started By")
-                            value: dialog.details.parent <= 0 ? "" : dialog.details.parentName.length > 0 ? qsTr("%1 (%2)").arg(dialog.details.parentName).arg(dialog.details.parent) : String(dialog.details.parent)
-                        }
-                        Property {
-                            label: qsTr("User")
-                            value: dialog.details.user
-                        }
-                        Property {
-                            label: qsTr("Running Since")
-                            value: dialog.since(dialog.details.started)
-                        }
-                        Property {
-                            label: qsTr("State")
-                            value: dialog.capitalise(dialog.details.state)
-                        }
-                        Property {
-                            label: qsTr("Threads")
-                            value: dialog.details.threads > 0 ? String(dialog.details.threads) : ""
-                        }
-                        Property {
-                            label: qsTr("Priority")
-                            value: dialog.priority(dialog.details.nice)
-                        }
-                    }
-                    Section {
-                        title: qsTr("Program")
-                        Property {
-                            label: qsTr("Executable")
-                            value: dialog.details.executable
-                        }
-                        Property {
-                            label: qsTr("Command Line")
-                            value: dialog.details.commandLine
-                        }
-                        Property {
-                            label: qsTr("Application")
-                            value: dialog.details.application
-                        }
-                        Property {
-                            label: qsTr("Unit")
-                            value: dialog.details.unit
-                        }
-                    }
-                    Section {
-                        title: qsTr("Resources")
-                        Property {
-                            label: qsTr("Processor Time")
-                            value: dialog.cpuTime(dialog.details.cpuTime)
-                        }
-                        Property {
-                            label: qsTr("Resident Memory")
-                            value: dialog.size(dialog.details.memory)
-                        }
-                        Property {
-                            label: qsTr("Proportional Memory")
-                            value: dialog.size(dialog.details.pss)
-                        }
-                        Property {
-                            label: qsTr("Private Memory")
-                            value: dialog.size(dialog.details.privateMemory)
-                        }
-                        Property {
-                            label: qsTr("Swapped Out")
-                            value: dialog.size(dialog.details.swap)
-                        }
-                        Property {
-                            label: qsTr("Open Files")
-                            value: dialog.details.openFiles >= 0 ? String(dialog.details.openFiles) : ""
-                        }
-                    }
+                Property {
+                    label: qsTr("Processes")
+                    value: String(dialog.details.processes)
                 }
-
-                // An application of several processes.
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    visible: dialog.details.group
-                    spacing: Kirigami.Units.gridUnit
-
-                    Section {
-                        title: qsTr("Application")
-                        Property {
-                            label: qsTr("Name")
-                            value: dialog.details.title
-                        }
-                        Property {
-                            label: qsTr("Application ID")
-                            value: dialog.details.appId
-                        }
-                        Property {
-                            label: qsTr("Processes")
-                            value: String(dialog.details.processes)
-                        }
-                        Property {
-                            label: qsTr("Processor")
-                            value: dialog.percentOfCore(dialog.details.cpu)
-                        }
-                        Property {
-                            label: qsTr("Resident Memory")
-                            value: dialog.size(dialog.details.groupMemory)
-                        }
-                        Property {
-                            label: dialog.details.units.indexOf("\n") >= 0 ? qsTr("Units") : qsTr("Unit")
-                            value: dialog.details.units
-                        }
-                    }
-                    Section {
-                        title: qsTr("Processes")
-                        footer: dialog.details.processes > dialog.details.memberNames.length ? qsTr("The %1 busiest of %2.").arg(dialog.details.memberNames.length).arg(dialog.details.processes) : ""
-                        Repeater {
-                            model: dialog.details.memberNames
-                            SectionRow {
-                                required property int index
-                                required property string modelData
-                                Layout.fillWidth: true
-                                title: modelData
-                                subtitle: qsTr("PID %1 · %2 · %3").arg(dialog.details.memberPids[index] ?? "").arg(dialog.percent(dialog.details.memberCpu[index] ?? 0)).arg(Format.scaled(dialog.details.memberMemory[index] ?? 0, ""))
-                                chevron: true
-                                onClicked: dialog.details.openMember(index)
-                            }
-                        }
+                Property {
+                    label: qsTr("Processor")
+                    value: dialog.percentOfCore(dialog.details.cpu)
+                }
+                Property {
+                    label: qsTr("Resident Memory")
+                    value: dialog.size(dialog.details.groupMemory)
+                }
+                Property {
+                    label: dialog.details.units.indexOf("\n") >= 0 ? qsTr("Units") : qsTr("Unit")
+                    value: dialog.details.units
+                }
+            }
+            Section {
+                title: qsTr("Processes")
+                footer: dialog.details.processes > dialog.details.memberNames.length ? qsTr("The %1 busiest of %2.").arg(dialog.details.memberNames.length).arg(dialog.details.processes) : ""
+                Repeater {
+                    model: dialog.details.memberNames
+                    SectionRow {
+                        required property int index
+                        required property string modelData
+                        Layout.fillWidth: true
+                        title: modelData
+                        subtitle: qsTr("PID %1 · %2 · %3").arg(dialog.details.memberPids[index] ?? "").arg(dialog.percent(dialog.details.memberCpu[index] ?? 0)).arg(Format.scaled(dialog.details.memberMemory[index] ?? 0, ""))
+                        chevron: true
+                        onClicked: dialog.details.openMember(index)
                     }
                 }
             }

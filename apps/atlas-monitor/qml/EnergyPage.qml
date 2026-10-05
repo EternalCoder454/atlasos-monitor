@@ -3,7 +3,6 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
-import org.kde.kirigami as Kirigami
 import Atlas.Ui
 
 // The apps keeping the processor busy, each with Ease Off (or Put Back),
@@ -172,11 +171,10 @@ AtlasPage {
                     onClicked: row.eased ? page.energy.restore(row.appId) : page.energy.ease(row.appId)
                     Accessible.description: row.name
                 }
-                IconButton {
+                ToolbarButton {
+                    focusable: true
                     icon.name: "overflow-menu"
                     text: qsTr("More Options for %1").arg(row.name)
-                    QQC2.ToolTip.text: qsTr("More Options")
-                    QQC2.ToolTip.visible: hovered && !options.visible
                     // Its right edge under the button's, so it stays over the card.
                     onClicked: options.popup(this, mirrored ? 0 : width - options.width, height + 4)
 
