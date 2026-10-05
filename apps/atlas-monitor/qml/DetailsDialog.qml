@@ -114,13 +114,19 @@ AtlasDialog {
     onBackRequested: {
         dialog.details.back();
         // Back hides itself at the top of the list: keep the focus inside.
-        dialog.contentItem.forceActiveFocus();
+        if (!dialog.details.canGoBack) {
+            dialog.contentItem.forceActiveFocus();
+        }
     }
     // The focus starts on the body, overriding AtlasDialog, which puts it on
     // the first button (Back or Close) when the body has nothing focusable,
     // so a Return would close the dialog again at once. Deferred, so it runs
     // after AtlasDialog's own onOpened whatever the connection order.
-    onOpened: Qt.callLater(() => dialog.contentItem.forceActiveFocus())
+    onOpened: Qt.callLater(() => {
+        if (dialog.opened) {
+            dialog.contentItem.forceActiveFocus();
+        }
+    })
 
     // A label small above its value, which is what anyone is here for; the
     // value can be selected, so a path or a command line can be copied. An

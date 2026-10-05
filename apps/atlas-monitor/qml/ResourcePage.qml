@@ -30,7 +30,7 @@ AtlasPage {
                 "tnum": 1
             })
         // AtlasPage's title has no description: the figure says what it is.
-        Accessible.name: qsTr("%1: %2").arg(root.title).arg(root.figure)
+        Accessible.name: root.title.length > 0 ? qsTr("%1: %2").arg(root.title).arg(root.figure) : root.figure
     }
 
     // AtlasPage has no subtitle slot: this is the first item of its column,
