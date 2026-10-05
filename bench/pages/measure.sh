@@ -3,6 +3,8 @@
 # fresh config and session bus each time, and measures it.
 #   measure.sh <runs> <seconds> <page...>
 #   APP=<path in the container> measure.sh ...   another build, for an A/B run
+# A page may carry folded sections, as <page>,folded=<ids>: cpu,folded=cpu.cores
+# is the Processor page with its logical processors folded shut.
 set -uo pipefail
 runs=$1 seconds=$2
 shift 2
@@ -25,7 +27,10 @@ for run in $(seq "$runs"); do
         home=$(mktemp -d)
         mkdir -p "$home/config" "$home/data" "$home/cache" "$home/runtime"
         chmod 700 "$home/runtime"
-        printf '[Window]\nPage=%s\nWidth=1100\nHeight=1150\n' "$page" >"$home/config/atlas-monitorrc"
+        folded=
+        case $page in *,folded=*) folded=${page#*,folded=} ;; esac
+        printf '[Window]\nPage=%s\nWidth=1100\nHeight=1150\nFoldedSections=%s\n' \
+            "${page%%,*}" "$folded" >"$home/config/atlas-monitorrc"
         # The inner script is single-quoted on purpose; its arguments come in as $1..$4.
         # A hung app (or bus) is stopped a minute after its window should end.
         # shellcheck disable=SC2016

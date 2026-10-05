@@ -36,7 +36,9 @@ with a fresh config and session bus. After a 10 s warm-up it measures for
 
 The defaults are 3 runs of 30 s over the pages without a device. Device pages
 take their name: `disk:nvme0n1`, `network:wlp7s0`, `gpu:card1`,
-`battery:BAT0`. The app sees the host's processes (`--pid=host`) and the
+`battery:BAT0`. A page with sections folded shut is
+`<page>,folded=<ids>`: `cpu,folded=cpu.cores` against `cpu` is the cost of
+the logical processors' grid. The app sees the host's processes (`--pid=host`) and the
 host's system bus (read-only: failed services, the Services list, SMART),
 so Apps and Services read what they would on the desktop. It gets no
 session services of the host's: Energy Saver finds no user manager and has
