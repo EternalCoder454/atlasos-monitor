@@ -145,13 +145,11 @@ Item {
             Layout.fillWidth: true
             spacing: Kirigami.Units.largeSpacing
 
-            QQC2.Label {
+            AtlasLabel {
                 Layout.fillWidth: true
                 text: qsTr("Apps")
-                font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.6
-                font.bold: true
+                textStyle: AtlasLabel.Title
                 elide: Text.ElideRight
-                Accessible.role: Accessible.Heading
             }
             SearchField {
                 id: search
