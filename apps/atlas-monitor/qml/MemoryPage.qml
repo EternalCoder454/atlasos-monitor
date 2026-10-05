@@ -22,7 +22,7 @@ ResourcePage {
     figure: page.measured ? Format.percent(page.memory.used / page.memory.total * 100) : Format.dash
     figureColor: page.hue
 
-    MonitorCard {
+    AtlasCard {
         LiveChart {
             Layout.fillWidth: true
             Layout.preferredHeight: Kirigami.Units.gridUnit * 9
@@ -46,7 +46,7 @@ ResourcePage {
         }
     }
 
-    MonitorCard {
+    AtlasCard {
         visible: page.hasSwap
         title: qsTr("Swap")
 
@@ -64,15 +64,15 @@ ResourcePage {
     }
 
     FigureCard {
-        BigStat {
+        AtlasStat {
             label: qsTr("In use")
             value: page.measured ? Format.bytes(page.memory.used) : Format.dash
         }
-        BigStat {
+        AtlasStat {
             label: qsTr("Available")
             value: page.measured ? Format.bytes(page.memory.available) : Format.dash
         }
-        BigStat {
+        AtlasStat {
             label: qsTr("Cached")
             value: page.measured ? Format.bytes(page.memory.cached) : Format.dash
         }

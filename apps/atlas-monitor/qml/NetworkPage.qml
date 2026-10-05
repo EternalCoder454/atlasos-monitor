@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import Atlas.Ui
@@ -23,16 +22,16 @@ ResourcePage {
     figure: Format.rate(page.net.rxRate + page.net.txRate)
     figureColor: page.hue
 
-    QQC2.Label {
+    AtlasLabel {
         visible: !page.net.present
         Layout.fillWidth: true
         wrapMode: Text.Wrap
-        opacity: 0.7
+        color: AtlasStyle.textMuted
         text: qsTr("This connection is not there right now.")
     }
 
     // Receiving and sending side by side where there is room.
-    MonitorCard {
+    AtlasCard {
         title: qsTr("Activity")
 
         GridLayout {
@@ -68,11 +67,11 @@ ResourcePage {
     }
 
     FigureCard {
-        BigStat {
+        AtlasStat {
             label: qsTr("Receive")
             value: Format.rate(page.net.rxRate)
         }
-        BigStat {
+        AtlasStat {
             label: qsTr("Send")
             value: Format.rate(page.net.txRate)
         }

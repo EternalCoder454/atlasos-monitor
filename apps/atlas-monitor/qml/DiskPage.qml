@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import Atlas.Ui
@@ -17,6 +16,13 @@ ResourcePage {
 
     readonly property color hue: Hues.on(Hues.disk, Kirigami.Theme.backgroundColor)
 
+    // As the Go version: a figure the drive reports as 0 says nothing
+    // yet, and the error counts show only once there are some.
+    readonly property var healthRows: [[qsTr("Life remaining"), isNaN(page.disk.life) ? "" : page.disk.life <= 10 ? qsTr("%1 · replace it").arg(Format.percent(page.disk.life)) : page.disk.life <= 30 ? qsTr("%1 · wearing out").arg(Format.percent(page.disk.life)) : Format.percent(page.disk.life)], [qsTr("Temperature"), isNaN(page.disk.temperature) ? "" : Format.celsius(page.disk.temperature)], [qsTr("Powered on"), page.disk.powerOnHours > 0 ? Format.hours(page.disk.powerOnHours) : ""], [qsTr("Written in total"), page.disk.written > 0 ? Format.size(page.disk.written) : ""], [qsTr("Power cycles"), page.disk.powerCycles > 0 ? Format.count(page.disk.powerCycles) : ""], [qsTr("Unsafe shutdowns"), page.disk.unsafeShutdowns > 0 ? Format.count(page.disk.unsafeShutdowns) : ""], [qsTr("Media errors"), page.disk.mediaErrors > 0 ? Format.count(page.disk.mediaErrors) : ""]].filter(r => r[1] !== "").map(r => ({
+            "label": r[0],
+            "value": r[1]
+        }))
+
     title: page.disk.label
     subtitle: [Format.bytes(page.disk.size), page.disk.name].filter(t => t.length > 0 && t !== Format.dash).join(" · ")
     // As the Overview and the sidebar: reading and writing together.
@@ -24,15 +30,15 @@ ResourcePage {
     figureColor: page.hue
 
     // zram is RAM, not a drive: say what it is instead of a capacity.
-    QQC2.Label {
+    AtlasLabel {
         visible: page.disk.swap
         Layout.fillWidth: true
         wrapMode: Text.Wrap
-        opacity: 0.7
+        color: AtlasStyle.textMuted
         text: qsTr("Swap (zram) is a compressed pool carved out of your RAM that acts as overflow memory: when RAM fills up, the kernel compresses rarely used pages and parks them here instead of writing them to your SSD. That keeps the system responsive under pressure and spares the drive.")
     }
 
-    MonitorCard {
+    AtlasCard {
         visible: !page.disk.swap
         title: qsTr("Capacity")
 
@@ -48,17 +54,17 @@ ResourcePage {
         }
         // Not mounted: there is no usage to show, and 0 B used would read
         // as an empty drive.
-        QQC2.Label {
+        AtlasLabel {
             visible: !page.disk.mounted
             Layout.fillWidth: true
             wrapMode: Text.Wrap
-            opacity: 0.7
+            color: AtlasStyle.textMuted
             text: qsTr("Not mounted, so there is no usage to show. Mount the drive in your file manager and its capacity will appear here.")
         }
     }
 
     // Reading and writing side by side where there is room.
-    MonitorCard {
+    AtlasCard {
         title: qsTr("Activity")
 
         GridLayout {
@@ -95,20 +101,20 @@ ResourcePage {
     }
 
     FigureCard {
-        BigStat {
+        AtlasStat {
             label: qsTr("Read speed")
             value: Format.rate(page.disk.readRate)
         }
-        BigStat {
+        AtlasStat {
             label: qsTr("Write speed")
             value: Format.rate(page.disk.writeRate)
         }
-        BigStat {
+        AtlasStat {
             visible: !page.disk.swap && page.disk.mounted
             label: qsTr("Used")
             value: page.disk.mounted ? Format.size(page.disk.used) : Format.dash
         }
-        BigStat {
+        AtlasStat {
             visible: !page.disk.swap && page.disk.mounted
             label: qsTr("Free")
             value: page.disk.mounted ? Format.size(page.disk.free) : Format.dash
@@ -116,26 +122,23 @@ ResourcePage {
         details: [[qsTr("Total size"), Format.bytes(page.disk.size)], [qsTr("Read since startup"), Format.size(page.disk.readTotal)], [qsTr("Written since startup"), Format.size(page.disk.writeTotal)], [qsTr("Device"), "/dev/" + page.disk.name]]
     }
 
-    MonitorCard {
+    AtlasCard {
         // Not an empty card when the drive reports nothing worth showing yet.
-        visible: page.disk.smart && (page.disk.warning.length > 0 || health.shown.length > 0)
+        visible: page.disk.smart && (page.disk.warning.length > 0 || page.healthRows.length > 0)
         title: qsTr("Health")
 
-        QQC2.Label {
+        AtlasLabel {
             visible: page.disk.warning.length > 0
             Layout.fillWidth: true
             wrapMode: Text.Wrap
-            color: Kirigami.Theme.negativeTextColor
+            color: AtlasStyle.error
             text: page.disk.warning
         }
-        DetailGrid {
-            id: health
+        AtlasDetailGrid {
             Layout.fillWidth: true
-            visible: health.shown.length > 0
-            pairs: page.width >= Kirigami.Units.gridUnit * 34 ? 2 : 1
-            // As the Go version: a figure the drive reports as 0 says nothing
-            // yet, and the error counts show only once there are some.
-            entries: [[qsTr("Life remaining"), isNaN(page.disk.life) ? "" : page.disk.life <= 10 ? qsTr("%1 · replace it").arg(Format.percent(page.disk.life)) : page.disk.life <= 30 ? qsTr("%1 · wearing out").arg(Format.percent(page.disk.life)) : Format.percent(page.disk.life)], [qsTr("Temperature"), isNaN(page.disk.temperature) ? "" : Format.celsius(page.disk.temperature)], [qsTr("Powered on"), page.disk.powerOnHours > 0 ? Format.hours(page.disk.powerOnHours) : ""], [qsTr("Written in total"), page.disk.written > 0 ? Format.size(page.disk.written) : ""], [qsTr("Power cycles"), page.disk.powerCycles > 0 ? Format.count(page.disk.powerCycles) : ""], [qsTr("Unsafe shutdowns"), page.disk.unsafeShutdowns > 0 ? Format.count(page.disk.unsafeShutdowns) : ""], [qsTr("Media errors"), page.disk.mediaErrors > 0 ? Format.count(page.disk.mediaErrors) : ""]]
+            visible: page.healthRows.length > 0
+            columns: 2
+            model: page.healthRows
         }
     }
 }
