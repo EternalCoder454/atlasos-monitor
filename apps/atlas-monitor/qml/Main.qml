@@ -257,7 +257,11 @@ QQC2.ApplicationWindow {
             // Scrolls by itself when the window is too short for every
             // entry, and keeps a focused one in view.
             AtlasSidebar {
-                anchors.fill: parent
+                id: navList
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: footer.top
                 anchors.rightMargin: 1
                 compact: root.compact
                 padding: Kirigami.Units.largeSpacing
@@ -374,15 +378,36 @@ QQC2.ApplicationWindow {
                     text: qsTr("Services")
                     icon.name: root.icons.services
                 }
-                NavItem {
-                    page: "settings"
-                    text: qsTr("Settings")
-                    icon.name: root.icons.settings
-                }
-                NavItem {
-                    page: "about"
-                    text: qsTr("About")
-                    icon.name: root.icons.about
+            }
+
+            // Settings and About stay put under the scrolling entries.
+            Rectangle {
+                id: footer
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.rightMargin: 1
+                anchors.bottom: parent.bottom
+                height: footerColumn.implicitHeight + Kirigami.Units.largeSpacing * 2
+                color: navList.baseColor
+
+                ColumnLayout {
+                    id: footerColumn
+                    anchors.fill: parent
+                    anchors.margins: Kirigami.Units.largeSpacing
+                    spacing: 2
+
+                    NavItem {
+                        page: "settings"
+                        text: qsTr("Settings")
+                        icon.name: root.icons.settings
+                        compact: root.compact
+                    }
+                    NavItem {
+                        page: "about"
+                        text: qsTr("About")
+                        icon.name: root.icons.about
+                        compact: root.compact
+                    }
                 }
             }
 
