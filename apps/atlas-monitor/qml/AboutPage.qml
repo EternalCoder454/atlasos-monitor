@@ -22,9 +22,10 @@ AtlasPage {
             Layout.preferredWidth: Math.round(Kirigami.Units.gridUnit * 5)
             Layout.preferredHeight: Layout.preferredWidth
         }
-        Kirigami.Heading {
+        AtlasLabel {
             Layout.alignment: Qt.AlignHCenter
             Layout.topMargin: Kirigami.Units.smallSpacing
+            textStyle: AtlasLabel.Title
             text: qsTr("Atlas Monitor")
         }
         QQC2.Label {

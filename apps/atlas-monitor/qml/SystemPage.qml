@@ -154,11 +154,10 @@ AtlasPage {
             Layout.fillWidth: true
             spacing: 0
 
-            Kirigami.Heading {
+            AtlasLabel {
                 Layout.fillWidth: true
                 wrapMode: Text.Wrap
-                level: 2
-                textFormat: Text.PlainText
+                textStyle: AtlasLabel.Heading
                 text: page.s.product || page.s.vendor || page.s.hostname || qsTr("This Computer")
             }
             QQC2.Label {
