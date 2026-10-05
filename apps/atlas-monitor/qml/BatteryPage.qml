@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import Atlas.Ui
@@ -65,7 +64,7 @@ ResourcePage {
     figure: Format.percent(page.b.percent)
     figureColor: page.hue
 
-    MonitorCard {
+    AtlasCard {
         LiveChart {
             Layout.fillWidth: true
             Layout.preferredHeight: Kirigami.Units.gridUnit * 9
@@ -79,7 +78,7 @@ ResourcePage {
         }
     }
 
-    MonitorCard {
+    AtlasCard {
         visible: page.b.present && page.hasRate
         title: page.rateName
 
@@ -100,15 +99,15 @@ ResourcePage {
     FigureCard {
         visible: page.b.present
 
-        BigStat {
+        AtlasStat {
             label: qsTr("Charge")
             value: Format.percent(page.b.percent)
         }
-        BigStat {
+        AtlasStat {
             label: page.rateName
             value: Format.watts(page.b.watts)
         }
-        BigStat {
+        AtlasStat {
             label: page.b.status === "charging" ? qsTr("Time until full") : qsTr("Time remaining")
             value: Format.duration(page.b.timeLeft)
         }

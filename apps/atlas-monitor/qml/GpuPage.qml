@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import Atlas.Ui
@@ -26,15 +25,15 @@ ResourcePage {
 
     // A sleeping card is left asleep: reading it would wake it and cost
     // more power than the figures are worth.
-    QQC2.Label {
+    AtlasLabel {
         visible: page.gpu.asleep
         Layout.fillWidth: true
         wrapMode: Text.Wrap
-        opacity: 0.7
+        color: AtlasStyle.textMuted
         text: qsTr("This card is asleep because nothing is using it. Atlas Monitor leaves it asleep rather than wake it to read it, so the figures below are from when it was last awake.")
     }
 
-    MonitorCard {
+    AtlasCard {
         LiveChart {
             Layout.fillWidth: true
             Layout.preferredHeight: Kirigami.Units.gridUnit * 9
@@ -48,7 +47,7 @@ ResourcePage {
         }
     }
 
-    MonitorCard {
+    AtlasCard {
         visible: page.hasMemory
         title: page.memoryName
 
@@ -66,28 +65,28 @@ ResourcePage {
     }
 
     FigureCard {
-        BigStat {
+        AtlasStat {
             label: qsTr("Utilization")
             value: Format.percent(page.gpu.usage)
         }
-        BigStat {
+        AtlasStat {
             visible: page.hasMemory
             label: page.memoryName
             value: page.gpu.memoryUsed >= 0 ? Format.size(page.gpu.memoryUsed) : Format.dash
         }
-        BigStat {
+        AtlasStat {
             label: qsTr("Temperature")
             value: Format.celsius(page.gpu.temperature)
         }
-        BigStat {
+        AtlasStat {
             label: qsTr("Power draw")
             value: Format.watts(page.gpu.power)
         }
-        BigStat {
+        AtlasStat {
             label: qsTr("GPU clock")
             value: Format.mhz(page.gpu.coreClock)
         }
-        BigStat {
+        AtlasStat {
             label: qsTr("Fan speed")
             // amdgpu counts the fan's turns; NVIDIA gives its duty cycle.
             value: page.gpu.fanRpm > 0 ? qsTr("%1 RPM").arg(Format.count(page.gpu.fanRpm)) : page.gpu.fanPercent > 0 ? Format.percent(page.gpu.fanPercent) : Format.dash

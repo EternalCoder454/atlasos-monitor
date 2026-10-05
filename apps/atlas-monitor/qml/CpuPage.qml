@@ -24,7 +24,7 @@ ResourcePage {
     figure: page.measured ? Format.percent(page.cpu.usage) : Format.dash
     figureColor: page.hue
 
-    MonitorCard {
+    AtlasCard {
         LiveChart {
             Layout.fillWidth: true
             Layout.preferredHeight: Kirigami.Units.gridUnit * 9
@@ -38,16 +38,26 @@ ResourcePage {
         }
     }
 
-    MonitorCard {
+    AtlasCard {
         visible: page.cpu.coreUsage.length > 0
         title: qsTr("Logical Processors")
+        headerTrailing: [
+            ToolbarButton {
+                focusable: true
+                icon.name: LayoutMirroring.enabled ? "arrow-left" : "arrow-right"
+                text: page.coresFolded ? qsTr("Show logical processors") : qsTr("Hide logical processors")
+                // A quarter turn to point down when open, either way round.
+                iconRotation: page.coresFolded ? 0 : (LayoutMirroring.enabled ? -90 : 90)
+                onClicked: page.backend.setFolded("cpu.cores", !page.coresFolded)
+                Accessible.checkable: true
+                Accessible.checked: !page.coresFolded
+            }
+        ]
+
         // On a 32-thread machine the grid is the page's biggest drawing.
         // Folded, it isn't drawn, and its binding stops reading the loads.
-        foldable: true
-        folded: page.coresFolded
-        onFoldRequested: fold => page.backend.setFolded("cpu.cores", fold)
-
         CoreGrid {
+            visible: !page.coresFolded
             Layout.fillWidth: true
             Layout.preferredHeight: implicitHeight
             values: page.coresFolded ? [] : page.cpu.coreUsage
@@ -65,15 +75,15 @@ ResourcePage {
     }
 
     FigureCard {
-        BigStat {
+        AtlasStat {
             label: qsTr("Utilization")
             value: page.measured ? Format.percent(page.cpu.usage) : Format.dash
         }
-        BigStat {
+        AtlasStat {
             label: qsTr("Speed")
             value: Format.mhz(page.cpu.frequency)
         }
-        BigStat {
+        AtlasStat {
             label: qsTr("Temperature")
             value: Format.celsius(page.cpu.temperature)
         }
