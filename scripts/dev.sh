@@ -17,8 +17,11 @@ image=localhost/atlas-monitor-dev:44
 if ! podman image exists "$image"; then
     rpms=${ATLAS_LOCAL_RPMS:?the dev image needs atlas-framework RPMs: set ATLAS_LOCAL_RPMS=<dir>}
     rpms=$(cd "$rpms" && pwd)
-    ctr=$(podman run -d -v "$repo/packaging":/packaging:ro,Z \
-        -v "$rpms":/atlas-rpms:ro,z \
+    # No relabelling (label=disable, as below): :z or :Z would give the
+    # mounted directories this container's SELinux label.
+    ctr=$(podman run -d --security-opt label=disable \
+        -v "$repo/packaging":/packaging:ro \
+        -v "$rpms":/atlas-rpms:ro \
         -v atlas-dnf:/var/cache/libdnf5 \
         registry.fedoraproject.org/fedora:44 sleep infinity)
     trap 'podman rm -f "$ctr" >/dev/null' EXIT
@@ -36,8 +39,11 @@ fi
 
 tty=()
 [ -t 0 ] && tty=(-it)
-exec podman run --rm "${tty[@]}" \
-    -v "$repo":/src:Z -w /src \
+# SELinux labelling is off for the container (label=disable) rather than
+# relabelling the checkout with :z or :Z, which would lock other containers
+# and confined tools out of it, and two containers out of each other.
+exec podman run --rm "${tty[@]}" --security-opt label=disable \
+    -v "$repo":/src -w /src \
     -v atlas-cargo:/root/.cargo/registry \
     -v atlas-cargo-git:/root/.cargo/git \
     -e CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/src/target/dev}" \
