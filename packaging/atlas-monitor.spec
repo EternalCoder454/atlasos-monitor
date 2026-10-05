@@ -4,6 +4,13 @@
 # strip=none) and the binary is shipped as built.
 %global debug_package %{nil}
 
+# --define "_atlas_build_cache <dir>" (packaging/build-rpm.sh passes it when
+# ATLAS_BUILD_CACHE is set) keeps the CMake build, Corrosion's cargo target
+# with it, in <dir>, so a rebuild only compiles what changed.
+%if 0%{?_atlas_build_cache:1}
+%global _vpath_builddir %{_atlas_build_cache}/cmake
+%endif
+
 Name:           atlas-monitor
 Version:        0.1.0
 Release:        1%{?dist}
@@ -78,10 +85,15 @@ export CARGO_HOME=${CARGO_HOME:-%{_builddir}/cargo-home}
 # mktemp one, goes into the debug info and so into the linker's build ID,
 # and two builds of one commit differ. These flags split on spaces, so
 # _topdir must have none (build-rpm.sh's hasn't).
-export RUSTFLAGS="%{build_rustflags} --remap-path-prefix=$PWD=. --remap-path-prefix=$CARGO_HOME=cargo"
-export HOST_CXXFLAGS="-ffile-prefix-map=$PWD=. -ffile-prefix-map=$CARGO_HOME=cargo"
-export CFLAGS="%{build_cflags} -ffile-prefix-map=$PWD=."
-export CXXFLAGS="%{build_cxxflags} -ffile-prefix-map=$PWD=."
+# A build cache (above) holds $PWD and the CMake build: its path is remapped too.
+cache_rs="%{?_atlas_build_cache:--remap-path-prefix=%{_atlas_build_cache}=cache}"
+cache_cc="%{?_atlas_build_cache:-ffile-prefix-map=%{_atlas_build_cache}=cache}"
+# The last matching remap wins, and $PWD is inside the cache: the cache's
+# comes first.
+export RUSTFLAGS="%{build_rustflags} $cache_rs --remap-path-prefix=$PWD=. --remap-path-prefix=$CARGO_HOME=cargo"
+export HOST_CXXFLAGS="$cache_cc -ffile-prefix-map=$PWD=. -ffile-prefix-map=$CARGO_HOME=cargo"
+export CFLAGS="%{build_cflags} $cache_cc -ffile-prefix-map=$PWD=."
+export CXXFLAGS="%{build_cxxflags} $cache_cc -ffile-prefix-map=$PWD=."
 export CARGO_PROFILE_RELEASE_STRIP=none
 # (checked with rpmspec --eval: %%cmake honours _vpath_srcdir, not __cmake_source_dir)
 %global _vpath_srcdir apps/atlas-monitor
@@ -97,12 +109,14 @@ install -Dpm0644 apps/atlas-monitor/data/dnf/protected.d/atlas-monitor.conf \
 %check
 # No path into the build tree (checked as well as set: see %%build).
 # grep: 0 = found, 1 = not found, anything else (no binary) fails too.
-rc=0
-grep -qF "%{_builddir}" %{buildroot}%{_bindir}/atlas-monitor || rc=$?
-if [ "$rc" != 1 ]; then
-    echo "atlas-monitor holds the build path %{_builddir} (grep status $rc)" >&2
-    exit 1
-fi
+for path in "%{_builddir}" %{?_atlas_build_cache:"%{_atlas_build_cache}"}; do
+    rc=0
+    grep -qF "$path" %{buildroot}%{_bindir}/atlas-monitor || rc=$?
+    if [ "$rc" != 1 ]; then
+        echo "atlas-monitor holds the build path $path (grep status $rc)" >&2
+        exit 1
+    fi
+done
 desktop-file-validate %{buildroot}%{_datadir}/applications/net.eterneon.atlas.monitor.desktop
 appstream-util validate-relax --nonet \
     %{buildroot}%{_datadir}/metainfo/net.eterneon.atlas.monitor.metainfo.xml

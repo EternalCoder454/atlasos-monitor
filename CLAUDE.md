@@ -75,8 +75,11 @@ The crates are pinned to a release tag (`tag = "vX.Y.Z"`). Each
 atlas-framework release also opens a pull request here that moves it.
 1. Change `tag` in `Cargo.toml`, then
    `scripts/dev.sh cargo update -p atlas-framework-ui`.
-2. Move the same tag in `.github/workflows/ci.yml` (the app-checks job and
-   the framework RPM job), and when the app uses something new in Atlas.Ui,
+2. Move `.github/workflows/ci.yml`'s app-checks job to that release:
+   `uses: ...app-checks.yml@<the tag's commit> # vX.Y.Z` and
+   `framework-ref: vX.Y.Z` (`git ls-remote` the tag; for an annotated one the
+   `^{}` line). CI's framework RPM job reads the tag from `Cargo.toml` and
+   fails, naming the line it wants, when they disagree. When the app uses something new in Atlas.Ui,
    `ui:` in `src/lib.rs` and `atlas-ui >=` in the spec (Requires and
    BuildRequires) to that version.
 3. Rebuild the dev image against that release's RPMs (delete it, then

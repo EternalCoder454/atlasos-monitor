@@ -27,7 +27,42 @@ main() {
     fi
     dnf -y builddep "$spec" >&2
 
-    top=$(mktemp -d)
+    # ATLAS_BUILD_CACHE=<dir> keeps the CMake build (Corrosion's cargo target
+    # in it) in <dir>, at a fixed path, so a rebuild only compiles what
+    # changed (CI caches it). It starts over when the version or the
+    # toolchain changes. Without it, every build is a clean one in a temp dir.
+    rpmopts=()
+    cache=${ATLAS_BUILD_CACHE:-}
+    if [ -n "$cache" ]; then
+        mkdir -p "$cache"
+        cache=$(cd "$cache" && pwd -P)
+        case $cache/ in
+            "$(cd "$src" && pwd -P)"/*) echo "ATLAS_BUILD_CACHE must be outside the source tree" >&2; exit 1 ;;
+        esac
+        # It goes into the build flags (split on spaces) and the spec's shell.
+        if [[ ! $cache =~ ^[A-Za-z0-9_./-]+$ ]]; then
+            echo "ATLAS_BUILD_CACHE may hold only letters, digits and _ . / -" >&2; exit 1
+        fi
+        # Only a directory this script made (or an empty one): it deletes
+        # rpmbuild/ and cmake/ in it.
+        if [ ! -e "$cache/.atlas-monitor-build-cache" ] && [ -n "$(ls -A "$cache")" ]; then
+            echo "ATLAS_BUILD_CACHE ($cache) is not empty and is not an Atlas Monitor build cache" >&2; exit 1
+        fi
+        touch "$cache/.atlas-monitor-build-cache"
+        top=$cache/rpmbuild
+        rm -rf "$top"
+        toolchain=$(rpm -q rust cargo corrosion gcc-c++ cmake qt6-qtbase-devel qt6-qtdeclarative-devel \
+            kf6-kirigami-devel atlas-ui || true)
+        toolchain="atlas-monitor-$version
+$toolchain"
+        if [ "$(cat "$cache/toolchain" 2>/dev/null)" != "$toolchain" ]; then
+            rm -rf "$cache/cmake"
+            printf '%s\n' "$toolchain" >"$cache/toolchain"
+        fi
+        rpmopts+=(--define "_atlas_build_cache $cache")
+    else
+        top=$(mktemp -d)
+    fi
     trap 'rm -rf "$top"' EXIT
     mkdir -p "$top"/{SOURCES,BUILD,RPMS,SRPMS,SPECS}
     tar -C "$src" \
@@ -35,7 +70,7 @@ main() {
         --transform "s,^\./,atlas-monitor-$version/," \
         -czf "$top/SOURCES/atlas-monitor-$version.tar.gz" .
 
-    rpmbuild -bb "$@" --define "_topdir $top" "$spec"
+    rpmbuild -bb "${rpmopts[@]}" "$@" --define "_topdir $top" "$spec"
 
     mkdir -p "$out"
     find "$top/RPMS" -name '*.rpm' ! -name '*.src.rpm' ! -name '*debuginfo*' ! -name '*debugsource*' \
