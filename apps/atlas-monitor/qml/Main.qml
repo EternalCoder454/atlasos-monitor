@@ -388,7 +388,8 @@ QQC2.ApplicationWindow {
                 anchors.rightMargin: 1
                 anchors.bottom: parent.bottom
                 height: footerColumn.implicitHeight + Kirigami.Units.largeSpacing * 2
-                color: navList.baseColor
+                // As AtlasSidebar paints its own, so there is no seam.
+                color: Qt.alpha(navList.baseColor, Appearance.effective ? 0.94 : 1)
 
                 ColumnLayout {
                     id: footerColumn
@@ -418,7 +419,6 @@ QQC2.ApplicationWindow {
                 color: Qt.alpha(Kirigami.Theme.textColor, 0.12)
             }
         }
-
 
         QQC2.StackView {
             id: stack

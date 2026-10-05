@@ -49,8 +49,6 @@ ResourcePage {
                 // A quarter turn to point down when open, either way round.
                 iconRotation: page.coresFolded ? 0 : (LayoutMirroring.enabled ? -90 : 90)
                 onClicked: page.backend.setFolded("cpu.cores", !page.coresFolded)
-                Accessible.checkable: true
-                Accessible.checked: !page.coresFolded
             }
         ]
 

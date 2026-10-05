@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import Atlas.Ui
 

@@ -88,8 +88,10 @@ AtlasDialog {
     // The dialog's body scrolls in a Flickable that is its contentItem's only
     // child; each new thing shown starts at its top.
     function toTop() {
+        // AtlasDialog doesn't expose its Flickable (asked for in Atlas.Ui
+        // 1.5.0); if its insides change, this does nothing rather than fail.
         const flick = dialog.contentItem.children[0];
-        if (flick) {
+        if (flick && flick.contentY !== undefined) {
             flick.contentY = 0;
         }
     }
@@ -109,12 +111,16 @@ AtlasDialog {
 
     title: dialog.details.title
     showBack: dialog.details.canGoBack
-    preferredWidth: Kirigami.Units.gridUnit * 30
-    onBackRequested: dialog.details.back()
-    // Each opening starts with the focus on the dialog itself: AtlasDialog
-    // puts it on the first button (Back or Close), and a Return would close
-    // the dialog again at once.
-    onOpened: dialog.contentItem.forceActiveFocus()
+    onBackRequested: {
+        dialog.details.back();
+        // Back hides itself at the top of the list: keep the focus inside.
+        dialog.contentItem.forceActiveFocus();
+    }
+    // The focus starts on the body, overriding AtlasDialog, which puts it on
+    // the first button (Back or Close) when the body has nothing focusable,
+    // so a Return would close the dialog again at once. Deferred, so it runs
+    // after AtlasDialog's own onOpened whatever the connection order.
+    onOpened: Qt.callLater(() => dialog.contentItem.forceActiveFocus())
 
     // A label small above its value, which is what anyone is here for; the
     // value can be selected, so a path or a command line can be copied. An
