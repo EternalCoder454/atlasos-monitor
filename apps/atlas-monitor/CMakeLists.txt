@@ -49,7 +49,7 @@ qt_add_qml_module(atlas-monitor-app
         qml/Hues.qml qml/ResourcePage.qml qml/BigStat.qml qml/DetailGrid.qml qml/MonitorCard.qml
         qml/FigureCard.qml qml/IconButton.qml
     SOURCES
-        cpp/coregrid.h cpp/coregrid.cpp cpp/sparkline.h cpp/sparkline.cpp
+        cpp/coregrid.h cpp/coregrid.cpp
 )
 target_include_directories(atlas-monitor-app PRIVATE cpp)
 

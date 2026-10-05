@@ -38,11 +38,27 @@ AtlasPage {
         return list.slice(index * page.span, (index + 1) * page.span);
     }
 
-    // The last minute beside a row's figure.
-    component Trend: Sparkline {
+    // The top of a rate row's scale: 1.25 times its highest sample, and at
+    // least `floor`, so a quiet device's line stays low.
+    function scaleTop(values, floor) {
+        let high = 0;
+        for (const v of values) {
+            if (isFinite(v) && v > high)
+                high = v;
+        }
+        return Math.max(high * 1.25, floor);
+    }
+
+    // The last minute beside a row's figure; a percentage unless `maximum`
+    // is set. The lists arrive padded to `span`, so the newest sample is
+    // at the right edge.
+    component Trend: AtlasSparkline {
         width: Kirigami.Units.gridUnit * 4.5
         height: Kirigami.Units.gridUnit * 1.4
         anchors.verticalCenter: parent?.verticalCenter
+        minimum: 0
+        maximum: 100
+        fill: true
         Accessible.ignored: true
     }
 
@@ -113,9 +129,8 @@ AtlasPage {
                 Trend {
                     color: Hues.on(Hues.disk, page.background)
                     values: page.trend(page.devices.diskTrends, diskRow.index)
-                    maximum: 0
                     // A quiet drive's line still spans a megabyte a second.
-                    minimumScale: 1048576
+                    maximum: page.scaleTop(values, 1048576)
                 }
             }
         }
@@ -134,8 +149,7 @@ AtlasPage {
                 Trend {
                     color: Hues.on(Hues.network, page.background)
                     values: page.trend(page.devices.netTrends, netRow.index)
-                    maximum: 0
-                    minimumScale: 102400
+                    maximum: page.scaleTop(values, 102400)
                 }
             }
         }

@@ -86,9 +86,9 @@ colour per part for its data:
   a card that folds: one painted item, "CPU 3" and its percent over a slim
   bar, as many columns as fit and preferably as fill every row.
 - The Overview is an `AtlasPage` list: a status row, then a row per part
-  with its figure and a `Sparkline` (`cpp/sparkline.*`) of its last minute
-  (`DeviceList`'s `*Trend(s)` properties). The sparkline is one painted item
-  with no grid, and skips a repaint when its samples haven't changed.
+  with its figure and an Atlas.Ui `AtlasSparkline` of its last minute
+  (`DeviceList`'s `*Trend(s)` properties), scaled 0 to 100 for percentages
+  and to 1.25 times the highest sample (at least a floor) for rates.
 - The sidebar is Atlas.Ui's `SidebarItem` and `SidebarGroup`, with live
   figures.
 - Apps, Startup, Services, Energy Saver, System Info, Devices, Sensors,
