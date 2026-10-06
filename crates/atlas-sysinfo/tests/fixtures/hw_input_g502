@@ -1,0 +1,24 @@
+I: Bus=0003 Vendor=046d Product=c08b Version=0111
+N: Name="Logitech G502 HERO Gaming Mouse"
+P: Phys=usb-0000:00:14.0-5/input0
+S: Sysfs=/devices/pci0000:00/0000:00:14.0/usb1/1-5/1-5:1.0/0003:046D:C08B.0004/input/input8
+U: Uniq=
+H: Handlers=event8 
+B: PROP=0
+B: EV=17
+B: KEY=ffff0000 0 0 0 0
+B: REL=1943
+B: MSC=10
+
+I: Bus=0003 Vendor=046d Product=c08b Version=0111
+N: Name="Logitech G502 HERO Gaming Mouse Keyboard"
+P: Phys=usb-0000:00:14.0-5/input1
+S: Sysfs=/devices/pci0000:00/0000:00:14.0/usb1/1-5/1-5:1.1/0003:046D:C08B.0005/input/input9
+U: Uniq=
+H: Handlers=sysrq kbd event9 
+B: PROP=0
+B: EV=10001f
+B: KEY=733eff 0 0 483ffff17aff32d bfd4444600000000 1 130ff38b17c007 ffe77bfad941dfff febeffdfffefffff fffffffffffffffe
+B: REL=1040
+B: ABS=100000000
+B: MSC=10
