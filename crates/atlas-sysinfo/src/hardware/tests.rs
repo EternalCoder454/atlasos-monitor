@@ -10,6 +10,7 @@ use super::input::{self, Block, classify, parse_blocks, parse_udev, udev_props};
 use super::*;
 
 const INPUT: &str = include_str!("../../tests/fixtures/hw_input_devices");
+const INPUT_G502: &str = include_str!("../../tests/fixtures/hw_input_g502");
 const UDEV_KEYBOARD: &str = include_str!("../../tests/fixtures/hw_udev_keyboard");
 const UDEV_MOUSE: &str = include_str!("../../tests/fixtures/hw_udev_mouse");
 const UDEV_POWER: &str = include_str!("../../tests/fixtures/hw_udev_powerbutton");
@@ -54,6 +55,23 @@ fn blocks() -> Vec<Block> {
     parse_blocks(INPUT)
 }
 
+/// One block of `/proc/bus/input/devices` with the given identity, keys
+/// enough for a keyboard. Vendor 1234 and product 5678 for every node.
+fn node(name: &str, bus: u16, phys: &str, uniq: &str, handlers: &str) -> String {
+    format!(
+        "I: Bus={bus:04x} Vendor=1234 Product=5678 Version=0001\nN: Name=\"{name}\"\n\
+         P: Phys={phys}\nU: Uniq={uniq}\nH: Handlers={handlers} \nB: PROP=0\n\
+         B: EV=120013\nB: KEY=1000000000007 ff9f207ac14057ff febeffdfffefffff fffffffffffffffe\n\n"
+    )
+}
+
+fn names(text: &str) -> Vec<(InputKind, String)> {
+    parse_input_devices(text)
+        .into_iter()
+        .map(|d| (d.kind, d.name))
+        .collect()
+}
+
 fn kind_of(text: &str, name: &str) -> InputKind {
     let d = parse_input_devices(text);
     d.iter().find(|d| d.name == name).unwrap().kind
@@ -70,6 +88,21 @@ fn input_blocks_parse() {
     assert_eq!(kb.bus, 3);
     assert!(kb.handlers.contains(&"kbd".to_owned()));
     assert_eq!(kb.key.len(), 4);
+    // The identity fields grouping goes by.
+    assert_eq!((kb.vendor, kb.product), (0x362d, 0x0240));
+    assert_eq!(kb.phys, "usb-0000:00:14.0-3/input0");
+    assert_eq!(kb.uniq, "");
+    assert!(kb.rel.is_empty());
+    let mouse = b
+        .iter()
+        .find(|b| b.name == "Keychron Lemokey X4 Mouse")
+        .unwrap();
+    assert_eq!(mouse.phys, "usb-0000:00:14.0-3/input2");
+    assert_eq!(mouse.rel, [0x1943]);
+    let bt = parse_blocks(&node("Pad", 5, "", "AA:BB:CC:DD:EE:01", "event1"));
+    assert_eq!(bt[0].uniq, "AA:BB:CC:DD:EE:01");
+    assert_eq!(bt[0].vendor, 0x1234);
+    assert_eq!(bt[0].product, 0x5678);
 }
 
 #[test]
@@ -233,6 +266,186 @@ fn input_kind_keys() {
         ]
     );
     assert_eq!(InputKind::default(), InputKind::Other);
+}
+
+#[test]
+fn nodes_of_one_device_are_one_row() {
+    let d = parse_input_devices(INPUT);
+    // The Lemokey's four nodes: one keyboard, none of its other interfaces.
+    let lemokey: Vec<_> = d.iter().filter(|d| d.name.contains("Lemokey")).collect();
+    assert_eq!(lemokey.len(), 1);
+    // Its first interface is named for the product, and the other nodes'
+    // names extend that one, so no suffix is stripped.
+    assert_eq!(lemokey[0].name, "Keychron Lemokey X4");
+    assert_eq!(lemokey[0].kind, InputKind::Keyboard);
+    assert!(
+        !d.iter()
+            .any(|d| d.name.ends_with("Consumer Control") || d.name.ends_with("System Control"))
+    );
+    assert_eq!(d.iter().filter(|d| d.kind == InputKind::Mouse).count(), 1);
+}
+
+#[test]
+fn a_mouse_with_a_keyboard_node_is_one_mouse() {
+    let d = parse_input_devices(INPUT_G502);
+    assert_eq!(d.len(), 1);
+    assert_eq!(d[0].name, "Logitech G502 HERO Gaming Mouse");
+    assert_eq!(d[0].kind, InputKind::Mouse);
+    assert_eq!(d[0].bus, "USB");
+    // The same in the full fixture.
+    let full = names(INPUT);
+    assert!(full.contains(&(InputKind::Mouse, "Logitech G502 HERO Gaming Mouse".into())));
+    assert!(!full.iter().any(|(_, n)| n.ends_with("Mouse Keyboard")));
+}
+
+#[test]
+fn nodes_with_one_uniq_merge_across_phys() {
+    let text = [
+        node("Pad Mouse", 5, "aa:bb/input1", "AA:BB", "event2"),
+        node("Pad", 5, "aa:bb/input0", "AA:BB", "event1"),
+        node("Pad Consumer Control", 5, "aa:bb/input2", "AA:BB", "event3"),
+    ]
+    .concat();
+    // "Pad" has the lowest interface, though it is not first in the file,
+    // and the other names extend it.
+    assert_eq!(names(&text), [(InputKind::Keyboard, "Pad".to_owned())]);
+    // Different uniqs: two devices, even with the same names.
+    let two = [
+        node("Pad", 5, "", "AA:01", "event1"),
+        node("Pad", 5, "", "AA:02", "event2"),
+    ]
+    .concat();
+    assert_eq!(parse_input_devices(&two).len(), 2);
+    // A different uniq on one bus and product is another device.
+    let apart = [
+        node("Pad", 5, "", "AA:01", "event1"),
+        node("Pad Mouse", 5, "", "AA:02", "event2"),
+    ]
+    .concat();
+    assert_eq!(parse_input_devices(&apart).len(), 2);
+}
+
+#[test]
+fn identical_usb_mice_on_different_ports_stay_two_rows() {
+    let text = [
+        node(
+            "Plain Mouse",
+            3,
+            "usb-0000:00:14.0-3/input0",
+            "",
+            "mouse0 event1",
+        ),
+        node(
+            "Plain Mouse",
+            3,
+            "usb-0000:00:14.0-4/input0",
+            "",
+            "mouse1 event2",
+        ),
+    ]
+    .concat();
+    let d = parse_input_devices(&text);
+    assert_eq!(d.len(), 2);
+    assert!(d.iter().all(|d| d.kind == InputKind::Mouse));
+    // Both nodes of one port are still one.
+    let one = [
+        node(
+            "Plain Mouse",
+            3,
+            "usb-0000:00:14.0-3/input0",
+            "",
+            "mouse0 event1",
+        ),
+        node("Plain Mouse", 3, "usb-0000:00:14.0-3/input1", "", "event2"),
+    ]
+    .concat();
+    assert_eq!(parse_input_devices(&one).len(), 1);
+}
+
+#[test]
+fn nodes_without_phys_or_uniq_never_merge() {
+    let text = [
+        node("Odd Thing", 3, "", "", "event1"),
+        node("Odd Thing Keyboard", 3, "", "", "event2"),
+    ]
+    .concat();
+    assert_eq!(parse_input_devices(&text).len(), 2);
+    // A phys that isn't a path to an interface doesn't group either.
+    let alsa = [
+        node("HDA Line", 0, "ALSA", "", "event1"),
+        node("HDA Mic", 0, "ALSA", "", "event2"),
+    ]
+    .concat();
+    assert_eq!(parse_input_devices(&alsa).len(), 2);
+    // Exact twins on a built-in bus are still one row (Power Button).
+    let twins = [
+        node(
+            "Power Button",
+            0x19,
+            "PNP0C0C/button/input0",
+            "",
+            "kbd event1",
+        ),
+        node(
+            "Power Button",
+            0x19,
+            "LNXPWRBN/button/input0",
+            "",
+            "kbd event2",
+        ),
+    ]
+    .concat();
+    assert_eq!(parse_input_devices(&twins).len(), 1);
+    // So are twins with nothing to tell them apart, on any bus.
+    let blind = [
+        node("Plain Mouse", 3, "", "", "mouse0 event1"),
+        node("Plain Mouse", 3, "", "", "mouse1 event2"),
+    ]
+    .concat();
+    assert_eq!(parse_input_devices(&blind).len(), 1);
+}
+
+#[test]
+fn group_names_fall_back_to_the_shared_lead_then_the_suffix() {
+    // No node's name extends the primary's: the shared words are the product.
+    let text = [
+        node("Acme Pro Mouse", 3, "usb-1/input0", "", "mouse0 event1"),
+        node("Acme Pro Keyboard", 3, "usb-1/input1", "", "event2"),
+    ]
+    .concat();
+    assert_eq!(names(&text), [(InputKind::Mouse, "Acme Pro".to_owned())]);
+    // Only the maker is shared: strip the interface word off the primary.
+    let text = [
+        node("Acme Mouse", 3, "usb-1/input0", "", "mouse0 event1"),
+        node("Acme Consumer Control", 3, "usb-1/input1", "", "event2"),
+    ]
+    .concat();
+    assert_eq!(names(&text), [(InputKind::Mouse, "Acme".to_owned())]);
+    // Nothing to strip: the primary's name as it is.
+    let text = [
+        node("Acme Dial", 3, "usb-1/input0", "", "event1"),
+        node("Other Name", 3, "usb-1/input1", "", "event2"),
+    ]
+    .concat();
+    assert_eq!(
+        names(&text),
+        [(InputKind::Keyboard, "Acme Dial".to_owned())]
+    );
+}
+
+#[test]
+fn a_mouse_is_known_by_rel_and_btn_left() {
+    // REL_X and REL_Y (bits 0 and 1) and BTN_LEFT, 0x110 = 272, which is
+    // bit 16 of the fifth word from the right. No mousedev handler.
+    let text = "I: Bus=0003 Vendor=1 Product=2 Version=3\nN: Name=\"Ptr\"\nH: Handlers=event1 \n\
+                B: PROP=0\nB: EV=17\nB: KEY=10000 0 0 0 0\nB: REL=3\n";
+    assert_eq!(kind_of(text, "Ptr"), InputKind::Mouse);
+    // A wheel only, as a keyboard's media interface has: not a mouse.
+    let wheel = text.replace("REL=3", "REL=1040");
+    assert_eq!(kind_of(&wheel, "Ptr"), InputKind::Buttons);
+    // Axes but no button.
+    let nobtn = text.replace("KEY=10000 0 0 0 0", "KEY=0 0 0 0 0");
+    assert_eq!(kind_of(&nobtn, "Ptr"), InputKind::Other);
 }
 
 #[test]
@@ -816,6 +1029,77 @@ fn a_name_with_line_breaks_cant_add_a_device() {
     assert!(parse_blocks(text).is_empty());
     let text = "I: Bus=0003\nN: Name=\"Twice\"\nH: Handlers=kbd\nH: Handlers=js0\n";
     assert!(parse_blocks(text).is_empty());
+}
+
+#[test]
+fn sysfs_blocks_read_identity_and_group() {
+    let dir = tempfile::tempdir().unwrap();
+    let device = |n: u32, name: &str, phys: &str, uniq: Option<&str>, rel: Option<&str>| {
+        let dev = dir.path().join(format!("input{n}"));
+        fs::create_dir_all(dev.join("capabilities")).unwrap();
+        fs::create_dir_all(dev.join("id")).unwrap();
+        fs::create_dir_all(dev.join(format!("event{n}"))).unwrap();
+        fs::write(dev.join("name"), format!("{name}\n")).unwrap();
+        fs::write(dev.join("id/bustype"), "0003\n").unwrap();
+        fs::write(dev.join("id/vendor"), "046d\n").unwrap();
+        fs::write(dev.join("id/product"), "c08b\n").unwrap();
+        // Q to P makes a keyboard; BTN_LEFT with REL makes a mouse.
+        let key = if rel.is_some() {
+            "10000 0 0 0 0"
+        } else {
+            "3ff0000"
+        };
+        fs::write(dev.join("capabilities/key"), format!("{key}\n")).unwrap();
+        fs::write(dev.join("properties"), "0\n").unwrap();
+        fs::write(dev.join("phys"), format!("{phys}\n")).unwrap();
+        if let Some(u) = uniq {
+            fs::write(dev.join("uniq"), format!("{u}\n")).unwrap();
+        }
+        if let Some(r) = rel {
+            fs::write(dev.join("capabilities/rel"), format!("{r}\n")).unwrap();
+        }
+    };
+    device(
+        8,
+        "G502 Mouse",
+        "usb-0000:00:14.0-5/input0",
+        Some(""),
+        Some("1943"),
+    );
+    device(
+        9,
+        "G502 Mouse Keyboard",
+        "usb-0000:00:14.0-5/input1",
+        None,
+        None,
+    );
+    // Nothing but a name: every other file is missing.
+    let bare = dir.path().join("input10");
+    fs::create_dir_all(&bare).unwrap();
+    fs::write(bare.join("name"), "Bare\n").unwrap();
+
+    let mut blocks = input::sysfs_blocks(dir.path());
+    blocks.sort_by(|a, b| a.name.cmp(&b.name));
+    assert_eq!(blocks.len(), 3);
+    let bare = &blocks[0];
+    assert_eq!(bare.name, "Bare");
+    assert_eq!((bare.bus, bare.vendor, bare.product), (0, 0, 0));
+    assert!(bare.phys.is_empty() && bare.uniq.is_empty() && bare.rel.is_empty());
+    let mouse = &blocks[1];
+    assert_eq!(mouse.vendor, 0x046d);
+    assert_eq!(mouse.product, 0xc08b);
+    assert_eq!(mouse.phys, "usb-0000:00:14.0-5/input0");
+    assert_eq!(mouse.rel, [0x1943]);
+
+    // No mousedev and no udev: REL and BTN_LEFT say mouse, and the keyboard
+    // node folds into it.
+    let found = input::sysfs_devices(dir.path(), |_| None);
+    let usb: Vec<_> = found.iter().filter(|d| d.bus == "USB").collect();
+    assert_eq!(usb.len(), 1);
+    assert_eq!(usb[0].name, "G502 Mouse");
+    assert_eq!(usb[0].kind, InputKind::Mouse);
+    // The bare node is its own row.
+    assert!(found.iter().any(|d| d.name == "Bare"));
 }
 
 #[test]
