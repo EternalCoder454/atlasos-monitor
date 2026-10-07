@@ -437,6 +437,57 @@ mod tests {
         Some(v.to_string())
     }
 
+    /// What atlas-monitor wrote is what telamon-monitor reads: the framework
+    /// copies `atlas-monitorrc` to `telamon-monitorrc` the first time, and every
+    /// group of it comes through. The only test that sets the environment, so
+    /// nothing else here races it.
+    #[test]
+    fn reads_what_atlas_monitor_wrote() {
+        let dir = std::env::temp_dir().join(format!("telamon-monitor-rc-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let old = "[Atlas]\nFormat=1\n\n[General]\nRefreshInterval=2000\nGpuRendering=true\n\n\
+                   [EnergySaver]\nAutomatic=true\nNever=b.App,a.App\n\n\
+                   [Apps]\nGroupByApp=false\nKernelThreads=true\nHiddenColumns=gpu\n\n\
+                   [Window]\nWidth=1000\nHeight=640\nMaximized=true\nPage=cpu\nFoldedSections=cpu.cores\n";
+        std::fs::write(dir.join("atlas-monitorrc"), old).unwrap();
+        // SAFETY: no other test in this crate reads or sets the environment.
+        unsafe { std::env::set_var("XDG_CONFIG_HOME", &dir) };
+
+        let got = Settings::load();
+        assert_eq!(got.refresh_interval_ms, 2000);
+        assert!(got.gpu_rendering);
+        let energy = Energy::load();
+        assert!(energy.automatic);
+        assert_eq!(energy.never, ["a.App", "b.App"]);
+        let apps = AppsView::load();
+        assert!(!apps.grouped);
+        assert!(apps.kernel_threads);
+        assert_eq!(apps.hidden, ["gpu"]);
+        let window = WindowState::load();
+        assert_eq!((window.width, window.height), (1000, 640));
+        assert!(window.maximized);
+        assert_eq!(window.page, "cpu");
+        assert_eq!(WindowState::load_folded(), ["cpu.cores"]);
+
+        // It was copied, once: the new file is the framework's, the old one is as it was.
+        let new = std::fs::read_to_string(dir.join("telamon-monitorrc")).unwrap();
+        assert!(new.starts_with("[Telamon]\nFormat=1\n"), "{new}");
+        assert!(!new.contains("[Atlas]"));
+        assert_eq!(
+            std::fs::read_to_string(dir.join("atlas-monitorrc")).unwrap(),
+            old
+        );
+        // What the app saves goes to the new file only; a later start doesn't copy again.
+        Settings::save_refresh_interval(1000).unwrap();
+        assert_eq!(Settings::load().refresh_interval_ms, 1000);
+        assert_eq!(
+            std::fs::read_to_string(dir.join("atlas-monitorrc")).unwrap(),
+            old
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     #[test]
     fn defaults_when_missing_or_broken() {
         assert_eq!(Settings::from_values(None, None), Settings::default());
