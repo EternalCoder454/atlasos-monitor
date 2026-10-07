@@ -172,22 +172,32 @@ AtlasPage {
                     Accessible.description: row.name
                 }
                 ToolbarButton {
+                    id: more
                     focusable: true
                     icon.name: "overflow-menu"
                     text: qsTr("More Options for %1").arg(row.name)
                     // Its right edge under the button's, so it stays over the card.
-                    onClicked: options.popup(this, mirrored ? 0 : width - options.width, height + 4)
+                    onClicked: {
+                        options.active = true;
+                        const menu = options.item as ContextMenu;
+                        menu.popup(this, mirrored ? 0 : width - menu.width, height + 4);
+                    }
 
-                    ContextMenu {
+                    // Made the first time it opens, not with every row.
+                    Loader {
                         id: options
+                        active: false
+                        sourceComponent: ContextMenu {
+                            parent: more
 
-                        ContextMenuItem {
-                            text: qsTr("Never Ease Off Automatically")
-                            // ContextMenuItem draws no check box of its own.
-                            icon.name: row.never ? "checkmark" : ""
-                            Accessible.checkable: true
-                            Accessible.checked: row.never
-                            onTriggered: page.energy.setNever(row.appId, !row.never)
+                            ContextMenuItem {
+                                text: qsTr("Never Ease Off Automatically")
+                                // ContextMenuItem draws no check box of its own.
+                                icon.name: row.never ? "checkmark" : ""
+                                Accessible.checkable: true
+                                Accessible.checked: row.never
+                                onTriggered: page.energy.setNever(row.appId, !row.never)
+                            }
                         }
                     }
                 }
