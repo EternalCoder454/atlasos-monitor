@@ -64,57 +64,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "atlas-framework-core"
-version = "1.4.0"
-source = "git+https://github.com/EternalCoder454/atlas-framework?tag=v1.4.0#7a114a112bd1fff4fe3d6facc81b0a81e5d2db30"
-dependencies = [
- "libc",
- "log",
- "serde",
-]
-
-[[package]]
-name = "atlas-framework-system"
-version = "1.4.0"
-source = "git+https://github.com/EternalCoder454/atlas-framework?tag=v1.4.0#7a114a112bd1fff4fe3d6facc81b0a81e5d2db30"
-dependencies = [
- "atlas-framework-core",
- "getrandom 0.3.4",
- "libc",
- "log",
- "serde",
- "serde_json",
- "unicode-normalization",
-]
-
-[[package]]
-name = "atlas-framework-ui"
-version = "1.4.0"
-source = "git+https://github.com/EternalCoder454/atlas-framework?tag=v1.4.0#7a114a112bd1fff4fe3d6facc81b0a81e5d2db30"
-dependencies = [
- "atlas-framework-core",
- "atlas-framework-system",
- "cxx-qt-build",
- "libc",
- "log",
-]
-
-[[package]]
-name = "atlas-monitor"
-version = "0.1.0"
-dependencies = [
- "atlas-framework-ui",
- "atlas-sysinfo",
- "cxx",
- "cxx-qt",
- "cxx-qt-build",
- "cxx-qt-lib",
- "log",
-]
-
-[[package]]
 name = "atlas-sysinfo"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "criterion",
  "futures-core",
@@ -1017,6 +968,55 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "telamon-framework-core"
+version = "2.0.0"
+source = "git+https://github.com/EternalCoder454/atlas-framework?tag=v2.0.0#8e6a53569363aec3d7e42920875d03ca113ef3eb"
+dependencies = [
+ "libc",
+ "log",
+ "serde",
+]
+
+[[package]]
+name = "telamon-framework-system"
+version = "2.0.0"
+source = "git+https://github.com/EternalCoder454/atlas-framework?tag=v2.0.0#8e6a53569363aec3d7e42920875d03ca113ef3eb"
+dependencies = [
+ "getrandom 0.3.4",
+ "libc",
+ "log",
+ "serde",
+ "serde_json",
+ "telamon-framework-core",
+ "unicode-normalization",
+]
+
+[[package]]
+name = "telamon-framework-ui"
+version = "2.0.0"
+source = "git+https://github.com/EternalCoder454/atlas-framework?tag=v2.0.0#8e6a53569363aec3d7e42920875d03ca113ef3eb"
+dependencies = [
+ "cxx-qt-build",
+ "libc",
+ "log",
+ "telamon-framework-core",
+ "telamon-framework-system",
+]
+
+[[package]]
+name = "telamon-monitor"
+version = "0.2.0"
+dependencies = [
+ "atlas-sysinfo",
+ "cxx",
+ "cxx-qt",
+ "cxx-qt-build",
+ "cxx-qt-lib",
+ "log",
+ "telamon-framework-ui",
 ]
 
 [[package]]

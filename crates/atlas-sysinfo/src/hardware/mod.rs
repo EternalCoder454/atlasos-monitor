@@ -1,5 +1,5 @@
 //! The devices on the PCI and USB buses, and the input devices: the lists
-//! KDE's Info Center shows, for Atlas Monitor's Devices page.
+//! KDE's Info Center shows, for Telamon Monitor's Devices page.
 //!
 //! [`read`] lists `/sys/bus/pci/devices` and `/sys/bus/usb/devices`, then
 //! names what it found from `pci.ids` and `usb.ids` in one pass over each

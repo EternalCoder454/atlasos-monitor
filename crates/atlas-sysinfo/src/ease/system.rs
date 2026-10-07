@@ -38,7 +38,7 @@ const RETRY: Duration = Duration::from_secs(30);
 const RETRY_MAX: Duration = Duration::from_secs(300);
 
 /// The state file's directory, under `$XDG_RUNTIME_DIR`.
-const STATE_DIR: &str = "net.eterneon.atlas.monitor";
+const STATE_DIR: &str = "net.eterneon.telamon.monitor";
 /// The state file is read up to this much.
 const STATE_MAX: u64 = 256 * 1024;
 
@@ -114,7 +114,7 @@ pub fn app_slice() -> Result<PathBuf, Unavailable> {
     }
 }
 
-/// Atlas Monitor's own application ID, from its own unit.
+/// Telamon Monitor's own application ID, from its own unit.
 fn own_app_id() -> Option<String> {
     let b = fs::read("/proc/self/cgroup").ok()?;
     let unit = std::str::from_utf8(unit_from_cgroup(&b)?).ok()?;
@@ -457,14 +457,14 @@ async fn connect() -> Option<Connection> {
     running.then_some(conn)
 }
 
-/// The state file: `$XDG_RUNTIME_DIR/net.eterneon.atlas.monitor/eased`.
+/// The state file: `$XDG_RUNTIME_DIR/net.eterneon.telamon.monitor/eased`.
 /// The runtime directory lives exactly as long as the session, and so as
 /// long as the eases it lists.
 pub fn state_file() -> Option<PathBuf> {
     Some(runtime_dir()?.join("eased"))
 }
 
-/// Atlas Monitor's folder in the runtime directory, for the state file and
+/// Telamon Monitor's folder in the runtime directory, for the state file and
 /// the KWin script ([`super::kwin`]).
 pub fn runtime_dir() -> Option<PathBuf> {
     let dir = PathBuf::from(std::env::var_os("XDG_RUNTIME_DIR")?);

@@ -5,7 +5,7 @@
 //! A mount is traced back to the hardware it lives on through sysfs: a
 //! partition's parent is the directory it sits in, and a device-mapper or md
 //! device (LUKS, LVM, RAID) leads through its `slaves` to the partitions
-//! under it. On AtlasOS the root filesystem is a composefs overlay on `/`; the
+//! under it. On Telamon OS the root filesystem is a composefs overlay on `/`; the
 //! partition it comes from is mounted at `/sysroot`, so either marks the root
 //! disk.
 
@@ -448,7 +448,7 @@ mod tests {
         assert_eq!(disks[2].label(), "Swap");
     }
 
-    /// AtlasOS: composefs on /, the btrfs root at /sysroot through LUKS.
+    /// Telamon OS: composefs on /, the btrfs root at /sysroot through LUKS.
     #[test]
     fn finds_the_root_disk_on_kinoite_with_luks() {
         let t = Tree::new();

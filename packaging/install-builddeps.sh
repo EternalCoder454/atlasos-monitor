@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install what building Atlas Monitor needs, as root in fedora:44: the spec's
+# Install what building Telamon Monitor needs, as root in fedora:44: the spec's
 # BuildRequires, rpm-build and the packages named. dnf (and its metadata
 # download) runs only for what is missing, so the CI dev image, which has it
 # all, skips it.
@@ -47,7 +47,7 @@ satisfied() {
 
 main() {
     here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-    spec=$here/atlas-monitor.spec
+    spec=$here/telamon-monitor.spec
 
     tools=(rpm-build dnf5-plugins tar gzip "$@")
     if [ -n "$(printf '%s\n' "${tools[@]}" | missing)" ]; then

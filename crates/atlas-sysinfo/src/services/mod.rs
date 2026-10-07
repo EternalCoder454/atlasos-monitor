@@ -7,7 +7,7 @@
 //! Reading needs no privilege. The actions go to systemd as the user, with
 //! the message flagged to allow interactive authorization, so systemd asks
 //! polkit (`manage-units`, `manage-unit-files`) and polkit's agent asks for
-//! the password; without the flag systemd refuses at once. Atlas Monitor
+//! the password; without the flag systemd refuses at once. Telamon Monitor
 //! adds no privilege of its own (DESIGN.md, Privilege).
 //!
 //! Listing is costly for PID 1 in two places, so the reader keeps what it

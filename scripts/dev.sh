@@ -1,6 +1,6 @@
 #!/bin/bash
 # Run a command in the fedora:44 build container, with the repo at /src and
-# the cargo and dnf caches in named podman volumes (shared with atlasos-updater).
+# the cargo and dnf caches in named podman volumes (shared with the other Telamon apps).
 #   scripts/dev.sh <command...>     e.g. scripts/dev.sh cargo test --workspace
 #   scripts/dev.sh                  an interactive shell
 # The first run installs the build dependencies from the spec (cached after).
@@ -12,7 +12,7 @@
 set -euo pipefail
 
 repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-image=localhost/atlas-monitor-dev:44
+image=localhost/telamon-monitor-dev:44
 
 if ! podman image exists "$image"; then
     rpms=${ATLAS_LOCAL_RPMS:?the dev image needs atlas-framework RPMs: set ATLAS_LOCAL_RPMS=<dir>}
@@ -31,7 +31,7 @@ if ! podman image exists "$image"; then
             dbus-daemon qt6-qtbase-gui kf6-qqc2-desktop-style breeze-icon-theme \
             ImageMagick xdotool \
             /atlas-rpms/telamon-ui-[0-9]*.rpm /atlas-rpms/telamon-symbols-fonts-[0-9]*.rpm &&
-        dnf -y builddep /packaging/atlas-monitor.spec' >&2
+        dnf -y builddep /packaging/telamon-monitor.spec' >&2
     podman commit "$ctr" "$image" >/dev/null
     podman rm -f "$ctr" >/dev/null
     trap - EXIT

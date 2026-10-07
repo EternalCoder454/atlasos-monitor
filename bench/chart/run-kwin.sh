@@ -1,6 +1,6 @@
 #!/bin/bash
 # Runs chartbench in the fedora:44 dev container against a private virtual
-# KWin on the host (Wayland, as AtlasOS runs it), never the real desktop.
+# KWin on the host (Wayland, as Telamon OS runs it), never the real desktop.
 #   bench/chart/run-kwin.sh <scale> <chartbench args...>
 # Prints chartbench's JSON line on stdout and KWin's CPU (kwin_cpu_ms) on
 # stderr; KWin's and the app's logs go to out/chartbench/. Build first (see
@@ -42,7 +42,7 @@ dbus-run-session --config-file="${PRIVATE_BUS_CONF:-$HOME/.claude/headless/priva
         -v "$3/$2":/run/wl/wayland-0 \
         -e XDG_RUNTIME_DIR=/run/wl -e WAYLAND_DISPLAY=wayland-0 -e QT_QPA_PLATFORM=wayland \
         ${CHART_ENV:-} \
-        localhost/atlas-monitor-dev:44 build/chartbench/chartbench "${@:6}" 2>"$4/out/chartbench/app.log")
+        localhost/telamon-monitor-dev:44 build/chartbench/chartbench "${@:6}" 2>"$4/out/chartbench/app.log")
     line=$(grep "^{" <<<"$out" || true)
     if [ -z "$line" ]; then
         echo "chartbench printed no result; see out/chartbench/app.log" >&2

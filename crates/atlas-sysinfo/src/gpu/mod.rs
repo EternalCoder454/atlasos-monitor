@@ -7,7 +7,7 @@
 //!   use, and the card's hwmon for temperatures, fan, power and clocks. A
 //!   handful of `pread`s a tick.
 //! - **NVIDIA's driver** through NVML, loaded at run time ([`nvml`]): only
-//!   when someone has layered the driver, since AtlasOS ships none.
+//!   when someone has layered the driver, since Telamon OS ships none.
 //! - **Intel** (i915, xe): the load from the time the GPU spent out of its
 //!   idle state (RC6), the hwmon node of a discrete card, and the driver's
 //!   clock and VRAM files.

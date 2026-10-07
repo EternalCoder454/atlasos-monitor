@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 128 128">
+  <title>Telamon Monitor, 16 px</title>
+  <!-- The 128 px icon simplified for 16 px: no grid or glow, a larger screen
+       and a thicker pulse with one fewer turn. -->
+  <defs>
+    <radialGradient id="shadow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#000000" stop-opacity="0.26"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bezel" gradientUnits="userSpaceOnUse" x1="0" y1="14" x2="0" y2="104">
+      <stop offset="0" stop-color="#6A748B"/>
+      <stop offset="1" stop-color="#3B4255"/>
+    </linearGradient>
+    <linearGradient id="line" gradientUnits="userSpaceOnUse" x1="24" y1="0" x2="104" y2="0">
+      <stop offset="0" stop-color="#3FE6C8"/>
+      <stop offset="1" stop-color="#22C3E6"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="64" cy="118" rx="50" ry="7" fill="url(#shadow)"/>
+  <rect x="34" y="104" width="60" height="12" rx="6" fill="#8E97A8"/>
+  <rect x="54" y="94" width="20" height="14" fill="#8E97A8"/>
+  <rect x="6" y="14" width="116" height="86" rx="14" fill="url(#bezel)"/>
+  <rect x="18" y="26" width="92" height="62" rx="6" fill="#0D2B3B"/>
+  <path fill="none" stroke="url(#line)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" d="M26 60H44L56 38L72 80L82 60H102"/>
+</svg>

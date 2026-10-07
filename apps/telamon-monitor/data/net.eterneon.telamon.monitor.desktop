@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Telamon Monitor
+GenericName=System Monitor
+Comment=See what your computer is doing: apps, processor, memory, disks, network and more
+Exec=telamon-monitor
+Icon=net.eterneon.telamon.monitor
+Terminal=false
+Categories=Qt;KDE;System;Monitor;
+Keywords=task;manager;process;cpu;memory;disk;network;gpu;sensors;services;startup;
+StartupNotify=true
+SingleMainWindow=true
+X-KDE-StartupNotify=true
+# Windows' Task Manager keys, and Ctrl+Esc, which Plasma's System Monitor had.
+X-KDE-Shortcuts=Ctrl+Shift+Esc,Ctrl+Esc

@@ -1,12 +1,12 @@
-# Atlas Monitor (AtlasOS)
+# Telamon Monitor (Telamon OS)
 
-Rust + Qt 6.11 + Kirigami (CXX-Qt) system monitor for AtlasOS, a Fedora Kinoite
+Rust + Qt 6.11 + Kirigami (CXX-Qt) system monitor for Telamon OS, a Fedora Kinoite
 44 bootc image (repo `~/Documents/AtlasOS`). Read `docs/DESIGN.md` first: it
 fixes the layout, the QObject/model API, the threading rule and what may need
 privilege. Change it only together with the code that implements the change.
 The roadmap is the Atlas Notes note "AtlasOS/Atlas Monitor/Roadmap".
 
-The stack, build and look are Atlas Updater's (`~/Documents/Atlas Updater`,
+The stack, build and look are Telamon Updater's (`~/Documents/Telamon Updater`,
 github.com/EternalCoder454/atlasos-updater). When in doubt, do what it does,
 except for what atlas-framework provides (startup, settings file, logging,
 crash reports), which the Monitor takes from there.
@@ -23,7 +23,7 @@ behaviour and numbers; it is frozen, so don't change it from here.
   (`CARGO_TARGET_DIR=/src/target/<name> scripts/dev.sh ...`).
 - **Never run the GUI on the user's display.** For smoke tests inside the
   container, use `QT_QPA_PLATFORM=offscreen`, or `xvfb-run -a -s "-screen 0 1920x1080x24"`
-  inside `dbus-run-session`. Real end-to-end tests happen in the AtlasOS test
+  inside `dbus-run-session`. Real end-to-end tests happen in the Telamon OS test
   VM, which the lead runs.
 - **No new privilege** (DESIGN.md, Privilege). Never call the
   atlas-system-helper and never add a method to it. Services go through
@@ -46,7 +46,7 @@ behaviour and numbers; it is frozen, so don't change it from here.
 - Commit only the paths you own (`git commit -- <paths>`). Other agents may be
   committing in this repo at the same time; retry if `index.lock` exists.
   Don't push unless the lead asked.
-- Licence: MIT. App ID `net.eterneon.atlas.monitor`. Wording follows KDE:
+- Licence: MIT. App ID `net.eterneon.telamon.monitor`. Wording follows KDE:
   Title Case buttons and titles, US spelling.
 
 ## Commands
@@ -56,15 +56,15 @@ behaviour and numbers; it is frozen, so don't change it from here.
 | Format | `scripts/dev.sh cargo fmt --all --check` |
 | Lint | `scripts/dev.sh cargo clippy --workspace --all-targets --locked -- -D warnings` |
 | Tests | `scripts/dev.sh cargo test --workspace --locked` |
-| App build | `scripts/dev.sh bash -c 'cmake -S apps/atlas-monitor -B build/dev -G Ninja && cmake --build build/dev'` |
-| Smoke run | `scripts/dev.sh dbus-run-session -- env QT_QPA_PLATFORM=offscreen build/dev/atlas-monitor` |
+| App build | `scripts/dev.sh bash -c 'cmake -S apps/telamon-monitor -B build/dev -G Ninja && cmake --build build/dev'` |
+| Smoke run | `scripts/dev.sh dbus-run-session -- env QT_QPA_PLATFORM=offscreen build/dev/telamon-monitor` |
 | RPM | `podman run --rm --security-opt label=disable -v "$PWD":/src -v <framework rpms>:/atlas-rpms:ro -e ATLAS_LOCAL_RPMS=/atlas-rpms -v atlas-cargo:/root/.cargo/registry -v atlas-cargo-git:/root/.cargo/git -e CARGO_HOME=/root/.cargo registry.fedoraproject.org/fedora:44 /src/packaging/build-rpm.sh /src/out` |
 
 `<framework rpms>` is the out dir of atlas-framework's `packaging/build-rpm.sh`
 (run the same way from its checkout): no repository has telamon-ui.
 
 The app needs a session bus (single instance), hence `dbus-run-session`.
-`scripts/dev.sh` builds `localhost/atlas-monitor-dev:44` on first use, which
+`scripts/dev.sh` builds `localhost/telamon-monitor-dev:44` on first use, which
 needs `ATLAS_LOCAL_RPMS=<dir>` holding atlas-framework's RPMs; delete that
 image after changing the spec's BuildRequires or to take a newer telamon-ui.
 Cold builds compile CXX-Qt and Qt bindings for a few minutes.

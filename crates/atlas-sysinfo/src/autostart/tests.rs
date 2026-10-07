@@ -269,7 +269,7 @@ fn locks_the_updater_and_skipped_entries() {
     let s = Session::new();
     s.system(
         UPDATER_TRAY,
-        "[Desktop Entry]\nName=Atlas Updater (tray)\nExec=atlas-updater --tray\nNoDisplay=true\nOnlyShowIn=KDE;\n",
+        "[Desktop Entry]\nName=Telamon Updater (tray)\nExec=atlas-updater --tray\nNoDisplay=true\nOnlyShowIn=KDE;\n",
     );
     s.system(
         "shell.desktop",

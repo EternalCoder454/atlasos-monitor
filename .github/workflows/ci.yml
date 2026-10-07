@@ -48,8 +48,8 @@ jobs:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ACTOR: ${{ github.actor }}
         run: |
-          image=ghcr.io/eternalcoder454/atlas-monitor-dev
-          stamp=f44-$(cat ci/Containerfile packaging/atlas-monitor.spec | sha256sum | cut -c1-16)-$(date -u +%G-%V)
+          image=ghcr.io/eternalcoder454/telamon-monitor-dev
+          stamp=f44-$(cat ci/Containerfile packaging/telamon-monitor.spec | sha256sum | cut -c1-16)-$(date -u +%G-%V)
           digest() {
             local d
             d=$(docker buildx imagetools inspect "$1" --format '{{.Manifest.Digest}}') || return 1
@@ -117,7 +117,7 @@ jobs:
       - name: Probe
         id: probe
         run: |
-          image=ghcr.io/eternalcoder454/atlas-monitor-dev
+          image=ghcr.io/eternalcoder454/telamon-monitor-dev
           # The digest is checked by pulling its manifest back by it.
           if digest=$(timeout 60 docker buildx imagetools inspect "$image:f44" --format '{{.Manifest.Digest}}' 2>/dev/null) &&
               [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]] &&
@@ -251,7 +251,7 @@ jobs:
       - name: Tests
         run: cargo test --workspace --locked
 
-  # The release build, as AtlasOS builds it. Its CMake build (Corrosion's cargo
+  # The release build, as Telamon OS builds it. Its CMake build (Corrosion's cargo
   # target in it) is cached, so it compiles only what changed.
   rpm:
     name: RPM
@@ -291,7 +291,7 @@ jobs:
             /github/home/rpm-build
           # build-rpm.sh in the key: a change to how it builds (or to the
           # source times it keeps in the cache) is saved as a new cache.
-          key: rpm-f44-${{ needs.framework.outputs.ref }}-${{ steps.week.outputs.week }}-${{ hashFiles('Cargo.lock', 'packaging/atlas-monitor.spec', 'packaging/build-rpm.sh') }}
+          key: rpm-f44-${{ needs.framework.outputs.ref }}-${{ steps.week.outputs.week }}-${{ hashFiles('Cargo.lock', 'packaging/telamon-monitor.spec', 'packaging/build-rpm.sh') }}
           restore-keys: rpm-f44-${{ needs.framework.outputs.ref }}-${{ steps.week.outputs.week }}-
       - name: Build the RPM
         run: ATLAS_LOCAL_RPMS=/tmp/atlas-framework-rpms packaging/build-rpm.sh "$GITHUB_WORKSPACE/out"

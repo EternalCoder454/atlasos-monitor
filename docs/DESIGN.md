@@ -1,14 +1,14 @@
-# Atlas Monitor: design
+# Telamon Monitor: design
 
-Atlas Monitor (`net.eterneon.atlas.monitor`) is the system monitor of AtlasOS,
+Telamon Monitor (`net.eterneon.telamon.monitor`) is the system monitor of Telamon OS,
 a Fedora Kinoite 44 bootc image (`ghcr.io/eternalcoder454/atlasos`). It is a
-required system app, like Atlas Updater, and replaces the Go/GTK4 Atlas
-Monitor (github.com/EternalCoder454/atlas-monitor, now frozen) and Plasma
+required system app, like Telamon Updater, and replaces the Go/GTK4 Atlas
+Monitor (github.com/EternalCoder454/telamon-monitor, now frozen) and Plasma
 System Monitor, which the image removes.
 
 Stack: Rust + Qt 6.11 + Kirigami 6.30 through CXX-Qt 0.10, built with CMake
 and Corrosion, QML compiled ahead of time by `qt_add_qml_module`. Same stack
-and build as [Atlas Updater](https://github.com/EternalCoder454/atlasos-updater),
+and build as [Telamon Updater](https://github.com/EternalCoder454/atlasos-updater),
 and its look for the lists and settings; the hardware pages are wider,
 with colour for their data (see "Look");
 its `docs/DESIGN.md` is the reference for anything this file doesn't cover.
@@ -21,19 +21,19 @@ Cargo.toml                    workspace; pins atlas-framework (see "Shared code"
 crates/atlas-sysinfo/         the readers: /proc, /sys, hwmon, D-Bus. No Qt.
   src/<reader>.rs             one module per Go package (stats, process, gpu, ...)
   tests/fixtures/             recorded /proc and /sys files for the parsers
-apps/atlas-monitor/           the app
+apps/telamon-monitor/           the app
   CMakeLists.txt              Corrosion + qt_add_qml_module; checks Telamon.Ui is installed
   build.rs                    cxx-qt-build: one entry per #[cxx_qt::bridge] file
   src/                        QObjects and models (CXX-Qt), settings
   cpp/                        main.cpp, and C++ Qt Quick items (the chart)
   qml/                        pages
   data/                       .desktop, metainfo, icon
-packaging/atlas-monitor.spec  the RPM; build-rpm.sh builds it in fedora:44
+packaging/telamon-monitor.spec  the RPM; build-rpm.sh builds it in fedora:44
 scripts/dev.sh                run a command in the fedora:44 build container
 ```
 
 `atlas-sysinfo` holds everything that reads the system, so it can be tested
-and benchmarked without Qt. `apps/atlas-monitor/src` turns its results into
+and benchmarked without Qt. `apps/telamon-monitor/src` turns its results into
 QObjects and models and owns the threads. QML only displays and calls
 invokables.
 
@@ -56,13 +56,13 @@ invokables.
   from there. The RPM `Requires` and `BuildRequires` it. No repository has
   it, so builds install atlas-framework's RPMs first: `build-rpm.sh` and
   `scripts/dev.sh` take them from `ATLAS_LOCAL_RPMS=<dir>`, CI builds them
-  from atlas-framework `main`, and the AtlasOS image builds them before the
+  from atlas-framework `main`, and the Telamon OS image builds them before the
   apps. A change to Telamon.Ui reaches the app when telamon-ui is updated, with
   no rebuild of the app.
 
 New shared components (`LiveChart`, `UsageBar`, `SidebarGroup`, `DataTable`,
 `SearchField`, `ContextMenu`) land in atlas-framework `ui/` first, following
-its compatibility rules. Code that only Atlas Monitor needs stays here.
+its compatibility rules. Code that only Telamon Monitor needs stays here.
 
 ## Look
 
@@ -99,7 +99,7 @@ pills, the theme's colours), with a colour per part for its data:
 ## Process and window
 
 - One instance per session: `KDBusService::Unique` owns
-  `net.eterneon.atlas.monitor` on the session bus. A second launch (the
+  `net.eterneon.telamon.monitor` on the session bus. A second launch (the
   launcher, Ctrl+Shift+Esc) activates the first and exits; the first raises
   its window with the activation token the launch passed
   (`KWindowSystem::updateStartupId` + `activateWindow`).
@@ -130,7 +130,7 @@ Consequences:
   only its own rectangle, and nothing animates while idle. At fractional
   scales (1.25x, 1.5x) Qt repaints the whole window instead. Forcing partial
   updates there (`QSG_SOFTWARE_RENDERER_FORCE_PARTIAL_UPDATES`) was measured
-  and saved nothing in Atlas Monitor or KWin, so it stays off.
+  and saved nothing in Telamon Monitor or KWin, so it stays off.
 - `main.cpp` sets `QT_NO_GUI_THREADPOOL=1` on both backends. Otherwise Qt's
   raster engine hands every fill of 96 or more spans to a thread pool and
   waits, which costs more than the fill for chart-sized shapes.
@@ -146,7 +146,7 @@ when it is resized or one of its properties changes.
 - **Data:** `values: list<real>`, oldest sample first, at most 60, plus
   `values2` for a second series (upload beside download, write beside read).
   The Rust `Series` holds the ring buffer and publishes the list in the tick's
-  queued closure. A generic list keeps Telamon.Ui free of Atlas Monitor's types,
+  queued closure. A generic list keeps Telamon.Ui free of Telamon Monitor's types,
   and it costs the same as reading the ring buffer from C++. `values2` is not
   in the benchmark; a second series adds roughly another fill and line, so
   measure it when it lands.
@@ -170,7 +170,7 @@ when it is resized or one of its properties changes.
   a worker thread and post their results back with
   `qt_thread().queue(move |obj| ...)`, which runs the closure on the Qt thread.
 - **One sampling thread** does the periodic reads (see Sampling). Occasional
-  one-off reads (Atlas Monitor's own memory, process details) may use a
+  one-off reads (Telamon Monitor's own memory, process details) may use a
   short-lived `std::thread`; a request while one is running is dropped, not
   queued.
 - Actions that can wait on polkit (services) run on their own thread, so a
@@ -182,7 +182,7 @@ when it is resized or one of its properties changes.
 
 ## QObject and model API
 
-QML sees a small set of objects. `atlas_objects_new` (`src/lib.rs`) makes
+QML sees a small set of objects. `telamon_objects_new` (`src/lib.rs`) makes
 them all in Rust, wires the sampler's sink to the stats objects' Qt-thread
 handles and starts the sampling thread; `main.cpp` hands them to the engine
 as initial properties of `Main.qml`, owns them, and deletes the `Sampler`
@@ -192,7 +192,7 @@ the plan the later phases build to:
 
 | Object | What it holds |
 |---|---|
-| `Backend` | Settings (`refreshInterval`, `gpuRendering`), Atlas Monitor's own memory (`ownPss`, `ownRss`). Invokables `changeRefreshInterval(ms)`, `changeGpuRendering(on)`, `refreshOwnMemory()`, `releaseIdleMemory()`, `trimMemory()`. |
+| `Backend` | Settings (`refreshInterval`, `gpuRendering`), Telamon Monitor's own memory (`ownPss`, `ownRss`). Invokables `changeRefreshInterval(ms)`, `changeGpuRendering(on)`, `refreshOwnMemory()`, `releaseIdleMemory()`, `trimMemory()`. |
 | `Sampler` | The sampling thread. QML calls `showPage(name)` when the page changes ("overview", "cpu", "memory", "disk:nvme0n1", "network:wlp4s0", "gpu", "battery:BAT0", "sensors", ...; anything else reads only the sidebar) and `changeInterval(ms)` when the setting does. |
 | `CpuStats`, `MemoryStats`, `GpuStats`, ... | Plain properties for the current values (`usage`, `frequency`, ...; NaN where the machine doesn't report one), plus a `list<real>` per chart (`usageHistory`, ...). Updated in one queued closure per tick. |
 | `HealthStatus` | `health::check`'s alerts for the Overview: `level` (0 fine, 1 warning, 2 critical) and the parallel lists `titles`, `details`, `levels`. Signals only when the list changes. |
@@ -355,7 +355,7 @@ The readers the loop drives (`atlas-sysinfo`):
     (edge, junction and memory temperatures by label, fan, power, clocks).
     About 11 `pread`s a tick on the development machine, and no `open`.
   - NVIDIA's driver: NVML, `dlopen`ed only for a card bound to `nvidia`.
-    AtlasOS ships no NVIDIA driver, so this is for someone who layered it.
+    Telamon OS ships no NVIDIA driver, so this is for someone who layered it.
     Not checked on hardware yet.
   - Intel (i915, xe): load from the time out of RC6 (idle residency).
     Clocks and VRAM size come from the driver's files. A discrete card's power
@@ -526,7 +526,7 @@ The readers the loop drives (`atlas-sysinfo`):
   folder, since the user can't remove `/etc`'s links. Candidates come
   from the link folders and only they are asked about: the full unit file
   list costs the user's manager about 40 ms, a dozen names about 10.
-  Locked: Atlas Updater's tray, and D-Bus, `systemd-*`, `plasma-*` and
+  Locked: Telamon Updater's tray, and D-Bus, `systemd-*`, `plasma-*` and
   portal units (off only). `NoDisplay` entries, skipped entries and
   installed units the user didn't enable are `plumbing`. Tested against a
   real user manager in a systemd container: each switch, both locks, and
@@ -543,20 +543,20 @@ The readers the loop drives (`atlas-sysinfo`):
   through the user's manager (`app-*` units only). Automatic: 30 s above
   50% of a core eases it, 60 s below 15% puts it back. Never eased:
   anything playing or recording (pw-dump, checked before every ease; no
-  answer means no easing), terminals, Atlas Monitor, apps listed as never,
+  answer means no easing), terminals, Telamon Monitor, apps listed as never,
   an app the user put back (while it runs), and any unit whose weight
   someone else set. The app in use is never eased automatically, and one
   eased is put back when it gets focus: on Plasma, `ease::kwin` loads a
-  KWin script (`$XDG_RUNTIME_DIR/net.eterneon.atlas.monitor/focus.js`) that
+  KWin script (`$XDG_RUNTIME_DIR/net.eterneon.telamon.monitor/focus.js`) that
   reports the focused window's pid to its own connection's unique name, and
   the Energy Saver thread passes that pid's unit to `set_focused`. The
   script is unloaded when the window closes, replaced by the next run after
   a crash, and loaded again into a KWin that restarted. uresourced, which
-  AtlasOS runs, raises apps playing sound to 300 (the focused app too, but
-  only on GNOME); a weight changed after Atlas set it is let go and never
+  Telamon OS runs, raises apps playing sound to 300 (the focused app too, but
+  only on GNOME); a weight changed after Telamon Monitor set it is let go and never
   restored over. Closing the window or turning automatic off
   puts back the automatic eases; manual ones stay. Every ease is listed in
-  `$XDG_RUNTIME_DIR/net.eterneon.atlas.monitor/eased`, so after a crash
+  `$XDG_RUNTIME_DIR/net.eterneon.telamon.monitor/eased`, so after a crash
   `open` puts back the automatic ones and takes up the manual ones again,
   where the weight is still 10. A tick reads two held files per unit
   (86 µs for 33 units); a sound check takes about 12 ms and runs only
@@ -579,9 +579,9 @@ The readers the loop drives (`atlas-sysinfo`):
 
 ## Privilege
 
-Atlas Monitor runs as the user and adds **no new privilege**: no setuid, no
+Telamon Monitor runs as the user and adds **no new privilege**: no setuid, no
 system service of its own, no polkit actions of its own. The
-atlas-system-helper keeps exactly its five methods; Atlas Monitor never calls
+atlas-system-helper keeps exactly its five methods; Telamon Monitor never calls
 it.
 
 | Feature | How | Who decides |
@@ -591,11 +591,11 @@ it.
 | Services: start, stop, restart, enable, disable | systemd's `org.freedesktop.systemd1` over the system bus (zbus), the call flagged to allow interactive authorization | systemd's own polkit actions (`manage-units`, `manage-unit-files`); polkit's agent asks for the password. Listing and details need nothing. |
 | Drive health (SMART) | udisks2 over the system bus (`NVMe.Controller` and `Drive.Ata` properties and `SmartGetAttributes`, its cached values) | udisks2, which asks polkit for none of these. No section when udisks2 is missing. |
 | Energy Saver | `CPUWeight` on the app's unit through the **user's** systemd manager | None needed: the user's own units. Reversible; restored on exit and after a crash. |
-| Startup items | XDG autostart files in `~/.config/autostart`; the user's systemd units through the **user's** systemd manager (Enable, Disable, Mask, Unmask) | None needed: the user's own files and manager. Atlas Updater's tray entry and the session's own units are shown but can't be switched off. |
+| Startup items | XDG autostart files in `~/.config/autostart`; the user's systemd units through the **user's** systemd manager (Enable, Disable, Mask, Unmask) | None needed: the user's own files and manager. Telamon Updater's tray entry and the session's own units are shown but can't be switched off. |
 
 ## Settings
 
-`~/.config/atlas-monitorrc` (KConfig INI), read and written by
+`~/.config/telamon-monitorrc` (KConfig INI), read and written by
 `src/settings.rs`, through atlas-framework's settings (atomic write through
 a temp file and rename, synced to disk):
 
@@ -616,23 +616,41 @@ the GUI thread never waits for the disk; `main()` waits for it at the end.
 - atlas-framework's crash reports: `telamon_app_init`, called first in
   `main()` after two environment variables are set, installs the panic hook and a Qt message handler that saves a
   report on `QtFatalMsg`. Reports are saved only when the user turned crash
-  reports on, which happens in Atlas Updater; Atlas Updater is also where
-  they are reviewed and sent. Atlas Monitor collects nothing else. See
-  "Privacy and crash reports" in Atlas Updater's DESIGN.md.
+  reports on, which happens in Telamon Updater; Telamon Updater is also where
+  they are reviewed and sent. Telamon Monitor collects nothing else. See
+  "Privacy and crash reports" in Telamon Updater's DESIGN.md.
 - Logging: the Rust `log` macros go to the systemd journal, identifier
-  `atlas-monitor` (`journalctl --user -t atlas-monitor`), or to stderr when
+  `telamon-monitor` (`journalctl --user -t telamon-monitor`), or to stderr when
   there is no journal. Level from `TELAMON_LOG` (`error`, `warn`, `info`
   (default), `debug`, `trace`, `off`). Qt's messages go where Qt sends them,
   through the same handler that records fatal ones.
 
-## System app (AtlasOS side)
+### Renamed from Atlas Monitor (0.2.0)
 
-- The RPM (`packaging/atlas-monitor.spec`) is built into the image under the
-  read-only `/usr` by the AtlasOS repo's `build_files/build.sh`, which fails
-  without it (`rpm -q atlas-monitor`). `/etc/dnf/protected.d/` lists it, like
-  Atlas Updater.
-- Ctrl+Shift+Esc (Plasma's System Monitor shortcut) opens Atlas Monitor.
-- Updates come with the image, through Atlas Updater. No in-app updater, no
+Monitor was `atlas-monitor` (`net.eterneon.atlas.monitor`) until 0.2.0. What it
+keeps on disk is the framework's: `~/.config/atlas-monitorrc` is copied to
+`telamon-monitorrc` the first time Settings reads it (`[Atlas]` becomes
+`[Telamon]`), `~/.config/atlasrc` to `telamonrc`, and the crash-report
+settings and `$XDG_STATE_HOME/atlas` are read or moved under the new names (a
+`telamon-framework` 2.0.0 feature, tested there); the old files are left, as
+an app that has not moved still uses them. Nothing else of Monitor's is
+named after it. For this release the old names still work: `atlas-monitor` is
+a link to `telamon-monitor`, `net.eterneon.atlas.monitor.desktop` is a hidden
+copy of the desktop file (the image's pinned apps and menus name it), and the
+RPM `Provides: atlas-monitor` and obsoletes older ones. The global shortcut
+file (`/usr/share/kglobalaccel/`) has the new ID only: a second copy would
+bind Ctrl+Shift+Esc twice, and Plasma keeps a shortcut the user changed under
+the old ID in `kglobalshortcutsrc`, where Monitor can't move it.
+Telamon Updater is started as `telamon-updater`, else `atlas-updater`.
+
+## System app (Telamon OS side)
+
+- The RPM (`packaging/telamon-monitor.spec`) is built into the image under the
+  read-only `/usr` by the Telamon OS repo's `build_files/build.sh`, which fails
+  without it (`rpm -q telamon-monitor`). `/etc/dnf/protected.d/` lists it, like
+  Telamon Updater.
+- Ctrl+Shift+Esc (Plasma's System Monitor shortcut) opens Telamon Monitor.
+- Updates come with the image, through Telamon Updater. No in-app updater, no
   channels.
 
 ## Testing
@@ -643,4 +661,4 @@ the GUI thread never waits for the disk; `main()` waits for it at the end.
   invariants only. CI has no GPU, battery, kernel threads or system bus.
 - Go parity: both readers run against the same fixtures and must agree.
 - Everything that needs a session, polkit, systemd or real hardware is tested
-  in the AtlasOS test VM (`just vm` in the AtlasOS repo), never on the host.
+  in the Telamon OS test VM (`just vm` in the Telamon OS repo), never on the host.

@@ -27,11 +27,11 @@ const SCRIPT_IF: &str = "org.kde.kwin.Script";
 const BUS: &str = "org.freedesktop.DBus";
 const BUS_PATH: &str = "/org/freedesktop/DBus";
 /// The script's name in KWin: one per session, whichever run loaded it.
-const PLUGIN: &str = "net.eterneon.atlas.monitor.focus";
+const PLUGIN: &str = "net.eterneon.telamon.monitor.focus";
 /// Where the script calls: the interface's name is spelt out again on
 /// [`Focus`], which the macro needs as a literal.
 const PATH: &str = "/Focus";
-const IFACE: &str = "net.eterneon.atlas.monitor.Focus";
+const IFACE: &str = "net.eterneon.telamon.monitor.Focus";
 const TIMEOUT: Duration = Duration::from_secs(2);
 
 /// KWin's scripting API (Plasma 6), calling `service`. The pid goes as a
@@ -49,7 +49,7 @@ report(workspace.activeWindow);
 
 struct Focus(Arc<AtomicU32>);
 
-#[zbus::interface(name = "net.eterneon.atlas.monitor.Focus")]
+#[zbus::interface(name = "net.eterneon.telamon.monitor.Focus")]
 impl Focus {
     /// The process of the window that got focus, "0" for none.
     fn activated(&self, pid: &str) {
@@ -267,7 +267,7 @@ mod tests {
         let s = script(":1.42");
         assert!(s.contains(r#"callDBus(":1.42", "#), "{s}");
         assert!(
-            s.contains(r#""/Focus", "net.eterneon.atlas.monitor.Focus", "Activated""#),
+            s.contains(r#""/Focus", "net.eterneon.telamon.monitor.Focus", "Activated""#),
             "{s}"
         );
     }

@@ -2,7 +2,7 @@
 //! The driver says almost nothing through sysfs or fdinfo, so this is the
 //! only way to its load, memory, temperature, fan, power and clocks.
 //!
-//! AtlasOS ships no NVIDIA driver, so the library is loaded at run time with
+//! Telamon OS ships no NVIDIA driver, so the library is loaded at run time with
 //! `dlopen`, and only for a card bound to the `nvidia` driver: someone who
 //! layered it. Nothing here is a build dependency. Every entry point but the
 //! first three is optional; one that is missing leaves its figure out.

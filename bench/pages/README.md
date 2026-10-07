@@ -13,7 +13,7 @@ Monitor's figures (Fedora 44, KDE Wayland, about 700 processes):
 Not part of the app build or CI. Build the Release app in the dev container:
 
 ```sh
-scripts/dev.sh bash -c 'cmake -S apps/atlas-monitor -B build/release -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build/release'
+scripts/dev.sh bash -c 'cmake -S apps/telamon-monitor -B build/release -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build/release'
 ```
 
 (Telamon.Ui is the telamon-ui installed in the dev image. To measure an unpackaged

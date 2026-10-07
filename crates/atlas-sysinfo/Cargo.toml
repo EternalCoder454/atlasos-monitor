@@ -1,6 +1,6 @@
 [package]
 name = "atlas-sysinfo"
-description = "System readers for Atlas Monitor: /proc, /sys, hwmon, D-Bus. No Qt."
+description = "System readers for Telamon Monitor: /proc, /sys, hwmon, D-Bus. No Qt."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

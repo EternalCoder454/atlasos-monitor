@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build the Atlas Monitor RPM inside a fedora:44 container, as root.
+# Build the Telamon Monitor RPM inside a fedora:44 container, as root.
 #   packaging/build-rpm.sh <out dir> [rpmbuild options]
 # The binary RPM (no source, no debuginfo) is copied to <out dir>.
 # Cargo needs network access.
@@ -57,7 +57,7 @@ main() {
 
     here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
     src=$(dirname "$here")
-    spec=$here/atlas-monitor.spec
+    spec=$here/telamon-monitor.spec
     version=$(awk '/^Version:/ {print $2; exit}' "$spec")
 
     # ATLAS_LOCAL_RPMS goes to it in the environment.
@@ -81,15 +81,15 @@ main() {
         fi
         # Only a directory this script made (or an empty one): it deletes
         # rpmbuild/ and cmake/ in it.
-        if [ ! -e "$cache/.atlas-monitor-build-cache" ] && [ -n "$(ls -A "$cache")" ]; then
-            echo "ATLAS_BUILD_CACHE ($cache) is not empty and is not an Atlas Monitor build cache" >&2; exit 1
+        if [ ! -e "$cache/.telamon-monitor-build-cache" ] && [ ! -e "$cache/.atlas-monitor-build-cache" ] && [ -n "$(ls -A "$cache")" ]; then
+            echo "ATLAS_BUILD_CACHE ($cache) is not empty and is not a Telamon Monitor build cache" >&2; exit 1
         fi
-        touch "$cache/.atlas-monitor-build-cache"
+        touch "$cache/.telamon-monitor-build-cache" # (a cache of the previous name is taken over)
         top=$cache/rpmbuild
         rm -rf "$top"
         toolchain=$(rpm -q rust cargo corrosion gcc-c++ cmake qt6-qtbase-devel qt6-qtdeclarative-devel \
             kf6-kirigami-devel telamon-ui || true)
-        toolchain="atlas-monitor-$version
+        toolchain="telamon-monitor-$version
 $toolchain"
         if [ "$(cat "$cache/toolchain" 2>/dev/null)" != "$toolchain" ]; then
             rm -rf "$cache/cmake"
@@ -113,8 +113,8 @@ $toolchain"
         # they were not built from: no times to restore next time.
         rm -f "$cache/source-times"
     fi
-    tar -C "$stage" --transform "s,^\./,atlas-monitor-$version/," \
-        -czf "$top/SOURCES/atlas-monitor-$version.tar.gz" .
+    tar -C "$stage" --transform "s,^\./,telamon-monitor-$version/," \
+        -czf "$top/SOURCES/telamon-monitor-$version.tar.gz" .
 
     rpmbuild -bb "${rpmopts[@]}" "$@" --define "_topdir $top" "$spec"
     if [ -n "$cache" ]; then

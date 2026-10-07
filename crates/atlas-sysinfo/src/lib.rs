@@ -1,4 +1,4 @@
-//! System readers for Atlas Monitor. Plain Rust, no Qt: the app crate runs
+//! System readers for Telamon Monitor. Plain Rust, no Qt: the app crate runs
 //! these on its sampling thread and posts the results to the Qt thread.
 //!
 //! Every reader is split in two: a function that reads the live system and a
@@ -19,7 +19,7 @@
 //! - [`autostart`]: what starts at login, and switching it on or off.
 //! - [`ease`]: Energy Saver, easing off busy applications and putting them back.
 //! - [`health`]: the short list of what is wrong with the machine.
-//! - [`sysmem`]: Atlas Monitor's own memory use, for Settings.
+//! - [`sysmem`]: Telamon Monitor's own memory use, for Settings.
 //! - [`about`]: what this computer is, for System Info.
 //! - [`hardware`]: PCI, USB and input devices, for Devices.
 
