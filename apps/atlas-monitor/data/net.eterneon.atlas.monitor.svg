@@ -1,19 +1,39 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
   <title>Atlas Monitor</title>
-  <!-- The Atlas apps' tile, as Atlas Updater's icon has it, with a screen
-       showing a pulse on it: Atlas Notes' white, lavender and purple. -->
+  <!-- A small screen on a stand with a glowing teal pulse. Part of the Atlas
+       app icons: no tile, own hue, same corners, light and shadow. -->
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#8a7af4"/>
-      <stop offset="1" stop-color="#5b4bd8"/>
+    <radialGradient id="shadow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#000000" stop-opacity="0.26"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bezel" gradientUnits="userSpaceOnUse" x1="0" y1="18" x2="0" y2="98">
+      <stop offset="0" stop-color="#6A748B"/>
+      <stop offset="1" stop-color="#3B4255"/>
+    </linearGradient>
+    <linearGradient id="screen" gradientUnits="userSpaceOnUse" x1="0" y1="26" x2="0" y2="90">
+      <stop offset="0" stop-color="#11394A"/>
+      <stop offset="1" stop-color="#0A2130"/>
+    </linearGradient>
+    <linearGradient id="stand" gradientUnits="userSpaceOnUse" x1="0" y1="92" x2="0" y2="112">
+      <stop offset="0" stop-color="#A9B1C1"/>
+      <stop offset="1" stop-color="#7D8699"/>
+    </linearGradient>
+    <linearGradient id="line" gradientUnits="userSpaceOnUse" x1="26" y1="0" x2="102" y2="0">
+      <stop offset="0" stop-color="#3FE6C8"/>
+      <stop offset="1" stop-color="#22C3E6"/>
     </linearGradient>
   </defs>
-  <rect x="8" y="8" width="112" height="112" rx="26" fill="url(#bg)"/>
-  <rect x="8.5" y="8.5" width="111" height="111" rx="25.5" fill="none" stroke="#ffffff" stroke-opacity="0.18"/>
-  <rect x="24" y="32" width="80" height="64" rx="10" fill="#ffffff"/>
-  <g fill="none" stroke="#c9c0ff" stroke-width="3" stroke-linecap="round">
-    <path d="M 34 48 H 94"/>
-    <path d="M 34 80 H 94"/>
+  <g transform="translate(64 64) scale(1.06) translate(-64 -64)">
+    <ellipse cx="64" cy="114" rx="46" ry="6" fill="url(#shadow)"/>
+    <path fill="url(#stand)" d="M54 92H74L77 104H51Z"/>
+    <rect x="36" y="102" width="56" height="9" rx="4.5" fill="url(#stand)"/>
+    <rect x="12" y="18" width="104" height="80" rx="10" fill="url(#bezel)"/>
+    <path fill="none" stroke="#8C95AA" stroke-width="2" stroke-linecap="round" d="M22 19.5H106"/>
+    <rect x="20" y="26" width="88" height="64" rx="5" fill="url(#screen)"/>
+    <path fill="none" stroke="#1C5266" stroke-width="2" d="M20 42H108M20 58H108M20 74H108"/>
+    <path fill="none" stroke="#3FE6C8" stroke-opacity="0.22" stroke-width="15" stroke-linecap="round" stroke-linejoin="round" d="M26 62H43L51 45L61 78L70 52L76 62H102"/>
+    <path fill="none" stroke="url(#line)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" d="M26 62H43L51 45L61 78L70 52L76 62H102"/>
+    <circle cx="102" cy="62" r="5" fill="#B3A7FD"/>
   </g>
-  <path fill="none" stroke="#6858e2" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" d="M 32 64 H 46 L 54 48 L 64 82 L 73 56 L 79 64 H 96"/>
 </svg>
