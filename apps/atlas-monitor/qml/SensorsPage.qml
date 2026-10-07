@@ -15,6 +15,9 @@ AtlasPage {
     required property var sensors
 
     readonly property var s: page.sensors
+    // Translated once: qsTr looks its file up on every call, and the Cores
+    // row's figure changes every tick.
+    readonly property string hottestFormat: qsTr("Hottest %1")
 
     // One reading, by its place in the flat lists. A temperature past the
     // hardware's own limit says so in the theme's warning colours.
@@ -52,10 +55,24 @@ AtlasPage {
             required property int index
             readonly property int first: page.s.first[index] ?? 0
             readonly property int count: page.s.counts[index] ?? 0
-            readonly property bool folds: page.s.folded.slice(first, first + count).includes(true)
+            // Where its readings are in the flat lists: those shown open,
+            // and those folded behind Cores.
+            readonly property var openAt: device.places(false)
+            readonly property var foldedAt: device.places(true)
+            readonly property bool folds: device.foldedAt.length > 0
             property bool expanded: false
             // A delegate reused for another device starts folded.
             onTitleChanged: expanded = false
+
+            function places(folded) {
+                const at = [];
+                for (let i = device.first; i < device.first + device.count; ++i) {
+                    if ((page.s.folded[i] ?? false) === folded) {
+                        at.push(i);
+                    }
+                }
+                return at;
+            }
 
             title: page.s.names[index] ?? ""
             // The kernel's name for it: what a search for the chip finds.
@@ -64,30 +81,28 @@ AtlasPage {
             // The readings shown open; folded ones are made only while
             // Cores is open, so a collapsed processor costs one row.
             Repeater {
-                model: device.count
+                model: device.openAt
                 Reading {
-                    required property int index
+                    required property int modelData
                     sensors: page.s
-                    at: device.first + index
-                    visible: !(page.s.folded[at] ?? false)
+                    at: modelData
                 }
             }
             SectionRow {
                 visible: device.folds
                 title: qsTr("Cores")
-                value: page.s.hottest[device.index] ? qsTr("Hottest %1").arg(page.s.hottest[device.index]) : ""
+                value: page.s.hottest[device.index] ? page.hottestFormat.arg(page.s.hottest[device.index]) : ""
                 chevron: true
                 disclosure: true
                 expanded: device.expanded
                 onClicked: device.expanded = !device.expanded
             }
             Repeater {
-                model: device.expanded ? device.count : 0
+                model: device.expanded ? device.foldedAt : []
                 Reading {
-                    required property int index
+                    required property int modelData
                     sensors: page.s
-                    at: device.first + index
-                    visible: page.s.folded[at] ?? false
+                    at: modelData
                 }
             }
         }
