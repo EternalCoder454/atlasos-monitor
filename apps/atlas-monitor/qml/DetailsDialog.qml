@@ -3,14 +3,14 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
-import Atlas.Ui
+import Telamon.Ui
 
 // What a process is, before somebody decides to end it: a row called
 // "python3" doesn't say what started it or what it runs. For an application
 // of several processes, the application and its busiest members, each of
 // which opens here in turn. The figures are read once, as it opens
 // (src/details.rs).
-AtlasDialog {
+TelamonDialog {
     id: dialog
 
     required property var details
@@ -88,7 +88,7 @@ AtlasDialog {
     // The dialog's body scrolls in a Flickable that is its contentItem's only
     // child; each new thing shown starts at its top.
     function toTop() {
-        // AtlasDialog doesn't expose its Flickable (asked for in Atlas.Ui
+        // TelamonDialog doesn't expose its Flickable (asked for in Telamon.Ui
         // 1.5.0); if its insides change, this does nothing rather than fail.
         const flick = dialog.contentItem.children[0];
         if (flick && flick.contentY !== undefined) {
@@ -136,9 +136,9 @@ AtlasDialog {
         Accessible.role: Accessible.StaticText
         Accessible.name: label + ", " + value
 
-        AtlasLabel {
+        TelamonLabel {
             text: property.label
-            textStyle: AtlasLabel.Caption
+            textStyle: TelamonLabel.Caption
         }
         TextEdit {
             Layout.fillWidth: true
@@ -159,16 +159,16 @@ AtlasDialog {
         id: body
         Layout.fillWidth: true
         spacing: Kirigami.Units.gridUnit
-        AtlasSpinner {
+        TelamonSpinner {
             Layout.alignment: Qt.AlignHCenter
             running: dialog.details.loading
         }
-        AtlasLabel {
+        TelamonLabel {
             Layout.fillWidth: true
             visible: dialog.details.gone && !dialog.details.loading
             text: qsTr("Process %1 has exited.").arg(dialog.details.pid)
             wrapMode: Text.Wrap
-            color: AtlasStyle.textMuted
+            color: TelamonStyle.textMuted
         }
 
         // One process.

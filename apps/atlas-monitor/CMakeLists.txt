@@ -26,11 +26,11 @@ corrosion_import_crate(MANIFEST_PATH ${WORKSPACE_DIR}/Cargo.toml
     CRATES atlas-monitor LOCKED)
 corrosion_set_env_vars(atlas_monitor QMAKE=${QMAKE6})
 
-# Atlas.Ui, the shared Atlas look, is installed like Kirigami (atlas-ui, from
+# Telamon.Ui, the shared Atlas look, is installed like Kirigami (telamon-ui, from
 # atlas-framework): QML imports it and nothing links it. qmlcachegen and
 # qmllint read its types from the installed copy.
-if(NOT EXISTS "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_QML}/Atlas/Ui/qmldir")
-    message(FATAL_ERROR "Atlas.Ui is not installed: install atlas-ui (atlas-framework)")
+if(NOT EXISTS "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_QML}/Telamon/Ui/qmldir")
+    message(FATAL_ERROR "Telamon.Ui is not installed: install telamon-ui (atlas-framework)")
 endif()
 
 qt_add_executable(atlas-monitor-app cpp/main.cpp)

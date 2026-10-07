@@ -2,12 +2,12 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import org.kde.kirigami as Kirigami
-import Atlas.Ui
+import Telamon.Ui
 
 // The whole computer at a glance: what, if anything, is wrong, then a row
 // per part with its figure and its last minute as a sparkline in its
 // colour. A row opens its page.
-AtlasPage {
+TelamonPage {
     id: page
 
     required property var cpu
@@ -51,7 +51,7 @@ AtlasPage {
     // The last minute beside a row's figure; a percentage unless `maximum`
     // is set. The lists arrive padded to `span`, so the newest sample is
     // at the right edge.
-    component Trend: AtlasSparkline {
+    component Trend: TelamonSparkline {
         width: Kirigami.Units.gridUnit * 4.5
         height: Kirigami.Units.gridUnit * 1.4
         anchors.verticalCenter: parent?.verticalCenter

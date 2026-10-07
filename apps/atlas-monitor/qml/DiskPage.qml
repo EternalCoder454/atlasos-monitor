@@ -3,7 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
-import Atlas.Ui
+import Telamon.Ui
 
 // One drive: how full it is, what it reads and writes, and what it says
 // about its own health.
@@ -30,15 +30,15 @@ ResourcePage {
     figureColor: page.hue
 
     // zram is RAM, not a drive: say what it is instead of a capacity.
-    AtlasLabel {
+    TelamonLabel {
         visible: page.disk.swap
         Layout.fillWidth: true
         wrapMode: Text.Wrap
-        color: AtlasStyle.textMuted
+        color: TelamonStyle.textMuted
         text: qsTr("Swap (zram) is a compressed pool carved out of your RAM that acts as overflow memory: when RAM fills up, the kernel compresses rarely used pages and parks them here instead of writing them to your SSD. That keeps the system responsive under pressure and spares the drive.")
     }
 
-    AtlasCard {
+    TelamonCard {
         visible: !page.disk.swap
         title: qsTr("Capacity")
 
@@ -54,17 +54,17 @@ ResourcePage {
         }
         // Not mounted: there is no usage to show, and 0 B used would read
         // as an empty drive.
-        AtlasLabel {
+        TelamonLabel {
             visible: !page.disk.mounted
             Layout.fillWidth: true
             wrapMode: Text.Wrap
-            color: AtlasStyle.textMuted
+            color: TelamonStyle.textMuted
             text: qsTr("Not mounted, so there is no usage to show. Mount the drive in your file manager and its capacity will appear here.")
         }
     }
 
     // Reading and writing side by side where there is room.
-    AtlasCard {
+    TelamonCard {
         title: qsTr("Activity")
 
         GridLayout {
@@ -101,20 +101,20 @@ ResourcePage {
     }
 
     FigureCard {
-        AtlasStat {
+        TelamonStat {
             label: qsTr("Read speed")
             value: Format.rate(page.disk.readRate)
         }
-        AtlasStat {
+        TelamonStat {
             label: qsTr("Write speed")
             value: Format.rate(page.disk.writeRate)
         }
-        AtlasStat {
+        TelamonStat {
             visible: !page.disk.swap && page.disk.mounted
             label: qsTr("Used")
             value: page.disk.mounted ? Format.size(page.disk.used) : Format.dash
         }
-        AtlasStat {
+        TelamonStat {
             visible: !page.disk.swap && page.disk.mounted
             label: qsTr("Free")
             value: page.disk.mounted ? Format.size(page.disk.free) : Format.dash
@@ -122,19 +122,19 @@ ResourcePage {
         details: [[qsTr("Total size"), Format.bytes(page.disk.size)], [qsTr("Read since startup"), Format.size(page.disk.readTotal)], [qsTr("Written since startup"), Format.size(page.disk.writeTotal)], [qsTr("Device"), "/dev/" + page.disk.name]]
     }
 
-    AtlasCard {
+    TelamonCard {
         // Not an empty card when the drive reports nothing worth showing yet.
         visible: page.disk.smart && (page.disk.warning.length > 0 || page.healthRows.length > 0)
         title: qsTr("Health")
 
-        AtlasLabel {
+        TelamonLabel {
             visible: page.disk.warning.length > 0
             Layout.fillWidth: true
             wrapMode: Text.Wrap
-            color: AtlasStyle.error
+            color: TelamonStyle.error
             text: page.disk.warning
         }
-        AtlasDetailGrid {
+        TelamonDetailGrid {
             Layout.fillWidth: true
             visible: page.healthRows.length > 0
             columns: 2

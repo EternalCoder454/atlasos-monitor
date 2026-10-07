@@ -12,7 +12,7 @@ It comes with AtlasOS and updates with it, through Atlas Updater. It is built
 for AtlasOS (Fedora Kinoite 44) only. For other distributions, see the
 [original Atlas Monitor](https://github.com/EternalCoder454/atlas-monitor).
 
-Rust + Qt 6 + Kirigami. Its look is Atlas.Ui from
+Rust + Qt 6 + Kirigami. Its look is Telamon.Ui from
 [atlas-framework](https://github.com/EternalCoder454/atlas-framework), which
 also gives it its start, settings file, logging and crash reports. How it is
 put together: [docs/DESIGN.md](docs/DESIGN.md).
@@ -28,7 +28,7 @@ scripts/dev.sh bash -c 'cmake -S apps/atlas-monitor -B build/dev -G Ninja && cma
 
 The RPM: `packaging/build-rpm.sh <out dir>`, run as root in `fedora:44`.
 
-Both need Atlas.Ui, the `atlas-ui` RPM, which is in no repository yet. Build
+Both need Telamon.Ui, the `telamon-ui` RPM, which is in no repository yet. Build
 atlas-framework's RPMs with its own `packaging/build-rpm.sh` and pass their
 directory as `ATLAS_LOCAL_RPMS=<dir>`, to `build-rpm.sh` and to the first
 `scripts/dev.sh` run (which builds the dev image; delete an older image).

@@ -4,7 +4,7 @@ import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
-import Atlas.Ui
+import Telamon.Ui
 
 QQC2.ApplicationWindow {
     id: root
@@ -375,7 +375,7 @@ QQC2.ApplicationWindow {
 
             // Scrolls by itself when the window is too short for every
             // entry, and keeps a focused one in view.
-            AtlasSidebar {
+            TelamonSidebar {
                 id: navList
                 anchors.left: parent.left
                 anchors.right: parent.right
@@ -507,7 +507,7 @@ QQC2.ApplicationWindow {
                 anchors.rightMargin: 1
                 anchors.bottom: parent.bottom
                 height: footerColumn.implicitHeight + Kirigami.Units.largeSpacing * 2
-                // As AtlasSidebar paints its own, so there is no seam.
+                // As TelamonSidebar paints its own, so there is no seam.
                 color: Qt.alpha(navList.baseColor, Appearance.effective ? 0.94 : 1)
 
                 ColumnLayout {

@@ -15,7 +15,7 @@ name = "atlas_monitor"
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
-atlas-framework-ui.workspace = true
+telamon-framework-ui.workspace = true
 atlas-sysinfo = { path = "../../crates/atlas-sysinfo" }
 cxx = "1"
 cxx-qt = "0.10"

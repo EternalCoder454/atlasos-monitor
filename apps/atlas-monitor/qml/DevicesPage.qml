@@ -4,12 +4,12 @@ import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
-import Atlas.Ui
+import Telamon.Ui
 
 // Everything connected to the computer: input devices, what is plugged in
 // over USB, and what is inside on the PCI bus, grouped by class. Drives and
 // network adapters have their own pages. Read as the page opens.
-AtlasPage {
+TelamonPage {
     id: page
 
     required property var hardware

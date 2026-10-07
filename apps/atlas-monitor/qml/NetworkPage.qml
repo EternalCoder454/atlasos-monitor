@@ -3,7 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
-import Atlas.Ui
+import Telamon.Ui
 
 // One network interface: what it receives and sends, and its addresses.
 ResourcePage {
@@ -22,16 +22,16 @@ ResourcePage {
     figure: Format.rate(page.net.rxRate + page.net.txRate)
     figureColor: page.hue
 
-    AtlasLabel {
+    TelamonLabel {
         visible: !page.net.present
         Layout.fillWidth: true
         wrapMode: Text.Wrap
-        color: AtlasStyle.textMuted
+        color: TelamonStyle.textMuted
         text: qsTr("This connection is not there right now.")
     }
 
     // Receiving and sending side by side where there is room.
-    AtlasCard {
+    TelamonCard {
         title: qsTr("Activity")
 
         GridLayout {
@@ -67,11 +67,11 @@ ResourcePage {
     }
 
     FigureCard {
-        AtlasStat {
+        TelamonStat {
             label: qsTr("Receive")
             value: Format.rate(page.net.rxRate)
         }
-        AtlasStat {
+        TelamonStat {
             label: qsTr("Send")
             value: Format.rate(page.net.txRate)
         }

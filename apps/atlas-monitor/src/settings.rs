@@ -30,12 +30,12 @@ use std::sync::mpsc;
 use std::sync::{Mutex, PoisonError};
 use std::thread::JoinHandle;
 
-use atlas_framework_ui::atlas_framework_core::settings as rc;
+use telamon_framework_ui::telamon_framework_core::settings as rc;
 
 /// `~/.config/atlas-monitorrc`, looked up on each use (`XDG_CONFIG_HOME`
 /// may change under a test).
 fn file() -> rc::Settings {
-    rc::Settings::for_app(atlas_framework_ui::app_info())
+    rc::Settings::for_app(telamon_framework_ui::app_info())
 }
 
 /// One key's new value, or `None` to remove it.

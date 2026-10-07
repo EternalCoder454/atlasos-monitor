@@ -4,7 +4,7 @@ import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
-import Atlas.Ui
+import Telamon.Ui
 
 // The system's services, failed ones first, each with a status dot. Start,
 // Stop, Restart, Enable and Disable go to systemd, which has polkit ask for
@@ -160,16 +160,16 @@ Item {
             Layout.fillWidth: true
             spacing: Kirigami.Units.largeSpacing
 
-            AtlasLabel {
+            TelamonLabel {
                 Layout.fillWidth: true
                 text: qsTr("Services")
-                textStyle: AtlasLabel.Title
+                textStyle: TelamonLabel.Title
                 elide: Text.ElideRight
             }
             QQC2.Label {
                 text: qsTr("All Unit Types")
             }
-            AtlasSwitch {
+            TelamonSwitch {
                 id: allTypes
                 // Sockets, timers, mounts, paths, swaps and targets too.
                 onToggled: page.services.setAllTypes(checked)
@@ -180,7 +180,7 @@ Item {
                 text: page.services.failedCount > 0 ? qsTr("Failed Only (%1)").arg(page.services.failedCount) : qsTr("Failed Only")
                 opacity: failedOnly.enabled ? 1 : 0.5
             }
-            AtlasSwitch {
+            TelamonSwitch {
                 id: failedOnly
                 // Nothing to show with none failed, unless it's on already.
                 enabled: checked || page.services.failedCount > 0

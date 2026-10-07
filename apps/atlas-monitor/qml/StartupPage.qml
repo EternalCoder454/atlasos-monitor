@@ -4,11 +4,11 @@ import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
-import Atlas.Ui
+import Telamon.Ui
 
 // What starts when you log in, each with a switch. The desktop's own
 // background pieces are behind "Show System Entries".
-AtlasPage {
+TelamonPage {
     id: page
 
     required property var startup
@@ -97,7 +97,7 @@ AtlasPage {
         QQC2.Label {
             text: qsTr("Show System Entries")
         }
-        AtlasSwitch {
+        TelamonSwitch {
             checked: page.showSystem
             onToggled: page.showSystem = checked
             Accessible.name: qsTr("Show System Entries")

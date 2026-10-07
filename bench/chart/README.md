@@ -3,7 +3,7 @@
 Measures what live charts cost on Qt Quick's software backend, the default
 renderer (docs/DESIGN.md, Rendering). It settled the chart decision: a C++
 `QQuickPaintedItem` drawn with the tricks below. `livechart.cpp` is the
-reference for Atlas.Ui's `LiveChart`. It draws what the Go Atlas Monitor's
+reference for Telamon.Ui's `LiveChart`. It draws what the Go Atlas Monitor's
 graph package draws: caption bands, a square grid, fill and line, a border.
 
 Not part of the app build or CI. Build it in the dev container:

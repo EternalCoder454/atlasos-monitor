@@ -4,12 +4,12 @@ import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
-import Atlas.Ui
+import Telamon.Ui
 
 // Every temperature, fan and power reading the hardware offers, grouped by
 // what it belongs to. A processor's many per-core temperatures fold behind
 // one "Cores" row that names the hottest.
-AtlasPage {
+TelamonPage {
     id: page
 
     required property var sensors
@@ -29,9 +29,9 @@ AtlasPage {
         title: reading.sensors.labels[reading.at] ?? ""
         value: reading.sensors.values[reading.at] ?? ""
 
-        AtlasLabel {
+        TelamonLabel {
             visible: reading.warmth > 0
-            textStyle: AtlasLabel.Caption
+            textStyle: TelamonLabel.Caption
             text: reading.warmth > 1 ? qsTr("Critical") : qsTr("Hot")
             color: reading.warmth > 1 ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.neutralTextColor
         }

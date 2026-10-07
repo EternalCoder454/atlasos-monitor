@@ -3,7 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
-import Atlas.Ui
+import Telamon.Ui
 
 // One graphics card: its load and video memory over the last minute, then
 // clocks, temperatures, fan and power.
@@ -25,15 +25,15 @@ ResourcePage {
 
     // A sleeping card is left asleep: reading it would wake it and cost
     // more power than the figures are worth.
-    AtlasLabel {
+    TelamonLabel {
         visible: page.gpu.asleep
         Layout.fillWidth: true
         wrapMode: Text.Wrap
-        color: AtlasStyle.textMuted
+        color: TelamonStyle.textMuted
         text: qsTr("This card is asleep because nothing is using it. Atlas Monitor leaves it asleep rather than wake it to read it, so the figures below are from when it was last awake.")
     }
 
-    AtlasCard {
+    TelamonCard {
         LiveChart {
             Layout.fillWidth: true
             Layout.preferredHeight: Kirigami.Units.gridUnit * 9
@@ -47,7 +47,7 @@ ResourcePage {
         }
     }
 
-    AtlasCard {
+    TelamonCard {
         visible: page.hasMemory
         title: page.memoryName
 
@@ -65,28 +65,28 @@ ResourcePage {
     }
 
     FigureCard {
-        AtlasStat {
+        TelamonStat {
             label: qsTr("Utilization")
             value: Format.percent(page.gpu.usage)
         }
-        AtlasStat {
+        TelamonStat {
             visible: page.hasMemory
             label: page.memoryName
             value: page.gpu.memoryUsed >= 0 ? Format.size(page.gpu.memoryUsed) : Format.dash
         }
-        AtlasStat {
+        TelamonStat {
             label: qsTr("Temperature")
             value: Format.celsius(page.gpu.temperature)
         }
-        AtlasStat {
+        TelamonStat {
             label: qsTr("Power draw")
             value: Format.watts(page.gpu.power)
         }
-        AtlasStat {
+        TelamonStat {
             label: qsTr("GPU clock")
             value: Format.mhz(page.gpu.coreClock)
         }
-        AtlasStat {
+        TelamonStat {
             label: qsTr("Fan speed")
             // amdgpu counts the fan's turns; NVIDIA gives its duty cycle.
             value: page.gpu.fanRpm > 0 ? qsTr("%1 RPM").arg(Format.count(page.gpu.fanRpm)) : page.gpu.fanPercent > 0 ? Format.percent(page.gpu.fanPercent) : Format.dash

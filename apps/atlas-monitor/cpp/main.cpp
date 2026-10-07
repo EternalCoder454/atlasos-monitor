@@ -47,9 +47,9 @@ extern "C" AtlasObjects atlas_objects_new(const char *iconTheme);
 extern "C" const char *atlas_icon_search_paths(const char *iconTheme);
 extern "C" bool atlas_settings_gpu_rendering();
 extern "C" void atlas_settings_flush();
-// atlas-framework-ui (include/atlas/app.h), linked in with the Rust library.
-extern "C" void atlas_app_init();
-extern "C" void atlas_app_ready();
+// telamon-framework-ui (include/telamon/app.h), linked in with the Rust library.
+extern "C" void telamon_app_init();
+extern "C" void telamon_app_ready();
 
 // Tells the sampler when the window can't be seen: minimized, hidden, or
 // not exposed (KWin suspends a minimized window, or one on another desktop,
@@ -223,7 +223,7 @@ int main(int argc, char *argv[])
     // domain and application name (together the single-instance D-Bus name
     // net.eterneon.atlas.monitor) and desktop file name, the version, and
     // the org.kde.desktop style.
-    atlas_app_init();
+    telamon_app_init();
 
     // Draw on the CPU (Qt Quick's software backend) unless the user turned on
     // "Use the graphics card" in Settings: the GPU path loads Mesa and LLVM,
@@ -233,8 +233,8 @@ int main(int argc, char *argv[])
     }
 
     QApplication app(argc, argv);
-    // The display name, the window icon, and what Atlas.Ui's AtlasApp shows.
-    atlas_app_ready();
+    // The display name, the window icon, and what Telamon.Ui's TelamonApp shows.
+    telamon_app_ready();
 
     // Before the single-instance check, so --help and --version answer
     // here; --page goes to the running window if there is one.

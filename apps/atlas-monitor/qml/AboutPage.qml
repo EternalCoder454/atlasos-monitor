@@ -2,9 +2,9 @@ import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
-import Atlas.Ui
+import Telamon.Ui
 
-AtlasPage {
+TelamonPage {
     id: page
 
     required property var backend
@@ -22,10 +22,10 @@ AtlasPage {
             Layout.preferredWidth: Math.round(Kirigami.Units.gridUnit * 5)
             Layout.preferredHeight: Layout.preferredWidth
         }
-        AtlasLabel {
+        TelamonLabel {
             Layout.alignment: Qt.AlignHCenter
             Layout.topMargin: Kirigami.Units.smallSpacing
-            textStyle: AtlasLabel.Title
+            textStyle: TelamonLabel.Title
             text: qsTr("Atlas Monitor")
         }
         QQC2.Label {

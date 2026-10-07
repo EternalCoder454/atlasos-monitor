@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
-import Atlas.Ui
+import Telamon.Ui
 
 // The processor: its load over the last minute, each logical processor's
 // load, how fast and warm it runs now, and what it is (cores, caches).
@@ -24,7 +24,7 @@ ResourcePage {
     figure: page.measured ? Format.percent(page.cpu.usage) : Format.dash
     figureColor: page.hue
 
-    AtlasCard {
+    TelamonCard {
         LiveChart {
             Layout.fillWidth: true
             Layout.preferredHeight: Kirigami.Units.gridUnit * 9
@@ -38,7 +38,7 @@ ResourcePage {
         }
     }
 
-    AtlasCard {
+    TelamonCard {
         visible: page.cpu.coreUsage.length > 0
         title: qsTr("Logical Processors")
         headerTrailing: [
@@ -73,15 +73,15 @@ ResourcePage {
     }
 
     FigureCard {
-        AtlasStat {
+        TelamonStat {
             label: qsTr("Utilization")
             value: page.measured ? Format.percent(page.cpu.usage) : Format.dash
         }
-        AtlasStat {
+        TelamonStat {
             label: qsTr("Speed")
             value: Format.mhz(page.cpu.frequency)
         }
-        AtlasStat {
+        TelamonStat {
             label: qsTr("Temperature")
             value: Format.celsius(page.cpu.temperature)
         }

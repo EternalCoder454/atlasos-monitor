@@ -4,7 +4,7 @@ import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
-import Atlas.Ui
+import Telamon.Ui
 
 // Every running application, or every process, with what each costs. The
 // model (src/processes.rs) sorts, searches and groups; this page lays it
@@ -158,10 +158,10 @@ Item {
             Layout.fillWidth: true
             spacing: Kirigami.Units.largeSpacing
 
-            AtlasLabel {
+            TelamonLabel {
                 Layout.fillWidth: true
                 text: qsTr("Apps")
-                textStyle: AtlasLabel.Title
+                textStyle: TelamonLabel.Title
                 elide: Text.ElideRight
             }
             SearchField {

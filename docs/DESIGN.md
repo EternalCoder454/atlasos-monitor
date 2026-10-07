@@ -22,7 +22,7 @@ crates/atlas-sysinfo/         the readers: /proc, /sys, hwmon, D-Bus. No Qt.
   src/<reader>.rs             one module per Go package (stats, process, gpu, ...)
   tests/fixtures/             recorded /proc and /sys files for the parsers
 apps/atlas-monitor/           the app
-  CMakeLists.txt              Corrosion + qt_add_qml_module; checks Atlas.Ui is installed
+  CMakeLists.txt              Corrosion + qt_add_qml_module; checks Telamon.Ui is installed
   build.rs                    cxx-qt-build: one entry per #[cxx_qt::bridge] file
   src/                        QObjects and models (CXX-Qt), settings
   cpp/                        main.cpp, and C++ Qt Quick items (the chart)
@@ -39,25 +39,25 @@ invokables.
 
 ## Shared code: atlas-framework
 
-- The Rust side is the `atlas-framework-ui` crate (which brings
-  `atlas-framework-core` and `atlas-framework-system`):
-  `[workspace.dependencies] atlas-framework-ui = { git, rev }` in the
+- The Rust side is the `telamon-framework-ui` crate (which brings
+  `telamon-framework-core` and `telamon-framework-system`):
+  `[workspace.dependencies] telamon-framework-ui = { git, rev }` in the
   workspace `Cargo.toml`. Cargo.lock records the same commit. It gives the
-  start (`app!` in `lib.rs`; `atlas_app_init` and `atlas_app_ready` in
+  start (`app!` in `lib.rs`; `telamon_app_init` and `telamon_app_ready` in
   `main.cpp`), the settings file, logging and crash reports. It is compiled
   in, so a change reaches the app when the pin moves: push the
   atlas-framework commit, change `rev`, run
-  `cargo update -p atlas-framework-ui`, commit `Cargo.toml` and `Cargo.lock`
+  `cargo update -p telamon-framework-ui`, commit `Cargo.toml` and `Cargo.lock`
   together. CI fails if they disagree.
-- Atlas.Ui comes from [atlas-framework](https://github.com/EternalCoder454/atlas-framework)
-  (read its `docs/DESIGN.md`, "How apps use it"). It is installed like Kirigami, by the `atlas-ui` RPM, at
-  `/usr/lib64/qt6/qml/Atlas/Ui`: the QML imports it and nothing links it.
+- Telamon.Ui comes from [atlas-framework](https://github.com/EternalCoder454/atlas-framework)
+  (read its `docs/DESIGN.md`, "How apps use it"). It is installed like Kirigami, by the `telamon-ui` RPM, at
+  `/usr/lib64/qt6/qml/Telamon/Ui`: the QML imports it and nothing links it.
   CMake stops if it isn't installed; qmlcachegen and qmllint read its types
   from there. The RPM `Requires` and `BuildRequires` it. No repository has
   it, so builds install atlas-framework's RPMs first: `build-rpm.sh` and
   `scripts/dev.sh` take them from `ATLAS_LOCAL_RPMS=<dir>`, CI builds them
   from atlas-framework `main`, and the AtlasOS image builds them before the
-  apps. A change to Atlas.Ui reaches the app when atlas-ui is updated, with
+  apps. A change to Telamon.Ui reaches the app when telamon-ui is updated, with
   no rebuild of the app.
 
 New shared components (`LiveChart`, `UsageBar`, `SidebarGroup`, `DataTable`,
@@ -66,35 +66,35 @@ its compatibility rules. Code that only Atlas Monitor needs stays here.
 
 ## Look
 
-Atlas.Ui's design throughout (bold titles, rounded cards, the sidebar's
+Telamon.Ui's design throughout (bold titles, rounded cards, the sidebar's
 pills, the theme's colours), with a colour per part for its data:
 
 - Each kind of thing has its colour (`qml/Hues.qml`): processor cyan, memory
   blue, disk green, network pink, graphics purple, battery green, power
   yellow, darkened to 72% on a light theme. Only data takes it: charts, bars,
   sparklines and a page's figure. Everything else is the theme's.
-- `ResourcePage` is `AtlasPage`'s bold title with what the part is under it
+- `ResourcePage` is `TelamonPage`'s bold title with what the part is under it
   and its figure now at the right, in a centred column wider than
-  `AtlasPage`'s (54 grid units, its writable `maxContentWidth`), the figure
-  in its `headerTrailing`. Its content is Atlas.Ui `AtlasCard`s, for a chart
+  `TelamonPage`'s (54 grid units, its writable `maxContentWidth`), the figure
+  in its `headerTrailing`. Its content is Telamon.Ui `TelamonCard`s, for a chart
   or a grid. Read and write (receive and send) charts sit side by side in one
   card where there is room.
-- `FigureCard` holds a part's figures: a few `AtlasStat`s across the top,
-  then an `AtlasDetailGrid` of names and values in two columns where there
+- `FigureCard` holds a part's figures: a few `TelamonStat`s across the top,
+  then an `TelamonDetailGrid` of names and values in two columns where there
   is room.
 - The processor's logical processors are a `CoreGrid` (`cpp/coregrid.*`) in
   a card that folds with a chevron `ToolbarButton` in its header: one painted item, "CPU 3" and its percent over a slim
   bar, as many columns as fit and preferably as fill every row.
-- The Overview is an `AtlasPage` list: a status row, then a row per part
-  with its figure and an Atlas.Ui `AtlasSparkline` of its last minute
+- The Overview is an `TelamonPage` list: a status row, then a row per part
+  with its figure and a Telamon.Ui `TelamonSparkline` of its last minute
   (`DeviceList`'s `*Trend(s)` properties), scaled 0 to 100 for percentages
   and to 1.25 times the highest sample (at least a floor) for rates.
-- The sidebar is Atlas.Ui's `AtlasSidebar` of `SidebarItem`s and
+- The sidebar is Telamon.Ui's `TelamonSidebar` of `SidebarItem`s and
   `SidebarGroup`s, with live figures. Settings and About sit in a fixed
   footer under it, so they stay at the bottom; they draw a plain selection
   rather than the list's sliding one.
 - Apps, Startup, Services, Energy Saver, System Info, Devices, Sensors,
-  Settings and About are `AtlasPage`s of sections.
+  Settings and About are `TelamonPage`s of sections.
 
 ## Process and window
 
@@ -110,8 +110,8 @@ pills, the theme's colours), with a colour per part for its data:
   `Main.qml` runs the script engine's collector and `Backend.trimMemory()`
   (`malloc_trim` on a short-lived thread). glibc otherwise keeps a closed
   page's heap for reuse: about 20 MiB after the Apps table.
-- `main.cpp` is glue only: `atlas_app_init` first (logging, crash hooks,
-  the app ID), the Qt Quick backend, `atlas_app_ready`, the
+- `main.cpp` is glue only: `telamon_app_init` first (logging, crash hooks,
+  the app ID), the Qt Quick backend, `telamon_app_ready`, the
   single-instance service, the QML engine. All logic is Rust.
 
 ### Rendering
@@ -138,7 +138,7 @@ Consequences:
 ### Charts
 
 Settled by measurement (`bench/chart/README.md`, 2026-10-02). `LiveChart` is a
-C++ `QQuickPaintedItem` in Atlas.Ui; `bench/chart/livechart.cpp` is its
+C++ `QQuickPaintedItem` in Telamon.Ui; `bench/chart/livechart.cpp` is its
 reference (its `series` pointer property is a benchmark shortcut, not part of
 the API). It repaints its whole rectangle once per tick, and otherwise only
 when it is resized or one of its properties changes.
@@ -146,7 +146,7 @@ when it is resized or one of its properties changes.
 - **Data:** `values: list<real>`, oldest sample first, at most 60, plus
   `values2` for a second series (upload beside download, write beside read).
   The Rust `Series` holds the ring buffer and publishes the list in the tick's
-  queued closure. A generic list keeps Atlas.Ui free of Atlas Monitor's types,
+  queued closure. A generic list keeps Telamon.Ui free of Atlas Monitor's types,
   and it costs the same as reading the ring buffer from C++. `values2` is not
   in the benchmark; a second series adds roughly another fill and line, so
   measure it when it lands.
@@ -613,7 +613,7 @@ the GUI thread never waits for the disk; `main()` waits for it at the end.
 
 ## Crash reports and logging
 
-- atlas-framework's crash reports: `atlas_app_init`, called first in
+- atlas-framework's crash reports: `telamon_app_init`, called first in
   `main()` after two environment variables are set, installs the panic hook and a Qt message handler that saves a
   report on `QtFatalMsg`. Reports are saved only when the user turned crash
   reports on, which happens in Atlas Updater; Atlas Updater is also where
@@ -621,7 +621,7 @@ the GUI thread never waits for the disk; `main()` waits for it at the end.
   "Privacy and crash reports" in Atlas Updater's DESIGN.md.
 - Logging: the Rust `log` macros go to the systemd journal, identifier
   `atlas-monitor` (`journalctl --user -t atlas-monitor`), or to stderr when
-  there is no journal. Level from `ATLAS_LOG` (`error`, `warn`, `info`
+  there is no journal. Level from `TELAMON_LOG` (`error`, `warn`, `info`
   (default), `debug`, `trace`, `off`). Qt's messages go where Qt sends them,
   through the same handler that records fatal ones.
 

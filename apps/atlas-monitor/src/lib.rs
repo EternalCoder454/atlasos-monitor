@@ -30,16 +30,16 @@ use cxx_qt::{CxxQtType, Threading};
 // linked even while no bridge uses one of its types.
 extern crate cxx_qt_lib;
 
-// Who this app is, for atlas-framework: `main.cpp`'s `atlas_app_init` and
-// `atlas_app_ready` take the names, the logger and the crash hooks from it.
+// Who this app is, for atlas-framework: `main.cpp`'s `telamon_app_init` and
+// `telamon_app_ready` take the names, the logger and the crash hooks from it.
 // The ID is the desktop file, the icon and the single-instance D-Bus name.
-atlas_framework_ui::app! {
+telamon_framework_ui::app! {
     name: "Atlas Monitor",
     id: "net.eterneon.atlas.monitor",
     repo: "atlasos-monitor",
-    // AtlasCard, AtlasStat, AtlasDetailGrid, AtlasSparkline, AtlasDialog and
-    // AtlasSidebar; the spec's Requires says the same.
-    ui: "1.4.0",
+    // TelamonCard, TelamonStat, TelamonDetailGrid, TelamonSparkline, TelamonDialog and
+    // TelamonSidebar; the spec's Requires says the same.
+    ui: "2.0.0",
 }
 
 /// The QObjects QML sees, handed to the engine as `Main.qml`'s initial

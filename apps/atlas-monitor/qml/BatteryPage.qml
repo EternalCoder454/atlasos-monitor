@@ -3,7 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
-import Atlas.Ui
+import Telamon.Ui
 
 // A battery, or every pack summed: its charge and draw over the last
 // minute, what it is doing, and how worn it is.
@@ -64,7 +64,7 @@ ResourcePage {
     figure: Format.percent(page.b.percent)
     figureColor: page.hue
 
-    AtlasCard {
+    TelamonCard {
         LiveChart {
             Layout.fillWidth: true
             Layout.preferredHeight: Kirigami.Units.gridUnit * 9
@@ -78,7 +78,7 @@ ResourcePage {
         }
     }
 
-    AtlasCard {
+    TelamonCard {
         visible: page.b.present && page.hasRate
         title: page.rateName
 
@@ -99,15 +99,15 @@ ResourcePage {
     FigureCard {
         visible: page.b.present
 
-        AtlasStat {
+        TelamonStat {
             label: qsTr("Charge")
             value: Format.percent(page.b.percent)
         }
-        AtlasStat {
+        TelamonStat {
             label: page.rateName
             value: Format.watts(page.b.watts)
         }
-        AtlasStat {
+        TelamonStat {
             label: page.b.status === "charging" ? qsTr("Time until full") : qsTr("Time remaining")
             value: Format.duration(page.b.timeLeft)
         }

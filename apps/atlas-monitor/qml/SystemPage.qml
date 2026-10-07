@@ -4,12 +4,12 @@ import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
-import Atlas.Ui
+import Telamon.Ui
 
 // What this computer is: its system and desktop, its hardware as the
 // firmware names it, and how well the firmware protects it (fwupd's Host
 // Security ID). Copy Details puts it all on the clipboard, for a bug report.
-AtlasPage {
+TelamonPage {
     id: page
 
     required property var system
@@ -164,10 +164,10 @@ AtlasPage {
             Layout.fillWidth: true
             spacing: 0
 
-            AtlasLabel {
+            TelamonLabel {
                 Layout.fillWidth: true
                 wrapMode: Text.Wrap
-                textStyle: AtlasLabel.Heading
+                textStyle: TelamonLabel.Heading
                 text: page.s.product || page.s.vendor || page.s.hostname || qsTr("This Computer")
             }
             QQC2.Label {

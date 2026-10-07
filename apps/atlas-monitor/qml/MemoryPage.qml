@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
-import Atlas.Ui
+import Telamon.Ui
 
 // Memory and swap: use over the last minute, how the memory is shared out
 // now, and the figures behind it.
@@ -22,7 +22,7 @@ ResourcePage {
     figure: page.measured ? Format.percent(page.memory.used / page.memory.total * 100) : Format.dash
     figureColor: page.hue
 
-    AtlasCard {
+    TelamonCard {
         LiveChart {
             Layout.fillWidth: true
             Layout.preferredHeight: Kirigami.Units.gridUnit * 9
@@ -46,7 +46,7 @@ ResourcePage {
         }
     }
 
-    AtlasCard {
+    TelamonCard {
         visible: page.hasSwap
         title: qsTr("Swap")
 
@@ -64,15 +64,15 @@ ResourcePage {
     }
 
     FigureCard {
-        AtlasStat {
+        TelamonStat {
             label: qsTr("In use")
             value: page.measured ? Format.bytes(page.memory.used) : Format.dash
         }
-        AtlasStat {
+        TelamonStat {
             label: qsTr("Available")
             value: page.measured ? Format.bytes(page.memory.available) : Format.dash
         }
-        AtlasStat {
+        TelamonStat {
             label: qsTr("Cached")
             value: page.measured ? Format.bytes(page.memory.cached) : Format.dash
         }

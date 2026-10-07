@@ -1,15 +1,15 @@
 import QtQuick
 import QtQuick.Layouts
-import Atlas.Ui
+import Telamon.Ui
 
 // A part's figures in one card: the few that matter large across the top
 // (`stats`, AtlasStats), the rest as a grid of names and values under a line.
 //
 //   FigureCard {
-//       AtlasStat { label: qsTr("Speed"); value: "4.2 GHz" }
+//       TelamonStat { label: qsTr("Speed"); value: "4.2 GHz" }
 //       details: [[qsTr("Cores"), "24"], [qsTr("Sockets"), "1"]]
 //   }
-AtlasCard {
+TelamonCard {
     id: card
 
     default property alias stats: statRow.data
@@ -28,15 +28,15 @@ AtlasCard {
             Layout.fillWidth: true
             // Not visibleChildren: it sticks at 0.
             visible: statRow.children.length > 0
-            spacing: AtlasStyle.spacingXXLarge
+            spacing: TelamonStyle.spacingXXLarge
         },
         Rectangle {
             Layout.fillWidth: true
             visible: statRow.visible && card.shown.length > 0
             implicitHeight: 1
-            color: AtlasStyle.separator
+            color: TelamonStyle.separator
         },
-        AtlasDetailGrid {
+        TelamonDetailGrid {
             Layout.fillWidth: true
             visible: card.shown.length > 0
             // Two to a line where there is room.

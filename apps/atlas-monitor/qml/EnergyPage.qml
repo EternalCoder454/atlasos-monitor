@@ -3,13 +3,13 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
-import Atlas.Ui
+import Telamon.Ui
 
 // The apps keeping the processor busy, each with Ease Off (or Put Back),
 // and the switch that eases them off automatically. Easing an app off
 // lowers its systemd CPU weight: it keeps running and keeps its work, and
 // just stops winning against everything else.
-AtlasPage {
+TelamonPage {
     id: page
 
     required property var energy

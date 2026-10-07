@@ -43,15 +43,15 @@ BuildRequires:  qt6-qtbase-devel
 BuildRequires:  cmake(KF6CoreAddons)
 BuildRequires:  cmake(KF6DBusAddons)
 BuildRequires:  cmake(KF6WindowSystem)
-# QML modules qmlcachegen resolves at build time (not linked). atlas-ui comes
+# QML modules qmlcachegen resolves at build time (not linked). telamon-ui comes
 # from atlas-framework, which is in no repository: install its RPMs first
 # (build-rpm.sh does, given ATLAS_LOCAL_RPMS).
 BuildRequires:  kf6-kirigami-devel
-BuildRequires:  atlas-ui >= 1.4.0
+BuildRequires:  telamon-ui >= 2.0.0
 
 Requires:       kf6-kirigami
-# Atlas.Ui, the shared look (atlas-framework); 1.4.0 for AtlasCard, AtlasStat, AtlasDetailGrid, AtlasSparkline, AtlasDialog and AtlasSidebar
-Requires:       atlas-ui >= 1.4.0
+# Telamon.Ui, the shared look (atlas-framework); 1.4.0 for TelamonCard, TelamonStat, TelamonDetailGrid, TelamonSparkline, TelamonDialog and TelamonSidebar
+Requires:       telamon-ui >= 2.0.0
 Requires:       kf6-qqc2-desktop-style
 Requires:       qt6-qtdeclarative
 # the app icon and Breeze's icons are SVG
