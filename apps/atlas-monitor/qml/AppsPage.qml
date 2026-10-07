@@ -46,11 +46,24 @@ Item {
         }
     }
 
+    // The menus and dialogs are made the first time they open, not with the
+    // page: together they are 5 MiB.
+    function made(loader) {
+        loader.active = true;
+        return loader.item;
+    }
+    function isOpen(loader) {
+        return loader.item !== null && loader.item.opened;
+    }
+    function isVisible(loader) {
+        return loader.item !== null && loader.item.visible;
+    }
+
     // End Task asks first only for an application of several processes:
     // one process asked to close can still save its work.
     function endTask() {
         if (page.apps.pinnedCount > 1) {
-            endDialog.open();
+            page.made(endDialogLoader).open();
         } else {
             page.act(page.actions.end);
         }
@@ -324,36 +337,41 @@ Item {
             // while the menu or a question is up, the answer goes to it.
             onContextMenuRequested: (row, x, y) => {
                 if (page.apps.pin(row)) {
-                    rowMenu.popup(table, x, y);
+                    page.made(rowMenuLoader).popup(table, x, y);
                 }
             }
-            onHeaderMenuRequested: (x, y) => columnsMenu.popup(table, x, y)
+            onHeaderMenuRequested: (x, y) => page.made(columnsMenuLoader).popup(table, x, y)
 
             // Rows hold still under the pointer, and while a menu or a
             // question is up about one of them.
-            readonly property bool held: pointerInside || rowMenu.opened || endDialog.opened || killDialog.opened || detailsDialog.visible
+            readonly property bool held: pointerInside || page.isOpen(rowMenuLoader) || page.isOpen(endDialogLoader) || page.isOpen(killDialogLoader) || page.isVisible(detailsDialogLoader)
             onHeldChanged: page.apps.setHeld(held)
         }
     }
 
     // The header's right-click menu: the columns, a check by each shown.
-    ContextMenu {
-        id: columnsMenu
+    Loader {
+        id: columnsMenuLoader
+        active: false
+        sourceComponent: ContextMenu {
+            id: columnsMenu
+            parent: page
 
-        Instantiator {
-            model: page.columnChoices
-            delegate: ContextMenuItem {
-                required property var modelData
-                readonly property bool shown: !page.apps.hiddenColumns.includes(modelData.role)
-                text: modelData.text
-                // ContextMenuItem draws no check box of its own.
-                icon.name: shown ? "checkmark" : ""
-                Accessible.checkable: true
-                Accessible.checked: shown
-                onTriggered: page.apps.setColumnShown(modelData.role, !shown)
+            Instantiator {
+                model: page.columnChoices
+                delegate: ContextMenuItem {
+                    required property var modelData
+                    readonly property bool shown: !page.apps.hiddenColumns.includes(modelData.role)
+                    text: modelData.text
+                    // ContextMenuItem draws no check box of its own.
+                    icon.name: shown ? "checkmark" : ""
+                    Accessible.checkable: true
+                    Accessible.checked: shown
+                    onTriggered: page.apps.setColumnShown(modelData.role, !shown)
+                }
+                onObjectAdded: (index, object) => columnsMenu.insertItem(index, object)
+                onObjectRemoved: (index, object) => columnsMenu.removeItem(object)
             }
-            onObjectAdded: (index, object) => columnsMenu.insertItem(index, object)
-            onObjectRemoved: (index, object) => columnsMenu.removeItem(object)
         }
     }
 
@@ -389,70 +407,87 @@ Item {
     Connections {
         target: page.details
         function onShown() {
-            detailsDialog.open();
+            page.made(detailsDialogLoader).open();
         }
     }
 
-    ContextMenu {
-        id: rowMenu
-        ContextMenuItem {
-            text: qsTr("Details")
-            icon.name: "documentinfo"
-            onTriggered: page.apps.showDetails()
-        }
-        ContextMenuItem {
-            text: qsTr("Open File Location")
-            icon.name: "folder-open"
-            onTriggered: page.apps.openLocation()
-        }
-        ContextMenuSeparator {}
-        ContextMenuItem {
-            text: qsTr("Stop")
-            icon.name: "media-playback-pause"
-            onTriggered: page.act(page.actions.stop)
-        }
-        ContextMenuItem {
-            text: qsTr("Continue")
-            icon.name: "media-playback-start"
-            onTriggered: page.act(page.actions.resume)
-        }
-        ContextMenuSeparator {}
-        ContextMenuItem {
-            text: qsTr("End Task")
-            icon.name: "process-stop"
-            shortcutText: qsTr("Del")
-            destructive: true
-            onTriggered: page.endTask()
-        }
-        ContextMenuItem {
-            text: qsTr("Kill")
-            icon.name: "edit-bomb"
-            destructive: true
-            onTriggered: killDialog.open()
+    Loader {
+        id: rowMenuLoader
+        active: false
+        sourceComponent: ContextMenu {
+            id: rowMenu
+            parent: page
+            ContextMenuItem {
+                text: qsTr("Details")
+                icon.name: "documentinfo"
+                onTriggered: page.apps.showDetails()
+            }
+            ContextMenuItem {
+                text: qsTr("Open File Location")
+                icon.name: "folder-open"
+                onTriggered: page.apps.openLocation()
+            }
+            ContextMenuSeparator {}
+            ContextMenuItem {
+                text: qsTr("Stop")
+                icon.name: "media-playback-pause"
+                onTriggered: page.act(page.actions.stop)
+            }
+            ContextMenuItem {
+                text: qsTr("Continue")
+                icon.name: "media-playback-start"
+                onTriggered: page.act(page.actions.resume)
+            }
+            ContextMenuSeparator {}
+            ContextMenuItem {
+                text: qsTr("End Task")
+                icon.name: "process-stop"
+                shortcutText: qsTr("Del")
+                destructive: true
+                onTriggered: page.endTask()
+            }
+            ContextMenuItem {
+                text: qsTr("Kill")
+                icon.name: "edit-bomb"
+                destructive: true
+                onTriggered: page.made(killDialogLoader).open()
+            }
         }
     }
 
-    DetailsDialog {
-        id: detailsDialog
-        details: page.details
+    Loader {
+        id: detailsDialogLoader
+        active: false
+        sourceComponent: DetailsDialog {
+            id: detailsDialog
+            details: page.details
+        }
     }
 
-    ConfirmDialog {
-        id: endDialog
-        title: qsTr("End %1?").arg(page.apps.pinnedName)
-        text: qsTr("Each of its %1 processes is asked to close. Anything it hasn't saved may be lost.").arg(page.apps.pinnedCount)
-        acceptText: qsTr("End Task")
-        focusReject: true
-        onAccepted: page.act(page.actions.end)
+    Loader {
+        id: endDialogLoader
+        active: false
+        sourceComponent: ConfirmDialog {
+            id: endDialog
+            title: qsTr("End %1?").arg(page.apps.pinnedName)
+            text: qsTr("Each of its %1 processes is asked to close. Anything it hasn't saved may be lost.").arg(page.apps.pinnedCount)
+            acceptText: qsTr("End Task")
+            focusReject: true
+            onAccepted: page.act(page.actions.end)
+        }
     }
 
-    ConfirmDialog {
-        id: killDialog
-        title: qsTr("Kill %1?").arg(page.apps.pinnedName)
-        text: qsTr("It stops at once, with no chance to save. Use this only for something that doesn't respond to End Task.")
-        acceptText: qsTr("Kill")
-        focusReject: true
-        onAccepted: page.act(page.actions.kill)
+    Loader {
+        id: killDialogLoader
+        active: false
+        sourceComponent: ConfirmDialog {
+            id: killDialog
+            title: qsTr("Kill %1?").arg(page.apps.pinnedName)
+            text: qsTr("It stops at once, with no chance to save. Use this only for something that doesn't respond to End Task.")
+            acceptText: qsTr("Kill")
+            focusReject: true
+            onAccepted: page.act(page.actions.kill)
+        }
     }
 
     Component.onCompleted: {

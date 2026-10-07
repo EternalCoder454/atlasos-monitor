@@ -268,10 +268,17 @@ Item {
                 page.target = page.services.nameAt(row);
                 page.available = page.services.availableAt(row);
                 if (page.target.length > 0) {
-                    rowMenu.popup(table, x, y);
+                    page.made(rowMenuLoader).popup(table, x, y);
                 }
             }
         }
+    }
+
+    // The menu and the Stop question are made the first time they open, not
+    // with the page.
+    function made(loader) {
+        loader.active = true;
+        return loader.item;
     }
 
     function resort() {
@@ -329,49 +336,58 @@ Item {
         }
     }
 
-    ContextMenu {
-        id: rowMenu
-        ContextMenuItem {
-            text: qsTr("Start")
-            icon.name: "media-playback-start"
-            enabled: page.can(page.actions.start)
-            onTriggered: page.act(page.actions.start)
-        }
-        ContextMenuItem {
-            text: qsTr("Restart")
-            icon.name: "view-refresh"
-            enabled: page.can(page.actions.restart)
-            onTriggered: page.act(page.actions.restart)
-        }
-        ContextMenuItem {
-            text: qsTr("Stop")
-            icon.name: "media-playback-stop"
-            destructive: true
-            enabled: page.can(page.actions.stop)
-            onTriggered: stopDialog.open()
-        }
-        ContextMenuSeparator {}
-        ContextMenuItem {
-            text: qsTr("Start at Boot")
-            icon.name: "checkmark"
-            enabled: page.can(page.actions.enable)
-            onTriggered: page.act(page.actions.enable)
-        }
-        ContextMenuItem {
-            text: qsTr("Don't Start at Boot")
-            icon.name: "action-unavailable"
-            enabled: page.can(page.actions.disable)
-            onTriggered: page.act(page.actions.disable)
+    Loader {
+        id: rowMenuLoader
+        active: false
+        sourceComponent: ContextMenu {
+            id: rowMenu
+            parent: page
+            ContextMenuItem {
+                text: qsTr("Start")
+                icon.name: "media-playback-start"
+                enabled: page.can(page.actions.start)
+                onTriggered: page.act(page.actions.start)
+            }
+            ContextMenuItem {
+                text: qsTr("Restart")
+                icon.name: "view-refresh"
+                enabled: page.can(page.actions.restart)
+                onTriggered: page.act(page.actions.restart)
+            }
+            ContextMenuItem {
+                text: qsTr("Stop")
+                icon.name: "media-playback-stop"
+                destructive: true
+                enabled: page.can(page.actions.stop)
+                onTriggered: page.made(stopDialogLoader).open()
+            }
+            ContextMenuSeparator {}
+            ContextMenuItem {
+                text: qsTr("Start at Boot")
+                icon.name: "checkmark"
+                enabled: page.can(page.actions.enable)
+                onTriggered: page.act(page.actions.enable)
+            }
+            ContextMenuItem {
+                text: qsTr("Don't Start at Boot")
+                icon.name: "action-unavailable"
+                enabled: page.can(page.actions.disable)
+                onTriggered: page.act(page.actions.disable)
+            }
         }
     }
 
-    ConfirmDialog {
-        id: stopDialog
-        title: qsTr("Stop %1?").arg(page.target)
-        text: page.target.endsWith(".mount") ? qsTr("This unmounts it: programs using files on it lose them, and unsaved work there may be lost.") : page.target.endsWith(".swap") ? qsTr("What is in it moves back into memory first. With memory short, that can take a while and slow everything down.") : qsTr("Anything that needs it may stop working until it is started again or the computer restarts.")
-        acceptText: qsTr("Stop")
-        focusReject: true
-        onAccepted: page.act(page.actions.stop)
+    Loader {
+        id: stopDialogLoader
+        active: false
+        sourceComponent: ConfirmDialog {
+            id: stopDialog
+            title: qsTr("Stop %1?").arg(page.target)
+            text: page.target.endsWith(".mount") ? qsTr("This unmounts it: programs using files on it lose them, and unsaved work there may be lost.") : page.target.endsWith(".swap") ? qsTr("What is in it moves back into memory first. With memory short, that can take a while and slow everything down.") : qsTr("Anything that needs it may stop working until it is started again or the computer restarts.")
+            acceptText: qsTr("Stop")
+            focusReject: true
+            onAccepted: page.act(page.actions.stop)
+        }
     }
 
     Component.onCompleted: {
