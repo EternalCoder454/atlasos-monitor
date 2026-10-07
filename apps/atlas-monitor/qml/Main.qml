@@ -119,24 +119,128 @@ QQC2.ApplicationWindow {
     // Icons only when the window is narrow.
     readonly property bool compact: width < Kirigami.Units.gridUnit * 40
 
+    // Each page's QML type, loaded the first time the page opens: naming the
+    // types here, rather than as components, keeps the window from loading
+    // all sixteen pages (and what they use) to show one.
     readonly property var pages: ({
-            "overview": overviewPage,
-            "cpu": cpuPage,
-            "memory": memoryPage,
-            "disk": diskPage,
-            "network": networkPage,
-            "gpu": gpuPage,
-            "battery": batteryPage,
-            "sensors": sensorsPage,
-            "apps": appsPage,
-            "startup": startupPage,
-            "services": servicesPage,
-            "energy": energyPage,
-            "system": systemPage,
-            "devices": devicesPage,
-            "settings": settingsPage,
-            "about": aboutPage
+            "overview": "OverviewPage",
+            "cpu": "CpuPage",
+            "memory": "MemoryPage",
+            "disk": "DiskPage",
+            "network": "NetworkPage",
+            "gpu": "GpuPage",
+            "battery": "BatteryPage",
+            "sensors": "SensorsPage",
+            "apps": "AppsPage",
+            "startup": "StartupPage",
+            "services": "ServicesPage",
+            "energy": "EnergyPage",
+            "system": "SystemPage",
+            "devices": "DevicesPage",
+            "settings": "SettingsPage",
+            "about": "AboutPage"
         })
+    // The components made so far, by kind.
+    property var pageComponents: ({})
+
+    function pageComponent(kind) {
+        let c = pageComponents[kind];
+        if (c === undefined) {
+            c = Qt.createComponent("net.eterneon.atlas.monitor", pages[kind]);
+            pageComponents[kind] = c;
+        }
+        return c;
+    }
+
+    // What a page is made with: the objects it shows, and bindings for what
+    // changes while it is open.
+    function pageProperties(kind) {
+        switch (kind) {
+        case "overview":
+            return {
+                cpu: root.cpu,
+                memory: root.memory,
+                health: root.health,
+                devices: root.devices,
+                gpu: root.gpu,
+                battery: root.battery,
+                icons: Qt.binding(() => root.icons)
+            };
+        case "services":
+            return {
+                services: root.services
+            };
+        case "energy":
+            return {
+                energy: root.energy
+            };
+        case "startup":
+            return {
+                startup: root.startup
+            };
+        case "apps":
+            return {
+                apps: root.apps,
+                details: root.details,
+                hasGpu: Qt.binding(() => root.gpu.cardNames.length > 0)
+            };
+        case "cpu":
+            return {
+                cpu: root.cpu,
+                backend: root.backend,
+                interval: Qt.binding(() => root.backend.refreshInterval)
+            };
+        case "memory":
+            return {
+                memory: root.memory,
+                interval: Qt.binding(() => root.backend.refreshInterval)
+            };
+        case "disk":
+            return {
+                disk: root.disk,
+                interval: Qt.binding(() => root.backend.refreshInterval)
+            };
+        case "network":
+            return {
+                net: root.net,
+                interval: Qt.binding(() => root.backend.refreshInterval)
+            };
+        case "gpu":
+            return {
+                gpu: root.gpu,
+                interval: Qt.binding(() => root.backend.refreshInterval)
+            };
+        case "battery":
+            return {
+                battery: root.battery,
+                interval: Qt.binding(() => root.backend.refreshInterval)
+            };
+        case "sensors":
+            return {
+                sensors: root.sensors
+            };
+        case "system":
+            return {
+                system: root.system,
+                platform: root.platform,
+                cards: Qt.binding(() => root.gpu.cardLabels)
+            };
+        case "devices":
+            return {
+                hardware: root.hardware
+            };
+        case "settings":
+            return {
+                backend: root.backend,
+                energy: root.energy
+            };
+        case "about":
+            return {
+                backend: root.backend
+            };
+        }
+        return {};
+    }
 
     // Its own keys only: "constructor" is no page.
     function isPage(kind) {
@@ -157,7 +261,7 @@ QQC2.ApplicationWindow {
         const kind = colon < 0 ? name : name.slice(0, colon);
         const device = colon < 0 ? undefined : name.slice(colon + 1);
         const known = isPage(kind) && (device !== undefined) === ["disk", "network", "gpu", "battery"].includes(kind) && device !== "";
-        var c = known ? pages[kind] : overviewPage;
+        const k = known ? kind : "overview";
         currentPage = known ? name : "overview";
         // Only the page on screen is sampled.
         sampler.showPage(currentPage);
@@ -172,10 +276,11 @@ QQC2.ApplicationWindow {
         } else if (known && kind === "battery") {
             battery.show(device, battery.packLabels[battery.packNames.indexOf(device)] ?? device);
         }
-        if (stack.depth === 0) {
-            stack.push(c, {}, QQC2.StackView.Immediate);
-        } else {
-            stack.replace(c);
+        const page = stack.depth === 0 ? stack.push(pageComponent(k), pageProperties(k), QQC2.StackView.Immediate) : stack.replace(pageComponent(k), pageProperties(k));
+        if (k === "overview") {
+            page.openPage.connect(name => root.showPage(name));
+        } else if (k === "settings") {
+            page.releaseIdleMemory.connect(root.releaseIdleMemory);
         }
         settleMemory.restart();
     }
@@ -559,123 +664,6 @@ QQC2.ApplicationWindow {
         function onPackNamesChanged() {
             root.restorePending("battery", root.battery.packNames);
             root.checkDevice();
-        }
-    }
-
-    Component {
-        id: overviewPage
-        OverviewPage {
-            cpu: root.cpu
-            memory: root.memory
-            health: root.health
-            devices: root.devices
-            gpu: root.gpu
-            battery: root.battery
-            icons: root.icons
-            onOpenPage: name => root.showPage(name)
-        }
-    }
-    Component {
-        id: servicesPage
-        ServicesPage {
-            services: root.services
-        }
-    }
-    Component {
-        id: energyPage
-        EnergyPage {
-            energy: root.energy
-        }
-    }
-    Component {
-        id: startupPage
-        StartupPage {
-            startup: root.startup
-        }
-    }
-    Component {
-        id: appsPage
-        AppsPage {
-            apps: root.apps
-            details: root.details
-            hasGpu: root.gpu.cardNames.length > 0
-        }
-    }
-    Component {
-        id: cpuPage
-        CpuPage {
-            cpu: root.cpu
-            backend: root.backend
-            interval: root.backend.refreshInterval
-        }
-    }
-    Component {
-        id: memoryPage
-        MemoryPage {
-            memory: root.memory
-            interval: root.backend.refreshInterval
-        }
-    }
-    Component {
-        id: diskPage
-        DiskPage {
-            disk: root.disk
-            interval: root.backend.refreshInterval
-        }
-    }
-    Component {
-        id: networkPage
-        NetworkPage {
-            net: root.net
-            interval: root.backend.refreshInterval
-        }
-    }
-    Component {
-        id: gpuPage
-        GpuPage {
-            gpu: root.gpu
-            interval: root.backend.refreshInterval
-        }
-    }
-    Component {
-        id: batteryPage
-        BatteryPage {
-            battery: root.battery
-            interval: root.backend.refreshInterval
-        }
-    }
-    Component {
-        id: sensorsPage
-        SensorsPage {
-            sensors: root.sensors
-        }
-    }
-    Component {
-        id: systemPage
-        SystemPage {
-            system: root.system
-            platform: root.platform
-            cards: root.gpu.cardLabels
-        }
-    }
-    Component {
-        id: devicesPage
-        DevicesPage {
-            hardware: root.hardware
-        }
-    }
-    Component {
-        id: settingsPage
-        SettingsPage {
-            backend: root.backend
-            energy: root.energy
-            onReleaseIdleMemory: root.releaseIdleMemory()
-        }
-    }
-    Component {
-        id: aboutPage
-        AboutPage {
-            backend: root.backend
         }
     }
 
