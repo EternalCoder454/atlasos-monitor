@@ -106,6 +106,10 @@ pills, the theme's colours), with a colour per part for its data:
 - **Nothing runs unless the window is open.** No tray, no autostart, no
   daemon. Closing the window quits the app. Automatic easing (Energy Saver)
   works only while the window is open and is undone when it closes.
+- A page left behind gives its memory back: a second after a page opens,
+  `Main.qml` runs the script engine's collector and `Backend.trimMemory()`
+  (`malloc_trim` on a short-lived thread). glibc otherwise keeps a closed
+  page's heap for reuse: about 20 MiB after the Apps table.
 - `main.cpp` is glue only: `atlas_app_init` first (logging, crash hooks,
   the app ID), the Qt Quick backend, `atlas_app_ready`, the
   single-instance service, the QML engine. All logic is Rust.
@@ -188,7 +192,7 @@ the plan the later phases build to:
 
 | Object | What it holds |
 |---|---|
-| `Backend` | Settings (`refreshInterval`, `gpuRendering`), Atlas Monitor's own memory (`ownPss`, `ownRss`). Invokables `changeRefreshInterval(ms)`, `changeGpuRendering(on)`, `refreshOwnMemory()`. |
+| `Backend` | Settings (`refreshInterval`, `gpuRendering`), Atlas Monitor's own memory (`ownPss`, `ownRss`). Invokables `changeRefreshInterval(ms)`, `changeGpuRendering(on)`, `refreshOwnMemory()`, `releaseIdleMemory()`, `trimMemory()`. |
 | `Sampler` | The sampling thread. QML calls `showPage(name)` when the page changes ("overview", "cpu", "memory", "disk:nvme0n1", "network:wlp4s0", "gpu", "battery:BAT0", "sensors", ...; anything else reads only the sidebar) and `changeInterval(ms)` when the setting does. |
 | `CpuStats`, `MemoryStats`, `GpuStats`, ... | Plain properties for the current values (`usage`, `frequency`, ...; NaN where the machine doesn't report one), plus a `list<real>` per chart (`usageHistory`, ...). Updated in one queued closure per tick. |
 | `HealthStatus` | `health::check`'s alerts for the Overview: `level` (0 fine, 1 warning, 2 critical) and the parallel lists `titles`, `details`, `levels`. Signals only when the list changes. |

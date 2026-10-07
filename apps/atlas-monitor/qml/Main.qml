@@ -177,6 +177,20 @@ QQC2.ApplicationWindow {
         } else {
             stack.replace(c);
         }
+        settleMemory.restart();
+    }
+
+    // Once a page has replaced another (and the first one has loaded), what
+    // the last one held goes back to the system: its script objects, then
+    // the heap malloc keeps for reuse. Otherwise about 20 MiB of the Apps
+    // table stays with every page opened after it (bench: Apps, then About).
+    Timer {
+        id: settleMemory
+        interval: 1000
+        onTriggered: {
+            gc();
+            root.backend.trimMemory();
+        }
     }
 
     // A group's name above its entries; hidden when the sidebar is icons only.

@@ -55,6 +55,12 @@ pub mod qobject {
         #[cxx_name = "releaseIdleMemory"]
         fn release_idle_memory(self: Pin<&mut Backend>);
 
+        /// Hands memory freed and kept for reuse back to the system, as a
+        /// page closes.
+        #[qinvokable]
+        #[cxx_name = "trimMemory"]
+        fn trim_memory(self: &Backend);
+
         /// Starts Atlas Updater, which keeps the crash report setting (a
         /// running one comes to the front). False when it isn't installed.
         #[qinvokable]
@@ -195,18 +201,14 @@ impl qobject::Backend {
     }
 
     pub fn release_idle_memory(self: Pin<&mut Self>) {
-        // A grown heap takes a while to walk, and other threads' mallocs
-        // wait on it: not on this thread.
         let qt = self.qt_thread();
-        let spawned = std::thread::Builder::new()
-            .name("trim".into())
-            .spawn(move || {
-                sysmem::trim();
-                let _ = qt.queue(|o| o.refresh_own_memory());
-            });
-        if let Err(e) = spawned {
-            log::warn!("starting the memory trim: {e}");
-        }
+        trim(move || {
+            let _ = qt.queue(|o| o.refresh_own_memory());
+        });
+    }
+
+    pub fn trim_memory(&self) {
+        trim(|| {});
     }
 
     pub fn refresh_own_memory(mut self: Pin<&mut Self>) {
@@ -276,5 +278,19 @@ struct Busy(Arc<AtomicBool>);
 impl Drop for Busy {
     fn drop(&mut self) {
         self.0.store(false, Ordering::Release);
+    }
+}
+
+/// Trims the heap, then calls `then`. A grown heap takes a while to walk,
+/// and other threads' mallocs wait on it: not on the GUI thread.
+fn trim(then: impl FnOnce() + Send + 'static) {
+    let spawned = std::thread::Builder::new()
+        .name("trim".into())
+        .spawn(move || {
+            sysmem::trim();
+            then();
+        });
+    if let Err(e) = spawned {
+        log::warn!("starting the memory trim: {e}");
     }
 }
