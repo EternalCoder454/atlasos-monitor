@@ -24,7 +24,7 @@ AtlasPage {
 
     // Every row, so the page and Copy Details say the same: a section, a
     // title, a value. Rows with nothing to say are left out.
-    readonly property var rows: {
+    readonly property var current: {
         const r = [];
         const add = (section, title, value) => {
             if (value !== undefined && value !== "") {
@@ -53,6 +53,16 @@ AtlasPage {
         add("hardware", qsTr("Motherboard"), s.board);
         add("hardware", qsTr("Firmware"), s.firmware);
         return r;
+    }
+
+    // The rows the page shows: `current` once a change has settled. The
+    // details arrive a property at a time, and each would make every row
+    // again. Set, not bound, from when the page is made.
+    property var rows: []
+    onCurrentChanged: Qt.callLater(page.settle)
+
+    function settle() {
+        page.rows = page.current;
     }
 
     // The firmware's own word for the case, in this app's language.
@@ -272,6 +282,7 @@ AtlasPage {
     }
 
     Component.onCompleted: {
+        page.rows = page.current;
         if (!page.s.loaded) {
             page.s.refresh();
         }
