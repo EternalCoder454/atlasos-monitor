@@ -1,4 +1,4 @@
-// Prototype of Atlas.Ui's LiveChart, for the chart decision: a QQuickPaintedItem
+// Prototype of Telamon.Ui's LiveChart, for the chart decision: a QQuickPaintedItem
 // that draws a 60-sample history the way the Go Atlas Monitor's graph package
 // does (caption bands, square grid, fill and line, border). It reads its
 // samples from a Series, which stands in for the Rust ring buffer.
@@ -19,7 +19,7 @@ class Series : public QObject
     Q_OBJECT
     QML_ELEMENT
     // The samples oldest first, as the Rust Series would publish them each
-    // tick (the generic interface a shared Atlas.Ui chart can take).
+    // tick (the generic interface a shared Telamon.Ui chart can take).
     Q_PROPERTY(QList<qreal> values READ values NOTIFY changed)
 public:
     static constexpr int Capacity = 60;

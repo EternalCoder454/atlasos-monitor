@@ -13,11 +13,11 @@ Monitor's figures (Fedora 44, KDE Wayland, about 700 processes):
 Not part of the app build or CI. Build the Release app in the dev container:
 
 ```sh
-scripts/dev.sh bash -c 'cmake -S apps/atlas-monitor -B build/release -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build/release'
+scripts/dev.sh bash -c 'cmake -S apps/telamon-monitor -B build/release -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build/release'
 ```
 
-(Atlas.Ui is the atlas-ui installed in the dev image. To measure an unpackaged
-Atlas.Ui change, install it over that one inside the container first, as
+(Telamon.Ui is the telamon-ui installed in the dev image. To measure an unpackaged
+Telamon.Ui change, install it over that one inside the container first, as
 atlas-framework's `docs/DESIGN.md` describes.)
 
 ## Running
@@ -81,7 +81,7 @@ What moved the figures:
 - Apps, 29 → 22.7: a changed label dirties only its glyphs, so a busy table
   left the software renderer a region of about 1,000 slivers, which it
   carries through every node twice a frame (`QRegion` was a third of the
-  CPU). Atlas.Ui's `RepaintArea` over each row makes it one rectangle per
+  CPU). Telamon.Ui's `RepaintArea` over each row makes it one rectangle per
   row. One per cell instead measured no better.
 - Apps, 22.7 → 18.3: the process model tells the table which roles of a
   row changed rather than all of them, and the scan keeps each process's

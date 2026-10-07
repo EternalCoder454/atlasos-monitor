@@ -1,6 +1,6 @@
 #!/bin/bash
 # What each page costs: the Release build under a private virtual KWin on the
-# host (Wayland at 1.5x, as AtlasOS runs it), never the real desktop.
+# host (Wayland at 1.5x, as Telamon OS runs it), never the real desktop.
 #   bench/pages/run.sh [runs] [seconds] [page...]
 # Build build/release first (see README.md). One JSON line per page and run
 # on stdout:
@@ -53,6 +53,6 @@ dbus-run-session --config-file="${PRIVATE_BUS_CONF:-$HOME/.claude/headless/priva
         -v /run/dbus/system_bus_socket:/run/dbus/system_bus_socket \
         -e WAYLAND_DISPLAY=/run/wl/wayland-0 -e QT_QPA_PLATFORM=wayland -e QT_SCALE_FACTOR=1.5 \
         ${PAGES_ENV:-} \
-        localhost/atlas-monitor-dev:44 bash /src/bench/pages/measure.sh "$runs" "$seconds" "$@" \
+        localhost/telamon-monitor-dev:44 bash /src/bench/pages/measure.sh "$runs" "$seconds" "$@" \
         2>"$repo/out/pages/app.log"
 ' _ "$sock" "$rt" "$repo" "$runs" "$seconds" "$budget" "${pages[@]}"

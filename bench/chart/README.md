@@ -3,7 +3,7 @@
 Measures what live charts cost on Qt Quick's software backend, the default
 renderer (docs/DESIGN.md, Rendering). It settled the chart decision: a C++
 `QQuickPaintedItem` drawn with the tricks below. `livechart.cpp` is the
-reference for Atlas.Ui's `LiveChart`. It draws what the Go Atlas Monitor's
+reference for Telamon.Ui's `LiveChart`. It draws what the Go Atlas Monitor's
 graph package draws: caption bands, a square grid, fill and line, a border.
 
 Not part of the app build or CI. Build it in the dev container:
@@ -14,7 +14,7 @@ scripts/dev.sh bash -c 'cmake -S bench/chart -B build/chartbench -G Ninja -DCMAK
 
 ## Running
 
-- **Under Wayland, as AtlasOS runs it:** `bench/chart/run-kwin.sh 1 <args>` starts a
+- **Under Wayland, as Telamon OS runs it:** `bench/chart/run-kwin.sh 1 <args>` starts a
   private virtual KWin on the host (its own D-Bus, never the real desktop) and
   runs `chartbench` in the container against it. It prints one JSON line. KWin's
   `--scale` does not apply to `--virtual`, so for 1.5x pass
@@ -72,7 +72,7 @@ of 30 s each, medians.
      and damages the whole window. `QSG_SOFTWARE_RENDERER_FORCE_PARTIAL_UPDATES=1`
      brings the damage back to the charts' rectangles, without seams (0 pixels
      differ after ~60 frames at 1.25, 1.5 and 1.75x). But it saved nothing:
-     Atlas Monitor 11.2 vs 11.2 ms/s with 12 charts and 4.5 vs 4.5 with one;
+     Telamon Monitor 11.2 vs 11.2 ms/s with 12 charts and 4.5 vs 4.5 with one;
      KWin's CPU was the same within noise. The rest of the window is flat
      rectangles, so repainting it is cheap. *In the app it is not:* the
      sidebar, text and cards made a whole-window repaint 11-13 ms/s on every

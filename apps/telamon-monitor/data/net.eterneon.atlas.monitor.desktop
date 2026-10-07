@@ -1,0 +1,15 @@
+[Desktop Entry]
+# The name Monitor had before Telamon Monitor (net.eterneon.telamon.monitor):
+# a hidden alias, for this release, so what still names it (the image's pinned
+# apps, menus and launchers, default-application lists) keeps opening Monitor.
+Type=Application
+Name=Telamon Monitor
+NoDisplay=true
+Exec=telamon-monitor
+Icon=net.eterneon.telamon.monitor
+Terminal=false
+Categories=Qt;KDE;System;Monitor;
+StartupNotify=true
+SingleMainWindow=true
+X-KDE-StartupNotify=true
+StartupWMClass=net.eterneon.telamon.monitor

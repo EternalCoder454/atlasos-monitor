@@ -1,0 +1,144 @@
+pragma ComponentBehavior: Bound
+
+import QtQuick
+import QtQuick.Layouts
+import org.kde.kirigami as Kirigami
+import Telamon.Ui
+
+// One drive: how full it is, what it reads and writes, and what it says
+// about its own health.
+ResourcePage {
+    id: page
+
+    required property var disk
+    // The refresh interval in ms, for the charts' time caption.
+    required property int interval
+
+    readonly property color hue: Hues.on(Hues.disk, Kirigami.Theme.backgroundColor)
+
+    // As the Go version: a figure the drive reports as 0 says nothing
+    // yet, and the error counts show only once there are some.
+    readonly property var healthRows: [[qsTr("Life remaining"), isNaN(page.disk.life) ? "" : page.disk.life <= 10 ? qsTr("%1 · replace it").arg(Format.percent(page.disk.life)) : page.disk.life <= 30 ? qsTr("%1 · wearing out").arg(Format.percent(page.disk.life)) : Format.percent(page.disk.life)], [qsTr("Temperature"), isNaN(page.disk.temperature) ? "" : Format.celsius(page.disk.temperature)], [qsTr("Powered on"), page.disk.powerOnHours > 0 ? Format.hours(page.disk.powerOnHours) : ""], [qsTr("Written in total"), page.disk.written > 0 ? Format.size(page.disk.written) : ""], [qsTr("Power cycles"), page.disk.powerCycles > 0 ? Format.count(page.disk.powerCycles) : ""], [qsTr("Unsafe shutdowns"), page.disk.unsafeShutdowns > 0 ? Format.count(page.disk.unsafeShutdowns) : ""], [qsTr("Media errors"), page.disk.mediaErrors > 0 ? Format.count(page.disk.mediaErrors) : ""]].filter(r => r[1] !== "").map(r => ({
+            "label": r[0],
+            "value": r[1]
+        }))
+
+    title: page.disk.label
+    subtitle: [Format.bytes(page.disk.size), page.disk.name].filter(t => t.length > 0 && t !== Format.dash).join(" · ")
+    // As the Overview and the sidebar: reading and writing together.
+    figure: Format.rate(page.disk.readRate + page.disk.writeRate)
+    figureColor: page.hue
+
+    // zram is RAM, not a drive: say what it is instead of a capacity.
+    TelamonLabel {
+        visible: page.disk.swap
+        Layout.fillWidth: true
+        wrapMode: Text.Wrap
+        color: TelamonStyle.textMuted
+        text: qsTr("Swap (zram) is a compressed pool carved out of your RAM that acts as overflow memory: when RAM fills up, the kernel compresses rarely used pages and parks them here instead of writing them to your SSD. That keeps the system responsive under pressure and spares the drive.")
+    }
+
+    TelamonCard {
+        visible: !page.disk.swap
+        title: qsTr("Capacity")
+
+        UsageBar {
+            Layout.fillWidth: true
+            visible: page.disk.mounted
+            barHeight: Math.round(Kirigami.Units.gridUnit * 0.9)
+            colors: [page.hue]
+            total: page.disk.used + page.disk.free
+            values: [page.disk.used]
+            labels: [qsTr("Used"), qsTr("Free")]
+            texts: [Format.size(page.disk.used), Format.size(page.disk.free)]
+        }
+        // Not mounted: there is no usage to show, and 0 B used would read
+        // as an empty drive.
+        TelamonLabel {
+            visible: !page.disk.mounted
+            Layout.fillWidth: true
+            wrapMode: Text.Wrap
+            color: TelamonStyle.textMuted
+            text: qsTr("Not mounted, so there is no usage to show. Mount the drive in your file manager and its capacity will appear here.")
+        }
+    }
+
+    // Reading and writing side by side where there is room.
+    TelamonCard {
+        title: qsTr("Activity")
+
+        GridLayout {
+            Layout.fillWidth: true
+            columns: page.width > Kirigami.Units.gridUnit * 40 ? 2 : 1
+            columnSpacing: Kirigami.Units.gridUnit
+            rowSpacing: Kirigami.Units.largeSpacing * 1.5
+
+            LiveChart {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Kirigami.Units.gridUnit * 7
+                color: page.hue
+                values: page.disk.readHistory
+                // A quiet drive still shows a scale of a megabyte a second,
+                // so a few kilobytes don't fill the chart.
+                minimumScale: 1048576
+                label: qsTr("Read")
+                valueText: Format.rate(page.disk.readRate)
+                topText: Format.rate(scaleTop)
+                spanText: Format.span(page.interval)
+            }
+            LiveChart {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Kirigami.Units.gridUnit * 7
+                color: page.hue
+                values: page.disk.writeHistory
+                minimumScale: 1048576
+                label: qsTr("Write")
+                valueText: Format.rate(page.disk.writeRate)
+                topText: Format.rate(scaleTop)
+                spanText: Format.span(page.interval)
+            }
+        }
+    }
+
+    FigureCard {
+        TelamonStat {
+            label: qsTr("Read speed")
+            value: Format.rate(page.disk.readRate)
+        }
+        TelamonStat {
+            label: qsTr("Write speed")
+            value: Format.rate(page.disk.writeRate)
+        }
+        TelamonStat {
+            visible: !page.disk.swap && page.disk.mounted
+            label: qsTr("Used")
+            value: page.disk.mounted ? Format.size(page.disk.used) : Format.dash
+        }
+        TelamonStat {
+            visible: !page.disk.swap && page.disk.mounted
+            label: qsTr("Free")
+            value: page.disk.mounted ? Format.size(page.disk.free) : Format.dash
+        }
+        details: [[qsTr("Total size"), Format.bytes(page.disk.size)], [qsTr("Read since startup"), Format.size(page.disk.readTotal)], [qsTr("Written since startup"), Format.size(page.disk.writeTotal)], [qsTr("Device"), "/dev/" + page.disk.name]]
+    }
+
+    TelamonCard {
+        // Not an empty card when the drive reports nothing worth showing yet.
+        visible: page.disk.smart && (page.disk.warning.length > 0 || page.healthRows.length > 0)
+        title: qsTr("Health")
+
+        TelamonLabel {
+            visible: page.disk.warning.length > 0
+            Layout.fillWidth: true
+            wrapMode: Text.Wrap
+            color: TelamonStyle.error
+            text: page.disk.warning
+        }
+        TelamonDetailGrid {
+            Layout.fillWidth: true
+            visible: page.healthRows.length > 0
+            columns: 2
+            model: page.healthRows
+        }
+    }
+}

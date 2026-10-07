@@ -28,12 +28,12 @@
 //!   ([`Controller::set_focused`]; on Plasma a KWin script). An eased one
 //!   that gets focus is put back, and counts as busy again only from when
 //!   it loses focus;
-//! - Atlas Monitor itself, and the applications the user listed as never;
+//! - Telamon Monitor itself, and the applications the user listed as never;
 //! - one the user put back by hand, for as long as it runs;
-//! - one whose weight someone else set. Fedora (and so AtlasOS) runs
+//! - one whose weight someone else set. Fedora (and so Telamon OS) runs
 //!   uresourced, which on GNOME gives the *focused* application's unit a
 //!   weight of 300 and resets it when focus moves (on Plasma it can't see
-//!   focus, checked in the AtlasOS VM), and does the same for one playing
+//!   focus, checked in the Telamon OS VM), and does the same for one playing
 //!   sound (seen in the trial, `--example ease -- --trial`): a raised unit
 //!   is the one in use ([`Status::KeptInUse`]). Any unit not at the kernel default is someone
 //!   else's, and a unit whose weight changed after Atlas eased it is let go
@@ -278,7 +278,7 @@ pub struct Controller {
     units: Box<dyn Units>,
     weights: Box<dyn Weights>,
     audio: Box<dyn Audio>,
-    /// Atlas Monitor's own application ID, never eased.
+    /// Telamon Monitor's own application ID, never eased.
     own: Option<Arc<str>>,
     /// Where the eases are written for crash recovery; `None` for nowhere.
     state: Option<PathBuf>,
@@ -301,7 +301,7 @@ pub struct Controller {
 
 impl Controller {
     /// A controller that does nothing until [`tick`](Self::tick). `own` is
-    /// Atlas Monitor's application ID; `state` the crash-recovery file.
+    /// Telamon Monitor's application ID; `state` the crash-recovery file.
     pub fn new(
         units: Box<dyn Units>,
         weights: Box<dyn Weights>,
@@ -354,7 +354,7 @@ impl Controller {
 
     /// Eases an application at the user's request. It stays eased until
     /// [`restore`](Self::restore), whatever it does meanwhile. Nothing for
-    /// an application not seen, or Atlas Monitor itself.
+    /// an application not seen, or Telamon Monitor itself.
     pub fn ease(&mut self, id: &str) -> Result<(), Error> {
         if self.own.as_deref() == Some(id) {
             return Ok(());
@@ -425,7 +425,7 @@ impl Controller {
 
     /// Every application worth showing, busiest first: anything using a
     /// noticeable share of a core, and anything eased, whatever it does.
-    /// Atlas Monitor itself is left out.
+    /// Telamon Monitor itself is left out.
     pub fn rows(&self) -> Vec<Row> {
         let mut out: Vec<Row> = self
             .apps
@@ -755,7 +755,7 @@ impl Controller {
         }
     }
 
-    /// Puts back what a previous Atlas Monitor eased automatically and
+    /// Puts back what a previous Telamon Monitor eased automatically and
     /// didn't live to restore, and takes up what the user eased by hand
     /// (on the first tick). Each only where the unit is still at Atlas's
     /// weight: one that has ended needs nothing, and one set otherwise since

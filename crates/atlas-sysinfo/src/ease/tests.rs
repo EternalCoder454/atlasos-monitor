@@ -121,7 +121,7 @@ const FIREFOX: &str = "app-org.mozilla.firefox-1.scope";
 const FIREFOX_2: &str = "app-org.mozilla.firefox-2.scope";
 const ELISA: &str = "app-org.kde.elisa@a1.service";
 const KONSOLE: &str = "app-org.kde.konsole@b2.service";
-const ATLAS: &str = "app-net.eterneon.atlas.monitor-9.scope";
+const ATLAS: &str = "app-net.eterneon.telamon.monitor-9.scope";
 
 impl Rig {
     fn new(units: &[&str]) -> Self {
@@ -141,7 +141,7 @@ impl Rig {
             Box::new(FakeUnits(world.clone())),
             Box::new(FakeWeights(world.clone())),
             Box::new(FakeAudio(world.clone())),
-            Some("net.eterneon.atlas.monitor".into()),
+            Some("net.eterneon.telamon.monitor".into()),
             state,
         );
         let mut r = Self {
@@ -281,7 +281,7 @@ fn terminals_self_and_never_are_kept() {
     assert_eq!(r.status("org.kde.konsole"), Some(Status::KeptTerminal));
     assert_eq!(r.status("org.kde.elisa"), Some(Status::KeptNever));
     assert_eq!(
-        r.status("net.eterneon.atlas.monitor"),
+        r.status("net.eterneon.telamon.monitor"),
         None,
         "Atlas is left off the page"
     );
@@ -399,7 +399,7 @@ fn automatic_off_does_nothing() {
     assert_eq!(r.weight(FIREFOX), UNSET);
 }
 
-/// uresourced, which AtlasOS runs, raises the focused application's unit to
+/// uresourced, which Telamon OS runs, raises the focused application's unit to
 /// 300 and resets it when focus moves.
 #[test]
 fn the_focused_app_is_left_alone() {

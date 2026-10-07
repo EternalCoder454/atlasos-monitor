@@ -3,7 +3,7 @@
 //!
 //! **Autostart entries.** Desktop files in `~/.config/autostart` belong to
 //! the user; the ones in each `$XDG_CONFIG_DIRS/autostart` (`/etc/xdg` on
-//! AtlasOS) are installed for everyone. A file shadows every file of the same
+//! Telamon OS) are installed for everyone. A file shadows every file of the same
 //! name below it: the user's over the system's, and among the system
 //! directories the first listed. Switching an entry off writes `Hidden=true`,
 //! which the specification says to honour at login: in the user's own file,
@@ -11,7 +11,7 @@
 //! never touched. Switching it back on removes a copy that only switched it
 //! off, so the entry follows the package again.
 //!
-//! Plasma 6 starts in systemd mode on AtlasOS: at login,
+//! Plasma 6 starts in systemd mode on Telamon OS: at login,
 //! `systemd-xdg-autostart-generator` turns each entry into a unit,
 //! `app-<name>@autostart.service`, and decides what runs. So this reads the
 //! entries the way the generator does: `Hidden`, `OnlyShowIn`/`NotShowIn`
@@ -43,7 +43,7 @@
 //! needs privilege: it is the user's own manager. The manager is reloaded
 //! after, as `systemctl` does; a running unit keeps running.
 //!
-//! **Locks.** Atlas Updater's tray is part of AtlasOS: shown, never switched
+//! **Locks.** Telamon Updater's tray is part of Telamon OS: shown, never switched
 //! off. D-Bus, systemd's own and Plasma's units can't be switched off either:
 //! the session doesn't start without them. Either can be switched back on.
 //!
@@ -71,7 +71,7 @@ use zbus::proxy::CacheProperties;
 use crate::apps::desktop::locale_keys;
 use crate::services::{ActiveState, FileState, Status, parse_description};
 
-/// Atlas Updater's tray entry, which can't be switched off.
+/// Telamon Updater's tray entry, which can't be switched off.
 pub const UPDATER_TRAY: &str = "net.eterneon.atlas.updater-tray.desktop";
 
 const DEST: &str = "org.freedesktop.systemd1";
@@ -141,7 +141,7 @@ pub enum Runs {
 /// Why a switch can't be moved.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Lock {
-    /// Part of AtlasOS (Atlas Updater's tray). It can be switched on, not off.
+    /// Part of Telamon OS (Telamon Updater's tray). It can be switched on, not off.
     Required,
     /// The session needs it to start: D-Bus, systemd's and Plasma's units.
     /// It can be switched on (unmasked), not off.

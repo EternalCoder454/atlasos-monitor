@@ -3,7 +3,7 @@ import QtQuick.Layouts
 import ChartBench
 
 // A page-like window: a sidebar, then the charts, each in a rounded section
-// like Atlas.Ui's Section.
+// like Telamon.Ui's Section.
 Window {
     id: root
 

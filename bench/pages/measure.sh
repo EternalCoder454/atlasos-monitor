@@ -30,14 +30,14 @@ for run in $(seq "$runs"); do
         folded=
         case $page in *,folded=*) folded=${page#*,folded=} ;; esac
         printf '[Window]\nPage=%s\nWidth=1100\nHeight=1150\nFoldedSections=%s\n' \
-            "${page%%,*}" "$folded" >"$home/config/atlas-monitorrc"
+            "${page%%,*}" "$folded" >"$home/config/telamon-monitorrc"
         # The inner script is single-quoted on purpose; its arguments come in as $1..$4.
         # A hung app (or bus) is stopped a minute after its window should end.
         # shellcheck disable=SC2016
         HOME=$home XDG_CONFIG_HOME=$home/config XDG_DATA_HOME=$home/data \
             XDG_CACHE_HOME=$home/cache XDG_RUNTIME_DIR=$home/runtime \
             timeout -k 10 $((warmup + seconds + 60)) dbus-run-session -- bash -c '
-                ${APP:-/src/build/release/atlas-monitor} &
+                ${APP:-/src/build/release/telamon-monitor} &
                 app=$!
                 echo $app >"$HOME/app.pid"
                 sleep "$1"
