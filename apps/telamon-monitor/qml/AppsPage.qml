@@ -69,48 +69,172 @@ Item {
         }
     }
 
-    // The columns that can be hidden, for View's Columns and the header's
-    // menu. Name always shows; GPU only with a card to show.
-    readonly property var columnChoices: [
+    // The text of the table's cells and headers, measured, so a column is as
+    // wide as its widest realistic figure and its header and never shows
+    // "1…" for 100.0% (DataTable cuts what doesn't fit). Figures are drawn
+    // with tabular digits, the headers in DemiBold when sorted.
+    QQC2.Label {
+        id: figureFont
+        visible: false
+        font.features: {
+            "tnum": 1
+        }
+    }
+    QQC2.Label {
+        id: headFont
+        visible: false
+        font.weight: Font.DemiBold
+    }
+    FontMetrics {
+        id: figureMetrics
+        font: figureFont.font
+    }
+    FontMetrics {
+        id: headMetrics
+        font: headFont.font
+    }
+
+    // A column's width in grid units: the widest of `samples` or the title,
+    // plus the table's cell padding and, for the title, the sort arrow it
+    // keeps room for.
+    function columnWidth(title, samples) {
+        const pad = 2 * TelamonStyle.spacingLarge;
+        const cell = Math.max(...samples.map(t => figureMetrics.advanceWidth(t))) + pad;
+        const head = headMetrics.advanceWidth(title) + pad + Kirigami.Units.iconSizes.small;
+        return Math.ceil(Math.max(cell, head) + 4) / Kirigami.Units.gridUnit;
+    }
+
+    // Every column but Name, in the order the table shows them. `menu` is
+    // the name in the Columns menus, `tip` what the short header stands for.
+    // Estimates: the machine's traffic shared out by each program's open
+    // sockets. `narrow` ranks the columns that go first when the window is
+    // too narrow for all of them (see `autoHidden`); CPU never goes.
+    readonly property var figureSpecs: [
         {
             role: "pid",
-            text: qsTr("PID")
+            title: qsTr("PID"),
+            menu: qsTr("PID"),
+            tip: qsTr("Process ID"),
+            narrow: 6,
+            samples: ["4194304"],
+            text: v => v > 0 ? String(v) : ""
         },
         {
             role: "cpu",
-            text: qsTr("CPU")
+            title: qsTr("CPU"),
+            menu: qsTr("CPU"),
+            tip: qsTr("How much of the processor it uses"),
+            narrow: 100,
+            samples: [page.percent(999.9)],
+            heat: 100,
+            text: v => page.percent(v)
         },
         {
             role: "memory",
-            text: qsTr("Memory")
+            title: qsTr("Memory"),
+            menu: qsTr("Memory"),
+            tip: qsTr("Memory it holds"),
+            narrow: 7,
+            samples: [Format.size(1023.9 * 1048576), Format.size(99.99 * 1073741824)],
+            // Tinted as the Go version's: faint at a few hundred
+            // megabytes, full at 4 GiB.
+            heat: 4294967296,
+            text: v => Format.size(v)
         },
         {
             role: "diskRead",
-            text: qsTr("Disk Read")
+            title: qsTr("Disk Read"),
+            menu: qsTr("Disk Read"),
+            tip: qsTr("How fast it reads from disks"),
+            narrow: 4,
+            samples: [Format.rate(999.9 * 1048576), Format.rate(9.99 * 1073741824)],
+            text: v => Format.rate(v)
         },
         {
             role: "diskWrite",
-            text: qsTr("Disk Write")
-        }
-    ].concat(page.hasGpu ? [
-            {
-                role: "gpu",
-                text: qsTr("GPU")
-            }
-        ] : []).concat([
+            title: qsTr("Disk Write"),
+            menu: qsTr("Disk Write"),
+            tip: qsTr("How fast it writes to disks"),
+            narrow: 3,
+            samples: [Format.rate(999.9 * 1048576), Format.rate(9.99 * 1073741824)],
+            text: v => Format.rate(v)
+        },
+        {
+            role: "gpu",
+            title: qsTr("GPU"),
+            menu: qsTr("GPU"),
+            tip: qsTr("How much of the graphics card it uses"),
+            narrow: 5,
+            samples: [page.percent(100)],
+            heat: 100,
+            text: v => isNaN(v) ? Format.dash : page.percent(v)
+        },
         {
             role: "power",
-            text: qsTr("Power")
+            title: qsTr("Power"),
+            menu: qsTr("Power"),
+            tip: qsTr("How much power it uses, roughly"),
+            narrow: 2,
+            samples: page.powerNames,
+            align: Qt.AlignLeft,
+            text: v => page.powerNames[v] ?? ""
         },
         {
             role: "netIn",
-            text: qsTr("Net In")
+            title: qsTr("Net ↓"),
+            menu: qsTr("Net In (Estimated)"),
+            tip: qsTr("Network download speed, estimated"),
+            narrow: 1,
+            samples: [Format.rate(999.9 * 1048576)],
+            text: v => Format.rate(v)
         },
         {
             role: "netOut",
-            text: qsTr("Net Out")
+            title: qsTr("Net ↑"),
+            menu: qsTr("Net Out (Estimated)"),
+            tip: qsTr("Network upload speed, estimated"),
+            narrow: 0,
+            samples: [Format.rate(999.9 * 1048576)],
+            text: v => Format.rate(v)
         }
-    ])
+    ]
+    // Each with its measured width, `width`, as DataTable takes it.
+    readonly property var figureColumns: page.figureSpecs.map(c => Object.assign({
+            width: page.columnWidth(c.title, c.samples),
+            align: Qt.AlignRight
+        }, c))
+
+    // The columns that can be hidden, for View's Columns and the header's
+    // menu. Name always shows; GPU only with a card to show.
+    readonly property var columnChoices: page.figureColumns.filter(c => c.role !== "gpu" || page.hasGpu).map(c => ({
+                role: c.role,
+                text: c.menu
+            }))
+
+    // The columns the window is too narrow for, as "role,role": Name keeps
+    // at least `nameMinimum`, so figures are never cut off. They go in the
+    // order `narrow` gives, skipping any the user already hid and the one
+    // the table is sorted by. A string, so the table's columns change only
+    // when the set does, not at every pixel of a resize.
+    readonly property real nameMinimum: Kirigami.Units.gridUnit * 13
+    readonly property string autoHidden: {
+        const hidden = [];
+        let room = table.width - 2 * table.padding - page.nameMinimum;
+        const shown = page.figureColumns.filter(c => (c.role !== "gpu" || page.hasGpu) && !page.apps.hiddenColumns.includes(c.role));
+        const px = c => c.width * Kirigami.Units.gridUnit;
+        room -= shown.reduce((sum, c) => sum + px(c), 0);
+        const order = shown.slice().sort((a, b) => a.narrow - b.narrow);
+        for (const c of order) {
+            if (room >= 0 || c.narrow >= 100) {
+                break;
+            }
+            if (c.role !== table.sortRole) {
+                hidden.push(c.role);
+                room += px(c);
+            }
+        }
+        return hidden.join(",");
+    }
 
     // A table sorted by a hidden column (hidden now, or saved hidden) sorts
     // by CPU instead, or by name when that is hidden too.
@@ -188,6 +312,12 @@ Item {
                     id: viewColumns
                     title: qsTr("Columns")
 
+                    // Last, once the Instantiator's items are in before it.
+                    QQC2.MenuItem {
+                        visible: page.autoHidden !== ""
+                        enabled: false
+                        text: qsTr("Columns the window is too narrow for are left out")
+                    }
                     Instantiator {
                         model: page.columnChoices
                         delegate: QQC2.MenuItem {
@@ -229,6 +359,13 @@ Item {
             id: table
             Layout.fillWidth: true
             Layout.fillHeight: true
+            // The table's text comes from an invisible Label (DataTable's
+            // `cellLabel`), and an invisible item gets no colours from the
+            // Qt style's colour scheme: with a light Kvantum theme loaded
+            // under a dark scheme its text came out black on the dark card.
+            // Set here, every Label and icon in the table follows Telamon.Ui's
+            // text colour, whatever the style.
+            Kirigami.Theme.textColor: TelamonStyle.text
             Accessible.name: qsTr("Apps")
             model: page.apps
             sortRole: "cpu"
@@ -245,79 +382,36 @@ Item {
                     // An application's row says how many processes it is.
                     // A row on its way out can lose its name for a moment.
                     text: (v, row) => row.count > 1 ? page.countFormat.arg(v).arg(row.count) : (v ?? "")
-                },
-                {
-                    title: qsTr("PID"),
-                    role: "pid",
-                    width: 3.5,
-                    align: Qt.AlignRight,
-                    text: v => v > 0 ? String(v) : ""
-                },
-                {
-                    title: qsTr("CPU"),
-                    role: "cpu",
-                    width: 4,
-                    align: Qt.AlignRight,
-                    heat: 100,
-                    text: v => page.percent(v)
-                },
-                {
-                    title: qsTr("Memory"),
-                    role: "memory",
-                    width: 5,
-                    align: Qt.AlignRight,
-                    // Tinted as the Go version's: faint at a few hundred
-                    // megabytes, full at 4 GiB.
-                    heat: 4294967296,
-                    text: v => Format.size(v)
-                },
-                {
-                    title: qsTr("Disk Read"),
-                    role: "diskRead",
-                    width: 5.5,
-                    align: Qt.AlignRight,
-                    text: v => Format.rate(v)
-                },
-                {
-                    title: qsTr("Disk Write"),
-                    role: "diskWrite",
-                    width: 5.5,
-                    align: Qt.AlignRight,
-                    text: v => Format.rate(v)
-                },
-            ].concat(page.hasGpu ? [
-                {
-                    title: qsTr("GPU"),
-                    role: "gpu",
-                    width: 4,
-                    align: Qt.AlignRight,
-                    heat: 100,
-                    text: v => isNaN(v) ? Format.dash : page.percent(v)
                 }
-            ] : []).concat([
-                {
-                    title: qsTr("Power"),
-                    role: "power",
-                    width: 5,
-                    text: v => page.powerNames[v] ?? ""
-                },
-                {
-                    // Estimates: the machine's traffic shared out by each
-                    // program's open sockets.
-                    title: qsTr("Net ≈ In"),
-                    role: "netIn",
-                    width: 5.5,
-                    align: Qt.AlignRight,
-                    text: v => Format.rate(v)
-                },
-                {
-                    title: qsTr("Net ≈ Out"),
-                    role: "netOut",
-                    width: 5.5,
-                    align: Qt.AlignRight,
-                    text: v => Format.rate(v)
+            ].concat(page.figureColumns.filter(c => (c.role !== "gpu" || page.hasGpu) && !page.apps.hiddenColumns.includes(c.role) && !page.autoHidden.split(",").includes(c.role)))
+
+            // Short headers say what they are on hover (the table's headers
+            // take a title and nothing else): one invisible cell over each.
+            Row {
+                x: table.padding
+                y: table.padding
+                height: Math.round(Kirigami.Units.gridUnit * 1.8)
+
+                Repeater {
+                    model: table.columns
+
+                    Item {
+                        id: headTip
+                        required property int index
+                        required property var modelData
+                        width: table.widths[index] ?? 0
+                        height: parent.height
+
+                        HoverHandler {
+                            id: headHover
+                        }
+                        TelamonToolTip {
+                            text: headTip.modelData.tip ?? ""
+                            shown: headHover.hovered
+                        }
+                    }
                 }
-            ]).filter(c => c.role === "name" || !page.apps.hiddenColumns.includes(c.role))
+            }
 
             onSortRoleChanged: Qt.callLater(page.resort)
             onSortOrderChanged: Qt.callLater(page.resort)
@@ -357,6 +451,11 @@ Item {
             id: columnsMenu
             parent: page
 
+            ContextMenuItem {
+                visible: page.autoHidden !== ""
+                enabled: false
+                text: qsTr("Columns the window is too narrow for are left out")
+            }
             Instantiator {
                 model: page.columnChoices
                 delegate: ContextMenuItem {
