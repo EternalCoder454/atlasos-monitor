@@ -22,16 +22,25 @@ TelamonPage {
     // The kernel's release, with its architecture unless it already says.
     readonly property string kernel: s.kernel === "" ? "" : s.arch === "" || s.kernel.includes(s.arch) ? s.kernel : qsTr("%1 (%2)").arg(s.kernel).arg(s.arch)
 
+    // The firmware's version and date, "11.02 (5/5/2025)": its maker, which
+    // is long, goes under the title instead (see `current`).
+    readonly property string firmwareRelease: {
+        const date = s.firmwareDate === "" ? "" : Format.date(s.firmwareDate);
+        return s.firmwareVersion === "" ? date : date === "" ? s.firmwareVersion : qsTr("%1 (%2)").arg(s.firmwareVersion).arg(date);
+    }
+
     // Every row, so the page and Copy Details say the same: a section, a
-    // title, a value. Rows with nothing to say are left out.
+    // title, a value, and a subtitle for what goes under the title. Rows
+    // with nothing to say are left out.
     readonly property var current: {
         const r = [];
-        const add = (section, title, value) => {
-            if (value !== undefined && value !== "") {
+        const add = (section, title, value, subtitle = "") => {
+            if (value !== undefined && (value !== "" || subtitle !== "")) {
                 r.push({
                     section: section,
                     title: title,
-                    value: value
+                    value: value,
+                    subtitle: subtitle
                 });
             }
         };
@@ -51,7 +60,7 @@ TelamonPage {
         add("hardware", qsTr("Product"), s.product);
         add("hardware", qsTr("Type"), page.chassis(s.chassis));
         add("hardware", qsTr("Motherboard"), s.board);
-        add("hardware", qsTr("Firmware"), s.firmware);
+        add("hardware", qsTr("Firmware"), page.firmwareRelease, s.firmwareVendor);
         return r;
     }
 
@@ -134,7 +143,7 @@ TelamonPage {
             const own = page.rows.filter(row => row.section === key);
             if (own.length > 0) {
                 lines.push(heading);
-                own.forEach(row => lines.push(row.title + ": " + row.value));
+                own.forEach(row => lines.push(row.title + ": " + [row.subtitle, row.value].filter(t => t !== "").join(" ")));
                 lines.push("");
             }
         };
@@ -231,9 +240,24 @@ TelamonPage {
                 model: section.own
 
                 SectionRow {
+                    id: row
                     required property var modelData
+                    // A value beside its title is cut off past 55% of the row.
+                    // One that would be goes under the title instead, where
+                    // it wraps, so none of it is lost.
+                    readonly property bool stacked: row.width > 0 && probe.implicitWidth > Math.round(row.width * 0.55)
+
                     title: modelData.title
-                    value: modelData.value
+                    subtitle: row.stacked ? [modelData.subtitle, modelData.value].filter(t => t !== "").join("\n") : modelData.subtitle
+                    value: row.stacked ? "" : modelData.value
+
+                    // The value's width as the row would draw it.
+                    QQC2.Label {
+                        id: probe
+                        visible: false
+                        text: row.modelData.value
+                        textFormat: Text.PlainText
+                    }
                 }
             }
         }

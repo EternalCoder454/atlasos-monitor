@@ -89,10 +89,23 @@ pub struct About {
     pub product: String,
     /// The motherboard's maker and name.
     pub board: String,
-    /// "Vendor version (date)" of the firmware, the date as YYYY-MM-DD.
-    pub firmware: String,
+    /// The firmware's maker, version and date.
+    pub firmware: Firmware,
     /// "Desktop", "Laptop", ...; empty when the DMI says Other or Unknown.
     pub chassis: String,
+}
+
+/// The BIOS or UEFI firmware, as the DMI tables name it. Kept apart so the
+/// page can lay the maker (long: "American Megatrends International, LLC.")
+/// out apart from the version and date, and write the date as the user's
+/// locale does. A part the tables lack is empty.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Firmware {
+    pub vendor: String,
+    pub version: String,
+    /// YYYY-MM-DD; SMBIOS's MM/DD/YYYY is turned around, and a date that
+    /// isn't one is kept as written.
+    pub date: String,
 }
 
 /// The parts of os-release that System Info shows.
@@ -123,7 +136,7 @@ pub fn read() -> About {
     let vendor = dmi("sys_vendor");
     let product = product_name(dmi("product_name"), dmi("product_version"));
     let board = board_name(dmi("board_vendor"), dmi("board_name"));
-    let firmware = firmware_text(
+    let firmware = firmware_parts(
         dmi("bios_vendor"),
         dmi("bios_version"),
         dmi("bios_date").as_deref(),
@@ -506,22 +519,13 @@ fn board_name(vendor: Option<String>, name: Option<String>) -> String {
     }
 }
 
-/// "Vendor version (YYYY-MM-DD)", leaving out what is missing.
-fn firmware_text(vendor: Option<String>, version: Option<String>, date: Option<&str>) -> String {
-    let mut text = vendor.unwrap_or_default();
-    for part in [
-        version,
-        date.map(|d| iso_date(d).map_or_else(|| d.to_owned(), |iso| format!("({iso})"))),
-    ]
-    .into_iter()
-    .flatten()
-    {
-        if !text.is_empty() {
-            text.push(' ');
-        }
-        text.push_str(&part);
+/// The firmware's maker, version and date, the date as YYYY-MM-DD.
+fn firmware_parts(vendor: Option<String>, version: Option<String>, date: Option<&str>) -> Firmware {
+    Firmware {
+        vendor: vendor.unwrap_or_default(),
+        version: version.unwrap_or_default(),
+        date: date.map_or_else(String::new, |d| iso_date(d).unwrap_or_else(|| d.to_owned())),
     }
-    text
 }
 
 /// SMBIOS writes the BIOS date as MM/DD/YYYY.

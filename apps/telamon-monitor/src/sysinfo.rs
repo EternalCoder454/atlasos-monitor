@@ -35,7 +35,11 @@ pub mod qobject {
         #[qproperty(QString, vendor)]
         #[qproperty(QString, product)]
         #[qproperty(QString, board)]
-        #[qproperty(QString, firmware)]
+        /// The firmware's maker, version and date (YYYY-MM-DD, or as the
+        /// firmware wrote it when that isn't a date); "" where missing.
+        #[qproperty(QString, firmware_vendor, cxx_name = "firmwareVendor")]
+        #[qproperty(QString, firmware_version, cxx_name = "firmwareVersion")]
+        #[qproperty(QString, firmware_date, cxx_name = "firmwareDate")]
         #[qproperty(QString, chassis)]
         /// fwupd has answered (or been found missing) at least once.
         #[qproperty(bool, security_loaded, cxx_name = "securityLoaded")]
@@ -90,7 +94,9 @@ pub struct SystemInfoRust {
     vendor: QString,
     product: QString,
     board: QString,
-    firmware: QString,
+    firmware_vendor: QString,
+    firmware_version: QString,
+    firmware_date: QString,
     chassis: QString,
     security_loaded: bool,
     security_available: bool,
@@ -117,7 +123,9 @@ impl Default for SystemInfoRust {
             vendor: QString::default(),
             product: QString::default(),
             board: QString::default(),
-            firmware: QString::default(),
+            firmware_vendor: QString::default(),
+            firmware_version: QString::default(),
+            firmware_date: QString::default(),
             chassis: QString::default(),
             security_loaded: false,
             security_available: false,
@@ -183,7 +191,12 @@ impl qobject::SystemInfo {
         self.as_mut().set_vendor(QString::from(&a.vendor));
         self.as_mut().set_product(QString::from(&a.product));
         self.as_mut().set_board(QString::from(&a.board));
-        self.as_mut().set_firmware(QString::from(&a.firmware));
+        self.as_mut()
+            .set_firmware_vendor(QString::from(&a.firmware.vendor));
+        self.as_mut()
+            .set_firmware_version(QString::from(&a.firmware.version));
+        self.as_mut()
+            .set_firmware_date(QString::from(&a.firmware.date));
         self.as_mut().set_chassis(QString::from(&a.chassis));
         self.as_mut().set_loaded(true);
     }

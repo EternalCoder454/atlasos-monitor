@@ -61,6 +61,22 @@ QtObject {
         return v < 0 ? dash : scaled(v, "");
     }
 
+    // A YYYY-MM-DD date as the locale writes a short one, the year in full
+    // ("5/5/2025", "05.05.2025"). Anything else is returned as it came.
+    function date(iso) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+        if (m === null) {
+            return iso;
+        }
+        const d = new Date(2000, 0, 1);
+        d.setFullYear(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+        // 2025-02-31 rolls over into March: not a date.
+        if (d.getMonth() !== Number(m[2]) - 1) {
+            return iso;
+        }
+        return d.toLocaleDateString(locale, locale.dateFormat(Locale.ShortFormat).replace(/y+/, "yyyy"));
+    }
+
     // Bytes per second.
     function rate(v) {
         return isNaN(v) || v < 0 ? dash : scaled(v, "/s");
