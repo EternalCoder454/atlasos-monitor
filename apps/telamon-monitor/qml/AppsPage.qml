@@ -98,6 +98,9 @@ Item {
     // plus the table's cell padding and, for the title, the sort arrow it
     // keeps room for.
     function columnWidth(title, samples) {
+        // Read so a change of font measures again (advanceWidth() is a call,
+        // which a binding can't see).
+        void (figureMetrics.font.pixelSize + figureMetrics.font.pointSize + headMetrics.font.pixelSize + headMetrics.font.pointSize);
         const pad = 2 * TelamonStyle.spacingLarge;
         const cell = Math.max(...samples.map(t => figureMetrics.advanceWidth(t))) + pad;
         const head = headMetrics.advanceWidth(title) + pad + Kirigami.Units.iconSizes.small;
@@ -125,7 +128,7 @@ Item {
             menu: qsTr("CPU"),
             tip: qsTr("How much of the processor it uses"),
             narrow: 100,
-            samples: [page.percent(999.9)],
+            samples: [page.percent(3200)],
             heat: 100,
             text: v => page.percent(v)
         },
@@ -135,7 +138,7 @@ Item {
             menu: qsTr("Memory"),
             tip: qsTr("Memory it holds"),
             narrow: 7,
-            samples: [Format.size(1023.9 * 1048576), Format.size(99.99 * 1073741824)],
+            samples: [Format.size(1023.9 * 1048576), Format.size(120.5 * 1073741824)],
             // Tinted as the Go version's: faint at a few hundred
             // megabytes, full at 4 GiB.
             heat: 4294967296,
@@ -316,7 +319,8 @@ Item {
                     QQC2.MenuItem {
                         visible: page.autoHidden !== ""
                         enabled: false
-                        text: qsTr("Columns the window is too narrow for are left out")
+                        // Empty when not needed: a menu is as wide as its widest item, shown or not.
+                        text: page.autoHidden !== "" ? qsTr("Columns the window is too narrow for are left out") : ""
                     }
                     Instantiator {
                         model: page.columnChoices
@@ -390,6 +394,7 @@ Item {
             Row {
                 x: table.padding
                 y: table.padding
+                width: table.width - 2 * table.padding
                 height: Math.round(Kirigami.Units.gridUnit * 1.8)
 
                 Repeater {
@@ -454,7 +459,8 @@ Item {
             ContextMenuItem {
                 visible: page.autoHidden !== ""
                 enabled: false
-                text: qsTr("Columns the window is too narrow for are left out")
+                // Empty when not needed: a menu is as wide as its widest item, shown or not.
+                text: page.autoHidden !== "" ? qsTr("Columns the window is too narrow for are left out") : ""
             }
             Instantiator {
                 model: page.columnChoices
