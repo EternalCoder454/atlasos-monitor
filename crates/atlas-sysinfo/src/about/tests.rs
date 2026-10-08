@@ -310,22 +310,34 @@ fn boards_and_firmware() {
     );
     assert_eq!(board_name(None, some("Board")), "Board");
     assert_eq!(board_name(None, None), "");
+    // The long maker stays whole and apart: the page shows it on a line of
+    // its own, so the version and date are never what gets cut off.
     assert_eq!(
-        firmware_text(
+        firmware_parts(
             some("American Megatrends International, LLC."),
-            some("1801"),
-            Some("03/14/2025")
+            some("11.02"),
+            Some("05/05/2025")
         ),
-        "American Megatrends International, LLC. 1801 (2025-03-14)"
+        Firmware {
+            vendor: "American Megatrends International, LLC.".to_owned(),
+            version: "11.02".to_owned(),
+            date: "2025-05-05".to_owned(),
+        }
     );
-    assert_eq!(firmware_text(None, some("1.2"), None), "1.2");
-    assert_eq!(firmware_text(None, None, None), "");
+    assert_eq!(
+        firmware_parts(None, some("1.2"), None),
+        Firmware {
+            version: "1.2".to_owned(),
+            ..Firmware::default()
+        }
+    );
+    assert_eq!(firmware_parts(None, None, None), Firmware::default());
     assert_eq!(iso_date("13/01/2025"), None);
     assert_eq!(iso_date("3/4/25"), None);
     assert_eq!(iso_date("03/14/2025/9"), None);
     assert_eq!(iso_date("03/14/2025").as_deref(), Some("2025-03-14"));
     // A date that isn't one is kept as written.
-    assert_eq!(firmware_text(None, None, Some("soon")), "soon");
+    assert_eq!(firmware_parts(None, None, Some("soon")).date, "soon");
 }
 
 #[test]

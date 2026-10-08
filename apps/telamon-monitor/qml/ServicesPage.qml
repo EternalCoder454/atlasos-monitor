@@ -233,6 +233,8 @@ Item {
             id: table
             Layout.fillWidth: true
             Layout.fillHeight: true
+            // As the Apps table's: its text comes from an invisible Label.
+            Kirigami.Theme.textColor: TelamonStyle.text
             Accessible.name: qsTr("Services")
             model: page.services
             sortRole: "status"
