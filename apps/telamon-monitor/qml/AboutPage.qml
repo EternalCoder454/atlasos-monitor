@@ -16,7 +16,7 @@ TelamonPage {
         Layout.topMargin: Kirigami.Units.gridUnit
         spacing: Kirigami.Units.smallSpacing
 
-        Kirigami.Icon {
+        MonitorIcon {
             Layout.alignment: Qt.AlignHCenter
             source: "net.eterneon.telamon.monitor"
             Layout.preferredWidth: Math.round(Kirigami.Units.gridUnit * 5)

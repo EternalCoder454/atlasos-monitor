@@ -166,7 +166,7 @@ TelamonPage {
         Layout.fillWidth: true
         spacing: Kirigami.Units.largeSpacing
 
-        Kirigami.Icon {
+        MonitorIcon {
             Layout.preferredWidth: Kirigami.Units.iconSizes.huge
             Layout.preferredHeight: Kirigami.Units.iconSizes.huge
             source: page.s.osLogo || "computer"
@@ -283,7 +283,7 @@ TelamonPage {
             title: qsTr("Problem Found While Running")
             subtitle: qsTr("Something in the running system weakens it, such as unencrypted swap or a tainted kernel.")
 
-            Kirigami.Icon {
+            MonitorIcon {
                 Layout.preferredWidth: Kirigami.Units.iconSizes.small
                 Layout.preferredHeight: Kirigami.Units.iconSizes.small
                 source: "dialog-warning"
