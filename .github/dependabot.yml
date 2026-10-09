@@ -1,0 +1,32 @@
+# Weekly pull requests for the dependencies Telamon Monitor builds with and
+# the actions its CI runs (each pinned by commit, with its version in a
+# comment). Nothing is merged by itself: CI and the security workflow must
+# pass, and a person reads the change. docs/SECURITY.md, "Build hardening and
+# supply chain".
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    ignore:
+      # atlas-framework is pinned by release tag, together with `telamon-ui >=`
+      # in the spec and the app-checks job of ci.yml (CLAUDE.md, "Moving the
+      # atlas-framework pin"): it is moved by hand, not by a bot.
+      - dependency-name: "telamon-framework-*"
+    groups:
+      crates:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "deps"
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns: ['*']
+    commit-message:
+      prefix: "ci"
