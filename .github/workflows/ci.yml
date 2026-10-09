@@ -183,9 +183,11 @@ jobs:
           qt=$(dnf -q repoquery --latest-limit=1 --qf '%{name}-%{evr}\n' qt6-qtbase qt6-qtdeclarative | sort | tr '\n' '_')
           case $qt in qt6-qtbase-*_qt6-qtdeclarative-*_) ;; *) echo "::error::could not read Fedora's Qt version ($qt)"; exit 1 ;; esac
           echo "qt=$qt" >> "$GITHUB_OUTPUT"
+      # Restored by every run, saved from pushes (and the weekly run) only, as
+      # the other caches are: a pull request does not fill the cache.
       - name: Cached RPMs
         id: cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: out
           key: atlas-framework-rpms-f44-${{ steps.ref.outputs.ref }}-${{ steps.qt.outputs.qt }}
@@ -199,6 +201,11 @@ jobs:
       - name: Build the RPMs
         if: steps.cache.outputs.cache-hit != 'true'
         run: atlas-framework/packaging/build-rpm.sh "$GITHUB_WORKSPACE/out"
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: (github.event_name == 'push' || github.event_name == 'schedule') && steps.cache.outputs.cache-hit != 'true'
+        with:
+          path: out
+          key: ${{ steps.cache.outputs.cache-primary-key }}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: atlas-framework-rpms
