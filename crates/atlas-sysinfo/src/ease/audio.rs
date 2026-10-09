@@ -232,7 +232,7 @@ pub struct PipeWire {
 }
 
 impl PipeWire {
-    /// `None` when `pw-dump` isn't on the `PATH`.
+    /// `None` when `pw-dump` isn't in `/usr/bin`.
     pub fn new(procs: ProcFs) -> Option<Self> {
         Some(Self {
             pw_dump: find_program("pw-dump")?,
@@ -249,11 +249,20 @@ impl Audio for PipeWire {
     }
 }
 
-/// `name` in the `PATH`.
+/// Where the system's programs are. Not the `PATH`: a program in a folder
+/// the user can write (`~/.local/bin`, a project's `node_modules/.bin`) that
+/// comes first in it would be run in place of the real one (docs/SECURITY.md,
+/// "Programs we start").
+const SYSTEM_BIN: [&str; 2] = ["/usr/bin", "/bin"];
+
+/// `name`, a plain file name, as a program of the system.
 pub fn find_program(name: &str) -> Option<PathBuf> {
-    let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path)
-        .map(|d| d.join(name))
+    if name.is_empty() || name.contains('/') || name.starts_with('.') {
+        return None;
+    }
+    SYSTEM_BIN
+        .iter()
+        .map(|d| Path::new(d).join(name))
         .find(|p| fs::metadata(p).is_ok_and(|m| m.is_file()))
 }
 

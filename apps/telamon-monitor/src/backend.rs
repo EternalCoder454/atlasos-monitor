@@ -148,11 +148,12 @@ fn to_i64(bytes: u64) -> i64 {
     i64::try_from(bytes).unwrap_or(i64::MAX)
 }
 
-/// Telamon Updater's program, on the `PATH` wherever Telamon OS installs it,
-/// and the name it had before it was renamed, which an image that has not
-/// moved the Updater yet still has (this release only).
-const UPDATER: &str = "telamon-updater";
-const LEGACY_UPDATER: &str = "atlas-updater";
+/// Telamon Updater's program, where Telamon OS installs it, and the name it
+/// had before it was renamed, which an image that has not moved the Updater
+/// yet still has (this release only). Absolute: not looked up in the `PATH`,
+/// where a program in `~/.local/bin` could stand in for it.
+const UPDATER: &str = "/usr/bin/telamon-updater";
+const LEGACY_UPDATER: &str = "/usr/bin/atlas-updater";
 
 fn spawn_updater() -> std::io::Result<std::process::Child> {
     let start = |program: &str| {
