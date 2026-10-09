@@ -56,11 +56,11 @@ BuildRequires:  cmake(KF6WindowSystem)
 # from atlas-framework, which is in no repository: install its RPMs first
 # (build-rpm.sh does, given ATLAS_LOCAL_RPMS).
 BuildRequires:  kf6-kirigami-devel
-BuildRequires:  telamon-ui >= 2.0.0
+BuildRequires:  telamon-ui >= 2.0.9
 
 Requires:       kf6-kirigami
-# Telamon.Ui, the shared look (atlas-framework); 1.4.0 for TelamonCard, TelamonStat, TelamonDetailGrid, TelamonSparkline, TelamonDialog and TelamonSidebar
-Requires:       telamon-ui >= 2.0.0
+# Telamon.Ui, the shared look (atlas-framework); 1.4.0 for TelamonCard, TelamonStat, TelamonDetailGrid, TelamonSparkline, TelamonDialog and TelamonSidebar; 2.0.9 for its tables, rows and labels drawing every text as plain text, and for the crash reports being scrubbed and capped
+Requires:       telamon-ui >= 2.0.9
 Requires:       kf6-qqc2-desktop-style
 Requires:       qt6-qtdeclarative
 # the app icon and Breeze's icons are SVG
@@ -176,6 +176,7 @@ annocheck --ignore-unknown --skip-notes --skip-optimization --skip-pic --skip-st
   Saver. The package build checks the program's hardening (PIE, full RELRO,
   non-executable stack, stack protectors; readelf and annocheck). See
   docs/SECURITY.md
+- Built on telamon-ui and atlas-framework 2.0.9
 
 * Fri Oct 02 2026 Atlas <atlas@eterneon.net> - 0.1.0-1
 - First package
