@@ -410,6 +410,24 @@ mod tests {
         assert_eq!(dir.drm_usage(me, &[999_999], &mut clients), None);
     }
 
+    /// A file bigger than the cap (a command line of megabytes) is read in part,
+    /// and the shared buffer does not grow past what the cap allows.
+    #[test]
+    fn a_huge_file_is_read_in_part() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("cmdline");
+        std::fs::write(&path, vec![b'y'; 3 * READ_MAX]).unwrap();
+        let open = || rfs::open(&path, OFlags::RDONLY | OFlags::CLOEXEC, Mode::empty()).unwrap();
+        let mut buf = vec![0; 8192];
+        let got = read_whole(&open(), &mut buf).unwrap().len();
+        assert!(got <= READ_MAX && got > 0, "{got}");
+        assert!(buf.len() <= READ_MAX, "the buffer grew to {}", buf.len());
+        let mut buf = vec![0; 8192];
+        let got = pread_whole(&open(), &mut buf).unwrap();
+        assert!(got <= READ_MAX && got > 0, "{got}");
+        assert!(buf.len() <= READ_MAX, "the buffer grew to {}", buf.len());
+    }
+
     #[test]
     fn pids() {
         assert_eq!(parse_pid(b"1"), Some(1));
