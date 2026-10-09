@@ -15,7 +15,8 @@ for Telamon OS (Fedora Kinoite 44) only. For other distributions, see the
 Rust + Qt 6 + Kirigami. Its look is Telamon.Ui from
 [atlas-framework](https://github.com/EternalCoder454/atlas-framework), which
 also gives it its start, settings file, logging and crash reports. How it is
-put together: [docs/DESIGN.md](docs/DESIGN.md).
+put together: [docs/DESIGN.md](docs/DESIGN.md). What it defends against and
+how: [docs/SECURITY.md](docs/SECURITY.md).
 
 ## Build
 
