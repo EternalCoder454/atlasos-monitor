@@ -69,6 +69,19 @@ dialog, clipboard or log ever sees the raw string:
 - `text::command_line(args)`: each argument through `literal`, at most 1024
   arguments and 16 384 characters in all, the rest replaced by one `…`.
 - `text::icon(s)`: see section 6.
+- **Joiners and fillers.** The zero-width non-joiner and joiner (U+200C, U+200D)
+  are kept when they sit between two characters that are shown (Persian and
+  Indic words, emoji sequences) and removed, or marked by `literal`, anywhere
+  else (at an end, next to white space, a bidirectional control or another
+  joiner); in an identifier or a path they are never kept. The fillers that
+  draw blank (U+3164, U+FFA0, U+115F, U+1160, U+034F) are dropped like the other
+  invisible characters, so a name made only of them is empty and gets the
+  fallback (the file's or the ID's name). Bidirectional overrides and isolates,
+  other zero-width characters and tag characters are always dropped. *Tests:*
+  `text::tests::joiners_stay_between_two_shown_characters_only`,
+  `blank_looking_names_are_empty`,
+  `text::props::no_bidi_control_no_filler_and_joiners_between_letters`,
+  `autostart::tests::a_planted_entry_shows_clean_text_and_no_remote_icon`.
 
 | Text | Where it is cleaned | Limit |
 |---|---|---|
@@ -309,7 +322,9 @@ Startup page opened; this one does not.
   parser and by the autostart reader.
 - A path icon is drawn only if the file is a regular file of a known type and at
   most 4 MiB (`icons::icon_file`; Qt decodes on the GUI thread, and an SVG of
-  hundreds of megabytes would stall it).
+  hundreds of megabytes would stall it). The Apps table and the Startup page
+  (`autostart::vetted_icon`) apply the same check, so a FIFO, a device, a huge
+  file or a file of another type named by `Icon=` is no icon, and is not opened.
 - The Apps table's and Energy Saver's icons come from `IconLookup`: a name the
   theme lists, or such a file. `index.theme` is read through the capped reader,
   its `Directories` cannot be absolute or climb out of the theme, and a theme
@@ -337,7 +352,8 @@ listing's cost, and the theme folders are the user's.
   attribute of the wrong type is ignored, only the first 256 attributes are
   read, each title is cleaned and cut at 256 characters, the level is 0 to 5 or
   none and the version 32 characters of `[A-Za-z0-9.+-]`. Everything is read
-  with a 4 s deadline. There is **no network access**: Monitor does not fetch
+  with a deadline of 8 s per call and 10 s in all (`about::TIMEOUT`, `DEADLINE`:
+  the first call can start fwupd). There is **no network access**: Monitor does not fetch
   firmware, metadata or anything else. *Tests:* `about::props::security_from_survives_any_reply`,
   `a_flood_of_attributes_is_cut`, `hsi_ids_are_levels_and_versions`.
 - **Drive health** is udisks2 over the system bus (`SmartGetAttributes`, its
@@ -385,11 +401,19 @@ shellcheck/QML lints cover the rest.
   alone): served on Monitor's *unique* bus name, which the KWin script is told.
   Any process of the session can list the bus's names and call it. A report is
   taken only from **KWin's own unique name** (`GetNameOwner("org.kde.KWin")`,
-  compared with the sender of every call); anything else is dropped. Before this
+  compared with the sender of every call); anything else is dropped. The owner
+  is found by polling (every 10 s, so a KWin that restarts is picked up late and
+  reports from the new one are dropped until then), and while KWin is not on the
+  bus a session-bus peer could claim the name `org.kde.KWin` and be believed.
+  That peer is a process of the same session: it can already steer Energy Saver
+  by being the focused window, and it is out of scope (section 14). The worst
+  outcome is the one it started with: an application left alone or eased. Before this
   phase any process could set the "focused" pid, steering which application
   Energy Saver left alone or eased. *Tests:* `ease::kwin::tests::only_kwin_may_report`
   and `on_the_bus_only_kwin_is_believed` (a stranger and the real KWin on a private
-  session bus; skipped without one, run by `dbus-run-session -- cargo test`).
+  session bus). CI runs it under `dbus-run-session` with
+  `TELAMON_REQUIRE_SESSION_BUS` set, which makes a missing bus a failure and not a
+  skip.
 - **The signal handler** (`main.cpp`, `SIGTERM`/`SIGINT`/`SIGHUP`) only writes a
   byte to a pipe; the event loop closes the window. A second signal kills as
   before.
@@ -471,8 +495,9 @@ ids, never used as paths or units.
   `packages: write`, and its `GITHUB_TOKEN` is passed to the one step that logs in
   (through `env`, never interpolated into a script); every checkout has
   `persist-credentials: false`; no `pull_request_target`; no `github.event.*`
-  text (titles, branch names) in a `run:`; caches are saved from pushes only,
-  so a pull request cannot poison them.
+  text (titles, branch names) in a `run:`; caches are restored by every run and saved
+  on push and schedule runs of the default branch (`main`) only, so neither a
+  pull request nor another branch fills or evicts them.
 - **Local builds.** `scripts/dev.sh` runs its container with `--ulimit core=0`
   (a crash leaves no core dump and no crash notification on the host) and
   `--security-opt no-new-privileges`; it never uses `--privileged`.
@@ -492,6 +517,10 @@ ids, never used as paths or units.
   files. Monitor does not try to be a boundary against it; it only makes sure
   what such a program writes cannot make Monitor do more (fetch a URL, hang,
   paste a command, steer Energy Saver).
+- **A peer that claims `org.kde.KWin`** while KWin is absent (section 9), and
+  the polling delay in finding KWin's owner. Checking the owner's
+  `GetConnectionCredentials` against our uid would not stop a process of the same
+  user, which is the only peer that can do it.
 - **Spoofing a name.** A process can call itself `systemd` or `Firefox`;
   cleaning removes what hides text, not what lies. The Details panel shows the
   pid, the executable, the command line, the user and the unit beside the name.

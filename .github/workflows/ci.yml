@@ -202,7 +202,7 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         run: atlas-framework/packaging/build-rpm.sh "$GITHUB_WORKSPACE/out"
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: (github.event_name == 'push' || github.event_name == 'schedule') && steps.cache.outputs.cache-hit != 'true'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.cache.outputs.cache-hit != 'true'
         with:
           path: out
           key: ${{ steps.cache.outputs.cache-primary-key }}
@@ -251,7 +251,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: f44-${{ steps.toolchain.outputs.hash }}
-          save-if: ${{ github.event_name == 'push' || github.event_name == 'schedule' }}
+          save-if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') }}
       # --locked: also fails when Cargo.lock and the atlas-framework tag disagree.
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
@@ -271,6 +271,15 @@ jobs:
       # against small programs with and without the hardening.
       - name: Hardening check self-test
         run: scripts/test-check-hardening.sh
+      # Energy Saver's focus object on a real session bus: a stranger's report
+      # is dropped, KWin's is taken. Skipped without a bus, so it runs under
+      # dbus-run-session, and a missing bus is a failure here.
+      - name: D-Bus tests
+        env:
+          TELAMON_REQUIRE_SESSION_BUS: '1'
+        run: |
+          rpm -q dbus-daemon >/dev/null || dnf -y install dbus-daemon
+          dbus-run-session -- cargo test -p atlas-sysinfo --locked ease::kwin
       - name: Shell scripts
         run: |
           rpm -q ShellCheck >/dev/null || dnf -y install ShellCheck
@@ -321,7 +330,7 @@ jobs:
       - name: Build the RPM
         run: ATLAS_LOCAL_RPMS=/tmp/atlas-framework-rpms packaging/build-rpm.sh "$GITHUB_WORKSPACE/out"
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: (github.event_name == 'push' || github.event_name == 'schedule') && steps.cache.outputs.cache-hit != 'true'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.cache.outputs.cache-hit != 'true'
         with:
           path: |
             /github/home/.cargo/registry
