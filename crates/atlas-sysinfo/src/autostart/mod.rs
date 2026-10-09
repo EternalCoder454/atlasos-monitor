@@ -680,7 +680,7 @@ fn list_desktop(paths: &Paths) -> Vec<Item> {
                     describe.comment.as_deref().unwrap_or_default(),
                     text::LINE_MAX,
                 ),
-                icon: text::icon(&describe.icon),
+                icon: vetted_icon(&describe.icon),
                 command: text::literal(&describe.exec, text::LINE_MAX),
                 file,
                 system: sys.is_some(),
@@ -701,6 +701,19 @@ fn list_desktop(paths: &Paths) -> Vec<Item> {
             }
         })
         .collect()
+}
+
+/// An entry's `Icon=` as the page may pass it to `Kirigami.Icon`: a theme
+/// name, or the path of an image file that exists, is a regular file (a FIFO or
+/// a device is not opened or stat'ed for its size) and is at most 4 MiB, the
+/// same rule as the Apps table's icons ([`crate::apps::icons::icon_file`]).
+/// Anything else is "" (no icon).
+fn vetted_icon(icon: &str) -> String {
+    let icon = text::icon(icon);
+    if icon.starts_with('/') && !crate::apps::icons::icon_file(Path::new(&icon)) {
+        return String::new();
+    }
+    icon
 }
 
 /// The units the generator made for this session, by desktop file name: its

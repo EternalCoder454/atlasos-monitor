@@ -22,12 +22,55 @@ pub const LINE_MAX: usize = 1024;
 pub const COMMAND_MAX: usize = 16 * 1024;
 pub const ARGS_MAX: usize = 1024;
 
+/// Whether a joiner may stand next to `c`: a character that is shown, not
+/// white space, a control, another format character or a joiner.
+fn joinable(c: char) -> bool {
+    !(c.is_whitespace() || crate::unprintable(c))
+}
+
+/// `s` with the zero-width non-joiner and joiner kept where they sit between
+/// two characters that are shown (`می‌خواهم`, a family emoji), and removed, or
+/// replaced by `stray` when it is `Some`, anywhere else: at an end, next to
+/// white space, a bidirectional control or another joiner. A name cannot hide
+/// anything behind one, and Persian, Indic and emoji text keeps what it needs.
+/// Borrowed when there is no joiner.
+pub(crate) fn fold_joiners(s: &str, stray: Option<char>) -> std::borrow::Cow<'_, str> {
+    if !s.contains(crate::joiner) {
+        return std::borrow::Cow::Borrowed(s);
+    }
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    let mut before = false;
+    while let Some(c) = chars.next() {
+        if crate::joiner(c) {
+            if before && chars.peek().is_some_and(|n| joinable(*n)) {
+                out.push(c);
+                // The next character is shown; a joiner after this one has
+                // a joiner before it, not a letter.
+                before = false;
+            } else {
+                if let Some(x) = stray {
+                    out.push(x);
+                }
+                // A run of joiners is none: the next one has no letter before it.
+                before = false;
+            }
+        } else {
+            out.push(c);
+            before = joinable(c);
+        }
+    }
+    std::borrow::Cow::Owned(out)
+}
+
 /// `s` as one line of at most `max` characters: control characters and
 /// white space become one space between words, invisible format characters
-/// (bidirectional overrides, zero-width marks, tags) are dropped, and
-/// the ends are trimmed. Anything longer than `max` is cut (no ellipsis: a
-/// name is a name).
+/// (bidirectional overrides, zero-width marks, tags) are dropped, joiners are
+/// kept only between two shown characters ([`fold_joiners`]), and the ends
+/// are trimmed. Anything longer than `max` is cut (no ellipsis: a name is a
+/// name).
 pub fn plain(s: &str, max: usize) -> String {
+    let s = &*fold_joiners(s, None);
     let mut out = String::with_capacity(s.len().min(max.saturating_mul(4)).min(1024));
     let mut count = 0;
     let mut space = false;
@@ -58,15 +101,17 @@ pub fn plain(s: &str, max: usize) -> String {
 /// `s` with its spaces as they are, for a path or a command line, where
 /// the exact text matters: every control or invisible character becomes
 /// U+FFFD, so it shows that something was there, and nothing is dropped
-/// silently. Cut to `max` characters, with `…` where it was cut.
+/// silently (a joiner between two shown characters stays, [`fold_joiners`]).
+/// Cut to `max` characters, with `…` where it was cut.
 pub fn literal(s: &str, max: usize) -> String {
+    let s = &*fold_joiners(s, Some('\u{FFFD}'));
     let mut out = String::with_capacity(s.len().min(max.saturating_mul(4)).min(4096));
     for (count, c) in s.chars().enumerate() {
         if count >= max {
             out.push('…');
             break;
         }
-        if crate::unprintable(c) {
+        if crate::unprintable(c) && !crate::joiner(c) {
             out.push('\u{FFFD}');
         } else {
             out.push(c);
@@ -138,6 +183,53 @@ mod tests {
         assert_eq!(plain(&"é".repeat(300), 10).chars().count(), 10);
         assert_eq!(plain("ab cd", 4), "ab c");
         assert_eq!(plain("ab cd", 3), "ab");
+    }
+
+    /// Persian, Indic and emoji text needs the joiners between its letters;
+    /// anywhere else they only hide things.
+    #[test]
+    fn joiners_stay_between_two_shown_characters_only() {
+        let persian = "می\u{200C}خواهم";
+        assert_eq!(plain(persian, 64), persian);
+        assert_eq!(literal(persian, 64), persian);
+        let family = "👨\u{200D}👩\u{200D}👧";
+        assert_eq!(plain(family, 64), family);
+        assert_eq!(plain("क\u{094D}\u{200D}ष", 64), "क\u{094D}\u{200D}ष");
+        for (raw, plain_out, literal_out) in [
+            ("\u{200D}abc", "abc", "\u{FFFD}abc"),
+            ("abc\u{200C}", "abc", "abc\u{FFFD}"),
+            ("a \u{200D} b", "a b", "a \u{FFFD} b"),
+            ("a\u{200C}\u{200D}b", "ab", "a\u{FFFD}\u{FFFD}b"),
+            ("a\u{202E}\u{200D}b", "ab", "a\u{FFFD}\u{FFFD}b"),
+            ("a\u{200D}\u{202E}b", "ab", "a\u{FFFD}\u{FFFD}b"),
+            ("a\u{200D}\nb", "a b", "a\u{FFFD}\u{FFFD}b"),
+        ] {
+            assert_eq!(plain(raw, 64), plain_out, "{raw:?}");
+            assert_eq!(literal(raw, 64), literal_out, "{raw:?}");
+        }
+        // Never in an identifier or a path.
+        assert_eq!(icon("a\u{200D}b"), "");
+        assert_eq!(icon("/tmp/a\u{200C}b.png"), "");
+        assert!(crate::unprintable('\u{200D}'));
+    }
+
+    /// A name made only of fillers that draw blank is an empty name.
+    #[test]
+    fn blank_looking_names_are_empty() {
+        for filler in ['\u{3164}', '\u{FFA0}', '\u{115F}', '\u{1160}', '\u{034F}'] {
+            assert_eq!(plain(&filler.to_string(), 64), "", "{filler:?}");
+            assert_eq!(
+                plain(&format!(" {filler}{filler} \u{200B}\u{200D}"), 64),
+                ""
+            );
+            assert_eq!(plain(&format!("a{filler}b"), 64), "ab");
+        }
+        assert_eq!(plain("\u{3164}\u{FFA0}\u{115F}\u{1160}\u{034F}", 64), "");
+        assert_eq!(
+            crate::about::parse_os_release("NAME=\"\u{3164}\u{FFA0}\"\n").name,
+            ""
+        );
+        assert_eq!(crate::hardware::clean("\u{3164} \u{1160}"), "");
     }
 
     #[test]
@@ -217,6 +309,18 @@ mod props {
             prop_assert!(!p.chars().any(char::is_whitespace) || !p.contains(['\t', '\n', '\r']));
             prop_assert!(!p.starts_with(' ') && !p.ends_with(' ') && !p.contains("  "), "{p:?}");
             prop_assert_eq!(plain(&p, max), p);
+        }
+
+        /// Nothing that reorders text or hides it survives, and a joiner only
+        /// sits between two shown characters.
+        #[test]
+        fn no_bidi_control_no_filler_and_joiners_between_letters(s in hostile::string()) {
+            let hidden = |c: char| matches!(c, '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}' | '\u{200E}' | '\u{200F}' | '\u{061C}'
+                | '\u{3164}' | '\u{FFA0}' | '\u{115F}' | '\u{1160}' | '\u{034F}' | '\u{200B}' | '\u{FEFF}');
+            for out in [plain(&s, 400), literal(&s, 400), crate::hardware::clean(&s)] {
+                prop_assert!(!out.chars().any(hidden), "{out:?}");
+                prop_assert!(hostile::is_clean_line(&out), "{out:?}");
+            }
         }
 
         /// A text without anything to clean passes unchanged (up to the cap).

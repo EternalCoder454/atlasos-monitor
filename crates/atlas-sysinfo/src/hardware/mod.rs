@@ -87,6 +87,7 @@ pub fn read() -> Hardware {
 /// characters taken out, any run of spaces or line breaks one space,
 /// trimmed, and cut to 128 characters.
 pub(crate) fn clean(s: &str) -> String {
+    let s = &*crate::text::fold_joiners(s, None);
     let mut out = String::new();
     let mut count = 0;
     for word in s

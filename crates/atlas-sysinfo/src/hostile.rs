@@ -98,8 +98,17 @@ pub fn cases(max: u32) -> ProptestConfig {
     ProptestConfig::with_cases(asked.min(max))
 }
 
-/// No control or invisible character, no line break.
+/// No control or invisible character and no line break; a joiner only
+/// between two characters that are shown.
 pub fn is_clean_line(s: &str) -> bool {
-    !s.chars()
-        .any(|c| c.is_control() || crate::invisible(c) || matches!(c, '\u{2028}' | '\u{2029}'))
+    let chars: Vec<char> = s.chars().collect();
+    chars.iter().enumerate().all(|(i, &c)| {
+        if crate::joiner(c) {
+            let shown =
+                |x: Option<&char>| x.is_some_and(|x| !x.is_whitespace() && !crate::unprintable(*x));
+            shown(i.checked_sub(1).and_then(|j| chars.get(j))) && shown(chars.get(i + 1))
+        } else {
+            !crate::unprintable(c)
+        }
+    })
 }

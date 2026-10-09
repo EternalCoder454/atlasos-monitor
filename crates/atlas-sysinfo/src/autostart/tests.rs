@@ -1002,11 +1002,47 @@ fn a_planted_entry_shows_clean_text_and_no_remote_icon() {
         "[Desktop Entry]\nName=x\nExec=x\nIcon=my-icon\n",
     );
     assert_eq!(s.item("evil.desktop").icon, "my-icon");
+    // A path is an icon only if the file is one: it exists, is a regular file
+    // (a FIFO is not opened) and is of a sane size.
+    let icons = s.root().join("icons");
+    fs::create_dir_all(&icons).unwrap();
+    let small = icons.join("mine.PNG");
+    fs::write(&small, b"\x89PNG").unwrap();
+    let huge = icons.join("huge.svg");
+    fs::File::create(&huge)
+        .unwrap()
+        .set_len(5 * 1024 * 1024)
+        .unwrap();
+    let fifo = icons.join("pipe.png");
+    let c = std::ffi::CString::new(fifo.as_os_str().as_encoded_bytes()).unwrap();
+    // SAFETY: a valid NUL-terminated path.
+    assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0);
+    let device = icons.join("zero.png");
+    symlink("/dev/zero", &device).unwrap();
+    let wrong_type = icons.join("note.txt");
+    fs::write(&wrong_type, "x").unwrap();
+    let gone = icons.join("gone.png");
+    for (path, want) in [
+        (&small, small.to_str().unwrap()),
+        (&huge, ""),
+        (&fifo, ""),
+        (&device, ""),
+        (&wrong_type, ""),
+        (&gone, ""),
+    ] {
+        s.user(
+            "evil.desktop",
+            &format!("[Desktop Entry]\nName=x\nExec=x\nIcon={}\n", path.display()),
+        );
+        // Listing must come back for the FIFO, which an open would hang on.
+        assert_eq!(s.item("evil.desktop").icon, want, "{}", path.display());
+    }
+    // A name made only of fillers that draw blank is no name: the file's.
     s.user(
-        "evil.desktop",
-        "[Desktop Entry]\nName=x\nExec=x\nIcon=/usr/share/pixmaps/mine.PNG\n",
+        "blank.desktop",
+        "[Desktop Entry]\nName=\u{3164}\u{FFA0}\u{115F}\u{1160}\u{034F}\nExec=x\n",
     );
-    assert_eq!(s.item("evil.desktop").icon, "/usr/share/pixmaps/mine.PNG");
+    assert_eq!(s.item("blank.desktop").name, "blank");
 }
 
 /// Names of 100 000 characters are cut.

@@ -35,7 +35,7 @@ const INDEX_MAX: u64 = 1024 * 1024;
 
 /// Whether `path` is an icon worth drawing: a regular file (a link is
 /// followed) of a known image type and a sane size.
-pub(super) fn icon_file(path: &Path) -> bool {
+pub(crate) fn icon_file(path: &Path) -> bool {
     let known = path
         .extension()
         .and_then(|e| e.to_str())

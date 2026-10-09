@@ -200,6 +200,7 @@ fn uname() -> (String, String, String) {
 /// Strips control characters, folds runs of white space into one space and
 /// cuts the text to [`MAX_TEXT`] characters.
 fn clean(s: &str) -> String {
+    let s = &*crate::text::fold_joiners(s, None);
     let mut out = String::new();
     for word in s.split(|c: char| c.is_whitespace() || c.is_control() || crate::invisible(c)) {
         if word.is_empty() {

@@ -302,11 +302,18 @@ mod tests {
     }
 
     /// On a real (session) bus: a stranger's report is dropped, KWin's is
-    /// taken. Skipped where there is no session bus (CI's container has none;
-    /// `dbus-run-session -- cargo test` gives one).
+    /// taken. Skipped where there is no session bus (`dbus-run-session -- cargo test`
+    /// gives one; CI runs it that way with TELAMON_REQUIRE_SESSION_BUS set, which
+    /// makes a missing bus a failure).
     #[test]
     fn on_the_bus_only_kwin_is_believed() {
         if std::env::var_os("DBUS_SESSION_BUS_ADDRESS").is_none() {
+            // CI sets this and runs the test under dbus-run-session: a bus
+            // that is not there is a failure there, not a skip.
+            assert!(
+                std::env::var_os("TELAMON_REQUIRE_SESSION_BUS").is_none(),
+                "TELAMON_REQUIRE_SESSION_BUS is set and there is no session bus"
+            );
             eprintln!("no session bus; skipping");
             return;
         }

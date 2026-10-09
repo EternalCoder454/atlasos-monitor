@@ -50,24 +50,40 @@ mod hostile;
 /// ([`invisible`]), or the line and paragraph separators, which break a line
 /// without being controls.
 pub(crate) fn unprintable(c: char) -> bool {
-    c.is_control() || invisible(c) || matches!(c, '\u{2028}' | '\u{2029}')
+    c.is_control() || invisible(c) || joiner(c) || matches!(c, '\u{2028}' | '\u{2029}')
+}
+
+/// The zero-width non-joiner and joiner. They are format characters, but
+/// Persian, Indic and emoji text needs them *between two letters*: `text`
+/// keeps one there and removes it anywhere else (`text::fold_joiners`). In
+/// an identifier or a path they are never kept ([`unprintable`]).
+pub(crate) fn joiner(c: char) -> bool {
+    matches!(c, '\u{200C}' | '\u{200D}')
 }
 
 /// A character that changes how text around it is shown without being seen
 /// itself: bidirectional overrides and isolates, zero-width characters, the
-/// byte order mark and the like (Unicode's format characters). A device
-/// could use them to make its name read as another's, so text from devices
-/// and firmware leaves them out.
+/// byte order mark, the fillers that draw blank (Hangul and Braille-like
+/// fillers, the combining grapheme joiner) and the like (Unicode's format
+/// characters). A device could use them to make its name read as another's,
+/// or to make a name that looks empty, so text from devices and firmware
+/// leaves them out. Not the joiners ([`joiner`]), which depend on their
+/// neighbours.
 pub(crate) fn invisible(c: char) -> bool {
     matches!(
         c,
         '\u{00AD}'
+            | '\u{034F}'
             | '\u{061C}'
+            | '\u{115F}'..='\u{1160}'
             | '\u{180E}'
-            | '\u{200B}'..='\u{200F}'
+            | '\u{200B}'
+            | '\u{200E}'..='\u{200F}'
             | '\u{202A}'..='\u{202E}'
             | '\u{2060}'..='\u{206F}'
+            | '\u{3164}'
             | '\u{FEFF}'
+            | '\u{FFA0}'
             | '\u{FFF9}'..='\u{FFFB}'
             // Tag characters: invisible, and used to smuggle text.
             | '\u{E0000}'..='\u{E007F}'
