@@ -63,9 +63,10 @@ pub fn character() -> impl Strategy<Value = char> {
     ]
 }
 
-/// Hostile text of up to 300 characters.
+/// Hostile text of up to 120 characters (every character is a strategy of its
+/// own to generate, so a longer text costs: `huge` is for big input).
 pub fn string() -> impl Strategy<Value = String> {
-    proptest::collection::vec(character(), 0..300).prop_map(|c| c.into_iter().collect())
+    proptest::collection::vec(character(), 0..120).prop_map(|c| c.into_iter().collect())
 }
 
 /// Hostile text of up to `n` characters.

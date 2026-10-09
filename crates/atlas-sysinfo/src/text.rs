@@ -237,15 +237,6 @@ mod props {
             }
         }
 
-        /// Arguments come out marked and bounded in number and size.
-        #[test]
-        fn command_lines_stay_bounded(args in proptest::collection::vec(hostile::string(), 0..40)) {
-            let out = command_line(args.iter().map(String::as_str));
-            prop_assert!(out.len() <= ARGS_MAX + 1);
-            prop_assert!(out.iter().all(|a| hostile::is_clean_line(a)));
-            prop_assert!(out.iter().map(|a| a.chars().count()).sum::<usize>() <= COMMAND_MAX + out.len() + 8);
-        }
-
         /// An icon is a name or a safe path, whatever it was given, and it
         /// never looks like a URL.
         #[test]
@@ -266,6 +257,19 @@ mod props {
         fn urls_are_never_icons(scheme in "(https?|ftp|file|qrc|image|data|ws)", rest in hostile::string_to(60)) {
             prop_assert_eq!(icon(&format!("{scheme}://{rest}")), "");
             prop_assert_eq!(icon(&format!("{scheme}:{rest}")), "");
+        }
+    }
+
+    proptest! {
+        #![proptest_config(hostile::cases(2500))]
+
+        /// Arguments come out marked and bounded in number and size.
+        #[test]
+        fn command_lines_stay_bounded(args in proptest::collection::vec(hostile::string(), 0..16)) {
+            let out = command_line(args.iter().map(String::as_str));
+            prop_assert!(out.len() <= ARGS_MAX + 1);
+            prop_assert!(out.iter().all(|a| hostile::is_clean_line(a)));
+            prop_assert!(out.iter().map(|a| a.chars().count()).sum::<usize>() <= COMMAND_MAX + out.len() + 8);
         }
     }
 

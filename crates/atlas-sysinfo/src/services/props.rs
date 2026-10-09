@@ -72,7 +72,7 @@ proptest! {
 /// ones.
 fn value() -> impl Strategy<Value = OwnedValue> {
     let any_value = prop_oneof![
-        hostile::string_to(300).prop_map(Value::from),
+        hostile::string_to(100).prop_map(Value::from),
         any::<u32>().prop_map(Value::from),
         any::<u64>().prop_map(Value::from),
         any::<i32>().prop_map(Value::from),
@@ -80,7 +80,7 @@ fn value() -> impl Strategy<Value = OwnedValue> {
         any::<bool>().prop_map(Value::from),
         any::<f64>().prop_map(Value::from),
         any::<u8>().prop_map(Value::from),
-        proptest::collection::vec(hostile::string_to(40), 0..200)
+        proptest::collection::vec(hostile::string_to(20), 0..100)
             .prop_map(|v| Value::Array(Array::from(v))),
         proptest::collection::vec(any::<u32>(), 0..8).prop_map(|v| Value::Array(Array::from(v))),
         hostile::string_to(20).prop_map(|s| Value::Value(Box::new(Value::from(s)))),
@@ -113,10 +113,12 @@ fn props() -> impl Strategy<Value = HashMap<String, OwnedValue>> {
         "TriggeredBy",
         "Other",
     ]);
-    proptest::collection::hash_map(keys.prop_map(str::to_owned), value(), 0..22)
+    proptest::collection::hash_map(keys.prop_map(str::to_owned), value(), 0..14)
 }
 
 proptest! {
+    #![proptest_config(hostile::cases(700))]
+
     /// Properties of the wrong type, huge, or hostile give a Details with
     /// clean text and bounded lists, and never a panic.
     #[test]

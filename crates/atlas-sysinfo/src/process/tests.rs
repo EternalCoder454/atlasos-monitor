@@ -415,13 +415,28 @@ fn named_waiter(dir: &std::path::Path, name: &str, argv0: &str, args: &[&str]) -
     use std::os::unix::process::CommandExt;
     let program = dir.join(name);
     std::fs::copy("/usr/bin/sh", &program).unwrap();
-    let child = Command::new(&program)
-        .arg0(argv0)
-        .args(["-c", "read x", "zero"])
-        .args(args)
-        .stdin(Stdio::piped())
-        .spawn()
-        .unwrap();
+    // A program that was just written can be "busy" while another test's fork
+    // still holds its descriptor: try again.
+    let mut child = None;
+    for _ in 0..500 {
+        match Command::new(&program)
+            .arg0(argv0)
+            .args(["-c", "read x", "zero"])
+            .args(args)
+            .stdin(Stdio::piped())
+            .spawn()
+        {
+            Ok(c) => {
+                child = Some(c);
+                break;
+            }
+            Err(e) if e.raw_os_error() == Some(libc::ETXTBSY) => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Err(e) => panic!("{e}"),
+        }
+    }
+    let child = child.expect("the copy stayed busy");
     // `spawn` returns once the child has been forked; until it has run the
     // new program, its command line is the parent's, or empty.
     let deadline = std::time::Instant::now() + Duration::from_secs(5);

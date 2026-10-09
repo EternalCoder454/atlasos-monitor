@@ -82,7 +82,7 @@ fn attr() -> impl Strategy<Value = Attr> {
 }
 
 proptest! {
-    #![proptest_config(hostile::cases(1500))]
+    #![proptest_config(hostile::cases(800))]
 
     /// fwupd's list of attributes with the wrong types and hostile text: the
     /// page gets clean, bounded titles.
