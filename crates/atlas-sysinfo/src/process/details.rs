@@ -7,12 +7,14 @@
 
 use std::ffi::{CStr, OsStr};
 use std::fs;
+use std::io::Read;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use super::parse;
+use crate::text;
 
 /// Everything the Details panel shows. A figure that couldn't be read is
 /// `None`: another user's `smaps_rollup` and `fd/` are closed to us.
@@ -70,14 +72,12 @@ pub fn details(pid: u32) -> Option<Info> {
     let mut info = Info {
         pid,
         start_time: st.start_time,
-        name: String::from_utf8_lossy(st.name).into_owned(),
+        name: text::plain(&String::from_utf8_lossy(st.name), text::NAME_MAX),
         state: String::new(),
         parent: st.ppid,
         parent_name: None,
         executable: fs::read_link(dir.join("exe")).ok(),
-        command_line: fs::read(dir.join("cmdline"))
-            .map(|b| split_command_line(&b))
-            .unwrap_or_default(),
+        command_line: read_command_line(&dir.join("cmdline")),
         uid: None,
         user: None,
         started: boot_time().map(|boot| boot + Duration::from_secs_f64(st.start_time as f64 / hz)),
@@ -90,17 +90,22 @@ pub fn details(pid: u32) -> Option<Info> {
         private: None,
         open_files: fs::read_dir(dir.join("fd")).ok().map(Iterator::count),
         unit: fs::read(dir.join("cgroup")).ok().and_then(|b| {
-            parse::unit_from_cgroup(&b).map(|u| String::from_utf8_lossy(u).into_owned())
+            parse::unit_from_cgroup(&b)
+                .map(|u| text::plain(&String::from_utf8_lossy(u), text::NAME_MAX))
         }),
     };
     parse_status(&String::from_utf8_lossy(&status), &mut info);
-    info.user = info
-        .uid
-        .map(|uid| user_name(uid).unwrap_or_else(|| uid.to_string()));
+    info.user = info.uid.map(|uid| {
+        user_name(uid)
+            .map(|n| text::plain(&n, text::NAME_MAX))
+            .filter(|n| !n.is_empty())
+            .unwrap_or_else(|| uid.to_string())
+    });
+    info.state = text::plain(&info.state, 32);
     if st.ppid > 0 {
         info.parent_name = fs::read(format!("/proc/{}/comm", st.ppid))
             .ok()
-            .map(|b| String::from_utf8_lossy(b.trim_ascii_end()).into_owned());
+            .map(|b| text::plain(&String::from_utf8_lossy(&b), text::NAME_MAX));
     }
     if let Ok(rollup) = fs::read_to_string(dir.join("smaps_rollup")) {
         // status's VmRSS is the kernel's running counter, batched per CPU,
@@ -194,10 +199,31 @@ fn split_command_line(b: &[u8]) -> Vec<String> {
         return Vec::new();
     };
     let trimmed = &b[..=last];
-    trimmed
+    // Control and invisible characters in an argument are marked, and the
+    // whole is capped: it is shown, copied and pasted by the person.
+    let args: Vec<String> = trimmed
         .split(|&c| c == 0)
+        .take(text::ARGS_MAX + 1)
         .map(|arg| String::from_utf8_lossy(arg).into_owned())
-        .collect()
+        .collect();
+    text::command_line(args.iter().map(String::as_str))
+}
+
+/// The most of `/proc/<pid>/cmdline` that is read: the kernel allows a
+/// process a command line of megabytes, and a process can make its own.
+const CMDLINE_MAX: u64 = 256 * 1024;
+
+/// A process's command line, cleaned and capped ([`split_command_line`]).
+/// Empty when it cannot be read.
+fn read_command_line(path: &Path) -> Vec<String> {
+    let Ok(file) = fs::File::open(path) else {
+        return Vec::new();
+    };
+    let mut bytes = Vec::new();
+    if file.take(CMDLINE_MAX).read_to_end(&mut bytes).is_err() {
+        return Vec::new();
+    }
+    split_command_line(&bytes)
 }
 
 /// When the machine started, from the `btime` line of `/proc/stat`.

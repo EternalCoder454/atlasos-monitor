@@ -29,11 +29,13 @@ TelamonPage {
             text: qsTr("Telamon Monitor")
         }
         QQC2.Label {
+            textFormat: Text.PlainText
             Layout.alignment: Qt.AlignHCenter
             opacity: 0.7
             text: qsTr("Version %1").arg(Qt.application.version)
         }
         QQC2.Label {
+            textFormat: Text.PlainText
             Layout.fillWidth: true
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.Wrap

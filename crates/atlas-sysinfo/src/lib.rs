@@ -22,6 +22,7 @@
 //! - [`sysmem`]: Telamon Monitor's own memory use, for Settings.
 //! - [`about`]: what this computer is, for System Info.
 //! - [`hardware`]: PCI, USB and input devices, for Devices.
+//! - [`text`]: what is done to text from outside before it is shown.
 
 pub mod about;
 pub mod apps;
@@ -39,6 +40,18 @@ pub mod smart;
 pub mod stats;
 pub mod sysfs;
 pub mod sysmem;
+pub mod text;
+
+#[cfg(test)]
+mod hostile;
+
+/// A character that must not reach a name, a path or a line of text: a
+/// control character (a line break, an escape), an invisible format character
+/// ([`invisible`]), or the line and paragraph separators, which break a line
+/// without being controls.
+pub(crate) fn unprintable(c: char) -> bool {
+    c.is_control() || invisible(c) || matches!(c, '\u{2028}' | '\u{2029}')
+}
 
 /// A character that changes how text around it is shown without being seen
 /// itself: bidirectional overrides and isolates, zero-width characters, the
@@ -56,5 +69,7 @@ pub(crate) fn invisible(c: char) -> bool {
             | '\u{2060}'..='\u{206F}'
             | '\u{FEFF}'
             | '\u{FFF9}'..='\u{FFFB}'
+            // Tag characters: invisible, and used to smuggle text.
+            | '\u{E0000}'..='\u{E007F}'
     )
 }

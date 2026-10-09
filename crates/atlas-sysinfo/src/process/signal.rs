@@ -77,10 +77,21 @@ impl std::error::Error for ActionError {}
 /// Carries out `action` on the process `pid` that started at `start_time`
 /// (clock ticks since boot, as [`super::Proc::start_time`] has it).
 pub fn act(pid: u32, start_time: u64, action: Action) -> Result<(), ActionError> {
+    // Only ever one process, by its pid: never pid 0 (our process group),
+    // -1 (everything we may signal) or a negative one (a group), which the
+    // kernel's `kill` takes for those; a `u32` above `i32::MAX` is the
+    // negative of one, and is refused rather than wrapped. Nor PID 1, whose
+    // signals are the service manager's to take (it ignores `SIGKILL`; for
+    // root `SIGTERM` would restart it): the row is shown, not actionable.
     let raw = i32::try_from(pid)
         .ok()
+        .filter(|&p| p > 1)
         .and_then(Pid::from_raw)
-        .ok_or(ActionError::Gone)?;
+        .ok_or(if pid == 1 {
+            ActionError::NotAllowed
+        } else {
+            ActionError::Gone
+        })?;
     // Opening a pidfd checks no permission, so a failure other than "no
     // such process" (a seccomp filter's EPERM, an old kernel's ENOSYS) is
     // not the user being refused.

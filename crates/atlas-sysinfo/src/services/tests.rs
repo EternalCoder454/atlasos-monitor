@@ -678,3 +678,60 @@ fn live_list_agrees_with_failed() {
     assert!(reader.details("no-such-unit-atlas-test.service").is_none());
     assert!(reader.details("/etc/passwd").is_none());
 }
+
+/// What an action may be asked to do is one unit, by name, before any bus is
+/// asked (docs/SECURITY.md, "Services"): a path, an option, a pattern, a name
+/// with a NUL or a line break, or a name of ten megabytes is refused for every
+/// action, and so is starting or stopping a target.
+#[test]
+fn nasty_names_are_refused_before_the_bus() {
+    let huge = format!("{}.service", "a".repeat(10 * 1024 * 1024));
+    let nasty = [
+        "../../../etc/passwd.service",
+        "/usr/lib/systemd/system/sshd.service",
+        "/tmp/evil.service",
+        "~/evil.service",
+        "x.service\0",
+        "x\0.service",
+        "x.service\n--now",
+        "--now.service/../x",
+        "*.service",
+        "x*.service",
+        "x?.service",
+        "[a-z].service",
+        "x.service ",
+        " x.service",
+        "x;y.service",
+        "$(id).service",
+        "`id`.service",
+        "x\u{202E}.service",
+        "x\u{200B}.service",
+        "..service",
+        "x.service/",
+        "x.service.d/override.conf",
+        "systemd-journald.service\r",
+        huge.as_str(),
+    ];
+    for name in nasty {
+        assert!(!valid_name(name), "{:?}", &name[..name.len().min(40)]);
+        for action in [
+            Action::Start,
+            Action::Stop,
+            Action::Restart,
+            Action::Enable,
+            Action::Disable,
+        ] {
+            assert_eq!(act(name, action), Err(ActionError::InvalidName));
+        }
+    }
+    for action in [Action::Start, Action::Stop, Action::Restart] {
+        assert_eq!(
+            act("poweroff.target", action),
+            Err(ActionError::InvalidName),
+            "{action:?}"
+        );
+    }
+    // A leading '-' is a legal unit name (the root mount is `-.mount`) and no
+    // option: names go over D-Bus as strings, never as the arguments of a program.
+    assert!(valid_name("-.mount"));
+}

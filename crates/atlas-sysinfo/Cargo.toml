@@ -6,6 +6,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+# Not for crates.io: it lets cargo-deny take the path dependencies as what they are.
+publish = false
 
 [dependencies]
 # uname for System Info, statvfs for disk space, a netlink socket for
@@ -29,6 +31,9 @@ futures-core = "0.3"
 
 [dev-dependencies]
 tempfile = "3"
+# Property tests of the parsers of text others write (`props` modules; CI runs
+# them with PROPTEST_CASES=20000, docs/SECURITY.md).
+proptest = { version = "1", default-features = false, features = ["std"] }
 criterion = { version = "0.7", default-features = false }
 
 [[bench]]

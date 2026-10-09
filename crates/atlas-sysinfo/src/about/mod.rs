@@ -213,7 +213,9 @@ fn clean(s: &str) -> String {
             break;
         }
     }
-    out.chars().take(MAX_TEXT).collect()
+    // Cut at the cap, maybe after a space.
+    let cut: String = out.chars().take(MAX_TEXT).collect();
+    cut.trim_end().to_owned()
 }
 
 /// The os-release fields System Info shows, from the file's text (os-release(5):
@@ -749,5 +751,7 @@ fn number(attr: &Attr, key: &str) -> Option<u64> {
     }
 }
 
+#[cfg(test)]
+mod props;
 #[cfg(test)]
 mod tests;

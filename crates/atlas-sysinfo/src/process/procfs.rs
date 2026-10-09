@@ -324,6 +324,10 @@ fn read_whole<'a>(fd: &OwnedFd, buf: &'a mut Vec<u8>) -> Result<&'a [u8], Errno>
         if n < buf.len() {
             return Ok(&buf[..n]);
         }
+        if buf.len() >= READ_MAX {
+            // Cut: a line cut short is a line that does not parse.
+            return Ok(&buf[..n]);
+        }
         buf.resize(buf.len() * 2, 0);
     }
 }
@@ -341,9 +345,19 @@ fn pread_whole(fd: &OwnedFd, buf: &mut Vec<u8>) -> Result<usize, Errno> {
         if n < buf.len() {
             return Ok(n);
         }
+        if buf.len() >= READ_MAX {
+            return Ok(n);
+        }
         buf.resize(buf.len() * 2, 0);
     }
 }
+
+/// The most of one `/proc/<pid>` file that is read, and so the most the shared
+/// buffer grows to. The files that matter are a few hundred bytes; a command
+/// line is the one a process makes long (the kernel allows megabytes), and
+/// only its first argument is wanted. Without a cap one process with a huge
+/// command line would grow the scan's buffer for good.
+const READ_MAX: usize = 1 << 20;
 
 /// A `/proc` entry name that is all digits, as a pid.
 fn parse_pid(name: &[u8]) -> Option<u32> {

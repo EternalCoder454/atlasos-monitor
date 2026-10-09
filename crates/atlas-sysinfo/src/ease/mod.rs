@@ -944,4 +944,6 @@ fn restore_app(w: &mut dyn Weights, a: &mut AppState) -> Result<(), Error> {
 }
 
 #[cfg(test)]
+mod props;
+#[cfg(test)]
 mod tests;

@@ -75,6 +75,7 @@ Item {
     // with tabular digits, the headers in DemiBold when sorted.
     QQC2.Label {
         id: figureFont
+        textFormat: Text.PlainText
         visible: false
         font.features: {
             "tnum": 1
@@ -82,6 +83,7 @@ Item {
     }
     QQC2.Label {
         id: headFont
+        textFormat: Text.PlainText
         visible: false
         font.weight: Font.DemiBold
     }

@@ -17,7 +17,6 @@
 
 use std::collections::HashMap;
 use std::fs;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -27,6 +26,8 @@ pub const ICON: &str = "preferences-virtualization-container";
 
 /// Far more than a real container list holds (about 1 KiB a container).
 const LIST_MAX: u64 = 16 * 1024 * 1024;
+/// The most of a `storage.conf` that is read.
+const CONF_MAX: u64 = 256 * 1024;
 
 /// The lists in each of a storage's `<driver>-containers/` folders.
 const LISTS: [&str; 2] = ["containers.json", "volatile-containers.json"];
@@ -152,13 +153,9 @@ impl Store {
 
 /// A list's text; `None` if it can't be read whole.
 fn read_list(path: &Path) -> Option<String> {
-    let mut text = String::new();
-    fs::File::open(path)
-        .ok()?
-        .take(LIST_MAX + 1)
-        .read_to_string(&mut text)
-        .ok()?;
-    (text.len() as u64 <= LIST_MAX).then_some(text)
+    // Opened without blocking and checked: a FIFO named containers.json
+    // would otherwise hang the sampling thread.
+    crate::files::read_text_capped(path, LIST_MAX)
 }
 
 /// Each container's ID and first name in a podman container list. An entry
@@ -177,7 +174,10 @@ pub fn parse(text: &str) -> Vec<(String, String)> {
                 .iter()
                 .filter_map(|n| n.as_str())
                 .find(|n| !n.is_empty())?;
-            Some((id.to_owned(), name.to_owned()))
+            // The list is a file in the user's storage folder: a name is text
+            // from outside (docs/SECURITY.md).
+            let name = crate::text::plain(name, 64);
+            (!name.is_empty()).then(|| (id.to_owned(), name))
         })
         .collect()
 }
@@ -203,14 +203,14 @@ pub fn graph_root() -> Option<PathBuf> {
                 .or_else(|| home.as_ref().map(|h| h.join(".config")))
                 .map(|c| c.join("containers/storage.conf"))
         });
-    let configured = match user_conf.and_then(|c| fs::read_to_string(c).ok()) {
+    let configured = match user_conf.and_then(|c| crate::files::read_text_capped(&c, CONF_MAX)) {
         Some(text) => setting(&text, "graphroot"),
         None => [
             "/etc/containers/storage.conf",
             "/usr/share/containers/storage.conf",
         ]
         .iter()
-        .find_map(|c| fs::read_to_string(c).ok())
+        .find_map(|c| crate::files::read_text_capped(Path::new(c), CONF_MAX))
         .and_then(|text| setting(&text, "rootless_storage_path")),
     };
     let expanded = configured.and_then(|v| {
@@ -421,5 +421,36 @@ mod tests {
              {{\"id\": \"{VOLATILE}\", \"names\": [3, \"\", \"good\"]}}]"
         );
         assert_eq!(parse(&text), [(VOLATILE.to_owned(), "good".to_owned())]);
+    }
+}
+
+#[cfg(test)]
+mod props {
+    use super::*;
+    use crate::hostile;
+    use proptest::prelude::*;
+
+    proptest! {
+        /// Whatever the list says, the names are clean lines of at most 64
+        /// characters, and a list that is not one gives none.
+        #[test]
+        fn lists_give_clean_names(names in proptest::collection::vec(hostile::string_to(100), 0..6), junk in hostile::string()) {
+            let entries: Vec<serde_json::Value> = names.iter().map(|n| serde_json::json!({"id": "abc", "names": [n]})).collect();
+            let text = serde_json::to_string(&entries).unwrap();
+            for (_, name) in parse(&text) {
+                prop_assert!(hostile::is_clean_line(&name) && !name.is_empty() && name.chars().count() <= 64, "{name:?}");
+            }
+            let _ = parse(&junk);
+        }
+
+        /// A storage.conf value is a path only if it is absolute.
+        #[test]
+        fn configured_paths_are_absolute(value in hostile::string_to(80), conf in hostile::string()) {
+            if let Some(p) = expand(&value, Some(Path::new("/home/u")), Some("u"), 1000) {
+                prop_assert!(p.is_absolute());
+            }
+            let _ = setting(&conf, "graphroot");
+            let _ = setting(&format!("[storage]\ngraphroot = \"{conf}\""), "graphroot");
+        }
     }
 }

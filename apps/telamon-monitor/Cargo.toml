@@ -6,6 +6,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+# Not for crates.io: it lets cargo-deny take the path dependencies as what they are.
+publish = false
 build = "build.rs"
 
 # CMake (Corrosion) links the static library into the C++ executable.
@@ -24,3 +26,7 @@ log = { version = "0.4", features = ["std"] }
 
 [build-dependencies]
 cxx-qt-build = "0.10"
+
+[dev-dependencies]
+# Property tests (`props` modules) of the text handed to a shell or a service.
+proptest = { version = "1", default-features = false, features = ["std"] }

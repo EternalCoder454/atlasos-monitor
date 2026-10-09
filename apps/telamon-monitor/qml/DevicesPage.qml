@@ -104,6 +104,7 @@ TelamonPage {
         spacing: Kirigami.Units.largeSpacing
 
         QQC2.Label {
+            textFormat: Text.PlainText
             Layout.fillWidth: true
             wrapMode: Text.Wrap
             opacity: 0.7
@@ -118,6 +119,7 @@ TelamonPage {
     }
 
     QQC2.Label {
+        textFormat: Text.PlainText
         visible: !page.h.loaded
         opacity: 0.7
         text: qsTr("Reading the devices…")
@@ -174,6 +176,7 @@ TelamonPage {
     }
 
     QQC2.Label {
+        textFormat: Text.PlainText
         visible: page.h.loaded && page.pciGroups.length > 0
         Layout.fillWidth: true
         Layout.topMargin: Kirigami.Units.largeSpacing

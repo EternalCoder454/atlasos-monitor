@@ -89,12 +89,14 @@ TelamonPage {
         spacing: Kirigami.Units.largeSpacing
 
         QQC2.Label {
+            textFormat: Text.PlainText
             Layout.fillWidth: true
             wrapMode: Text.Wrap
             opacity: 0.7
             text: qsTr("Programs that start when you log in. A change takes effect at your next login.")
         }
         QQC2.Label {
+            textFormat: Text.PlainText
             text: qsTr("Show System Entries")
         }
         TelamonSwitch {
@@ -118,12 +120,14 @@ TelamonPage {
     }
 
     QQC2.Label {
+        textFormat: Text.PlainText
         visible: !page.s.loaded
         opacity: 0.7
         text: qsTr("Reading what starts at login…")
     }
 
     QQC2.Label {
+        textFormat: Text.PlainText
         visible: page.s.loaded && page.shown === 0
         Layout.fillWidth: true
         wrapMode: Text.Wrap
@@ -162,6 +166,7 @@ TelamonPage {
     }
 
     QQC2.Label {
+        textFormat: Text.PlainText
         visible: page.s.loaded && !page.s.units
         Layout.fillWidth: true
         wrapMode: Text.Wrap
