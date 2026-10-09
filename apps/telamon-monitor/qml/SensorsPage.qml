@@ -40,6 +40,7 @@ TelamonPage {
     title: qsTr("Sensors")
 
     QQC2.Label {
+        textFormat: Text.PlainText
         Layout.fillWidth: true
         Layout.bottomMargin: Kirigami.Units.largeSpacing
         wrapMode: Text.Wrap

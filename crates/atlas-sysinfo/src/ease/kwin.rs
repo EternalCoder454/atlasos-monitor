@@ -12,8 +12,8 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -47,13 +47,32 @@ report(workspace.activeWindow);
     )
 }
 
-struct Focus(Arc<AtomicU32>);
+/// The unique bus name KWin has now, or `None` while there is none. Only the
+/// KWin the script was loaded into may report: the session bus lets any
+/// program of the session call any unique name (docs/SECURITY.md, "D-Bus
+/// objects we serve").
+type KwinOwner = Arc<Mutex<Option<String>>>;
+
+struct Focus {
+    pid: Arc<AtomicU32>,
+    kwin: KwinOwner,
+}
+
+/// Whether a call from `sender` is KWin's, `owner` being KWin's unique name.
+fn from_kwin(sender: Option<&str>, owner: Option<&str>) -> bool {
+    matches!((sender, owner), (Some(s), Some(o)) if s == o)
+}
 
 #[zbus::interface(name = "net.eterneon.telamon.monitor.Focus")]
 impl Focus {
-    /// The process of the window that got focus, "0" for none.
-    fn activated(&self, pid: &str) {
-        self.0.store(pid.parse().unwrap_or(0), Ordering::Relaxed);
+    /// The process of the window that got focus, "0" for none. Reports from
+    /// anyone but KWin are dropped.
+    fn activated(&self, #[zbus(header)] header: zbus::message::Header<'_>, pid: &str) {
+        let owner = self.kwin.lock().unwrap_or_else(PoisonError::into_inner);
+        if !from_kwin(header.sender().map(|s| s.as_str()), owner.as_deref()) {
+            return;
+        }
+        self.pid.store(pid.parse().unwrap_or(0), Ordering::Relaxed);
     }
 }
 
@@ -122,8 +141,9 @@ fn run(dir: &Path, pid: Arc<AtomicU32>, mut stopped: oneshot::Receiver<()>) {
     };
     // Reports are answered while this runs: the runtime is driven only here.
     rt.block_on(async {
+        let kwin: KwinOwner = Arc::default();
         let conn = tokio::select! {
-            conn = tokio::time::timeout(TIMEOUT, connect(pid.clone())) => conn.ok().flatten(),
+            conn = tokio::time::timeout(TIMEOUT, connect(pid.clone(), kwin.clone())) => conn.ok().flatten(),
             _ = &mut stopped => None,
         };
         let Some(conn) = conn else {
@@ -134,7 +154,7 @@ fn run(dir: &Path, pid: Arc<AtomicU32>, mut stopped: oneshot::Receiver<()>) {
         let mut tried: Option<String> = None;
         loop {
             tokio::select! {
-                () = follow(&conn, dir, &pid, &mut tried) => {}
+                () = follow(&conn, dir, &pid, &kwin, &mut tried) => {}
                 _ = &mut stopped => break,
             }
             tokio::select! {
@@ -149,11 +169,11 @@ fn run(dir: &Path, pid: Arc<AtomicU32>, mut stopped: oneshot::Receiver<()>) {
 }
 
 /// A session connection serving [`PATH`].
-async fn connect(pid: Arc<AtomicU32>) -> Option<Connection> {
+async fn connect(pid: Arc<AtomicU32>, kwin: KwinOwner) -> Option<Connection> {
     zbus::connection::Builder::session()
         .ok()?
         .method_timeout(TIMEOUT)
-        .serve_at(PATH, Focus(pid))
+        .serve_at(PATH, Focus { pid, kwin })
         .ok()?
         .build()
         .await
@@ -163,7 +183,13 @@ async fn connect(pid: Arc<AtomicU32>) -> Option<Connection> {
 /// Loads the script into a KWin it isn't in yet. When KWin goes or is
 /// replaced, the last report is stale: no window is known to have focus
 /// until the new one reports.
-async fn follow(conn: &Connection, dir: &Path, pid: &AtomicU32, tried: &mut Option<String>) {
+async fn follow(
+    conn: &Connection,
+    dir: &Path,
+    pid: &AtomicU32,
+    kwin: &KwinOwner,
+    tried: &mut Option<String>,
+) {
     // Only the bus saying so means KWin is gone; a call that failed (a
     // timeout) leaves things as they were, the script perhaps loaded.
     let owner = match conn
@@ -181,6 +207,8 @@ async fn follow(conn: &Connection, dir: &Path, pid: &AtomicU32, tried: &mut Opti
         }
         Err(_) => return,
     };
+    // Before the script is loaded: its first report comes at once.
+    *kwin.lock().unwrap_or_else(PoisonError::into_inner) = owner.clone();
     if owner == *tried {
         return;
     }
@@ -261,6 +289,63 @@ fn write_script(dir: &Path, service: &str) -> std::io::Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_kwin_may_report() {
+        assert!(from_kwin(Some(":1.7"), Some(":1.7")));
+        assert!(!from_kwin(Some(":1.8"), Some(":1.7")));
+        // KWin not on the bus (or the sender unknown): nobody is believed.
+        assert!(!from_kwin(Some(":1.7"), None));
+        assert!(!from_kwin(None, Some(":1.7")));
+        assert!(!from_kwin(None, None));
+        assert!(!from_kwin(Some(""), Some(":1.7")));
+    }
+
+    /// On a real (session) bus: a stranger's report is dropped, KWin's is
+    /// taken. Skipped where there is no session bus (`dbus-run-session -- cargo test`
+    /// gives one; CI runs it that way with TELAMON_REQUIRE_SESSION_BUS set, which
+    /// makes a missing bus a failure).
+    #[test]
+    fn on_the_bus_only_kwin_is_believed() {
+        if std::env::var_os("DBUS_SESSION_BUS_ADDRESS").is_none() {
+            // CI sets this and runs the test under dbus-run-session: a bus
+            // that is not there is a failure there, not a skip.
+            assert!(
+                std::env::var_os("TELAMON_REQUIRE_SESSION_BUS").is_none(),
+                "TELAMON_REQUIRE_SESSION_BUS is set and there is no session bus"
+            );
+            eprintln!("no session bus; skipping");
+            return;
+        }
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        rt.block_on(async {
+            let pid = Arc::new(AtomicU32::new(0));
+            let kwin: KwinOwner = Arc::default();
+            let server = connect(pid.clone(), kwin.clone())
+                .await
+                .expect("session bus");
+            let session = || async { zbus::connection::Builder::session()?.build().await };
+            let real = session().await.unwrap();
+            let stranger = session().await.unwrap();
+            *kwin.lock().unwrap() = Some(real.unique_name().unwrap().to_string());
+            let to = server.unique_name().unwrap().to_string();
+            let report = |from: Connection, p: &'static str| {
+                let to = to.clone();
+                async move {
+                    from.call_method(Some(to.as_str()), PATH, Some(IFACE), "Activated", &(p,))
+                        .await
+                        .unwrap();
+                }
+            };
+            report(stranger, "4242").await;
+            assert_eq!(pid.load(Ordering::Relaxed), 0, "a stranger moved the focus");
+            report(real, "4243").await;
+            assert_eq!(pid.load(Ordering::Relaxed), 4243);
+        });
+    }
 
     #[test]
     fn the_script_calls_what_is_served() {

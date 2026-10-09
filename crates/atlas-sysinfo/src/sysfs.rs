@@ -26,6 +26,12 @@ use std::path::Path;
 /// files say how much they need with [`HeldFile::with_capacity`].
 const SMALL_VALUE: usize = 256;
 
+/// The most one held file is read: the kernel's files are kilobytes, and a
+/// path that turned out to be a device or something endless (`/dev/zero`)
+/// must not fill the memory by doubling a buffer for ever. A bigger file is
+/// returned cut at this size.
+const HELD_MAX: usize = 8 << 20;
+
 /// A kernel file held open for repeated reads.
 #[derive(Debug)]
 pub struct HeldFile {
@@ -70,7 +76,7 @@ impl HeldFile {
             // grow and read again, so a file that outgrows its buffer never
             // comes back truncated. A half-read /proc/stat would quietly
             // corrupt every figure.
-            if n == self.buf.len() {
+            if n == self.buf.len() && n < HELD_MAX {
                 self.buf.resize(n * 2, 0);
                 continue;
             }
@@ -128,13 +134,35 @@ pub fn field(line: &[u8], idx: usize) -> Option<&[u8]> {
 /// Reads a value from a file not worth holding open: discovery and static
 /// information, read once.
 pub fn read_uint(path: impl AsRef<Path>) -> Option<u64> {
-    parse_uint(std::fs::read(path).ok()?.trim_ascii())
+    parse_uint(read_bounded(path.as_ref())?.trim_ascii())
 }
 
-/// Reads a one-shot string value, trimmed. `None` if the file can't be read.
+/// The most of an attribute that is read: they are a word or a number, and
+/// what a device puts in one (a drive's model, a label) is its own text.
+const ATTRIBUTE_MAX: u64 = 16 * 1024;
+
+fn read_bounded(path: &Path) -> Option<Vec<u8>> {
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    File::open(path)
+        .ok()?
+        .take(ATTRIBUTE_MAX)
+        .read_to_end(&mut bytes)
+        .ok()?;
+    Some(bytes)
+}
+
+/// Reads a one-shot string value as one clean line. `None` if the file can't
+/// be read. The text is a device's or a driver's (a drive's model, a sensor's
+/// label), so it is bounded and cleaned where it is read
+/// ([`crate::text::plain`]: no control or invisible characters, white space
+/// folded, at most [`crate::text::LINE_MAX`] characters).
 pub fn read_string(path: impl AsRef<Path>) -> Option<String> {
-    let text = std::fs::read_to_string(path).ok()?;
-    Some(text.trim().to_owned())
+    let bytes = read_bounded(path.as_ref())?;
+    Some(crate::text::plain(
+        &String::from_utf8_lossy(&bytes),
+        crate::text::LINE_MAX,
+    ))
 }
 
 #[cfg(test)]
@@ -309,5 +337,52 @@ mod tests {
         let second = f.bytes().unwrap();
         assert!(second.starts_with(b"cpu "));
         assert!(second.ends_with(b"\n"), "a re-read came back cut short");
+    }
+}
+
+#[cfg(test)]
+mod props {
+    use super::*;
+    use crate::hostile;
+    use proptest::prelude::*;
+
+    proptest! {
+        /// The number readers never panic, and read back what they wrote.
+        #[test]
+        fn numbers_round_trip(n in any::<u64>(), i in any::<i64>(), junk in hostile::bytes()) {
+            prop_assert_eq!(parse_uint(n.to_string().as_bytes()), Some(n));
+            prop_assert_eq!(parse_int(i.to_string().as_bytes()), Some(i));
+            let _ = parse_uint(&junk);
+            let _ = parse_int(&junk);
+            let _ = field(&junk, 3);
+        }
+
+        /// A number with too many digits is no number.
+        #[test]
+        fn numbers_that_overflow_are_refused(extra in 1usize..40, d in 1u8..=9) {
+            let big = format!("{}{}", u64::MAX, char::from(b'0' + d).to_string().repeat(extra));
+            prop_assert_eq!(parse_uint(big.as_bytes()), None);
+        }
+    }
+
+    proptest! {
+        #![proptest_config(hostile::cases(150))]
+
+        /// An attribute is text from a device: one clean line, whatever the
+        /// bytes, and no more than the cap is read of a file of any size.
+        #[test]
+        fn attributes_are_clean_lines(bytes in hostile::bytes(), pad in 0usize..40_000) {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("model");
+            let mut body = bytes;
+            body.extend(std::iter::repeat_n(b'z', pad));
+            std::fs::write(&path, &body).unwrap();
+            let s = read_string(&path).unwrap();
+            prop_assert!(hostile::is_clean_line(&s));
+            prop_assert!(s.chars().count() <= crate::text::LINE_MAX);
+            let _ = read_uint(&path);
+            let mut held = HeldFile::open(&path).unwrap();
+            prop_assert!(held.bytes().is_none_or(|b| b.len() <= body.len()));
+        }
     }
 }

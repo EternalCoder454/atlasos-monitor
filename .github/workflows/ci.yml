@@ -133,9 +133,9 @@ jobs:
   # like a Telamon.Ui type), at the release the crates are pinned to.
   atlas:
     name: Atlas app checks
-    uses: EternalCoder454/atlas-framework/.github/workflows/app-checks.yml@8e6a53569363aec3d7e42920875d03ca113ef3eb # v2.0.0
+    uses: EternalCoder454/atlas-framework/.github/workflows/app-checks.yml@cda51cea326fbad492d3328a8d7fb10db737dbfc # v2.0.9
     with:
-      framework-ref: v2.0.0
+      framework-ref: v2.0.9
 
   # Telamon.Ui (telamon-ui), which the app builds against, is in no repository:
   # atlas-framework's RPMs at the release the crates are pinned to, built
@@ -183,9 +183,11 @@ jobs:
           qt=$(dnf -q repoquery --latest-limit=1 --qf '%{name}-%{evr}\n' qt6-qtbase qt6-qtdeclarative | sort | tr '\n' '_')
           case $qt in qt6-qtbase-*_qt6-qtdeclarative-*_) ;; *) echo "::error::could not read Fedora's Qt version ($qt)"; exit 1 ;; esac
           echo "qt=$qt" >> "$GITHUB_OUTPUT"
+      # Restored by every run, saved from pushes (and the weekly run) only, as
+      # the other caches are: a pull request does not fill the cache.
       - name: Cached RPMs
         id: cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: out
           key: atlas-framework-rpms-f44-${{ steps.ref.outputs.ref }}-${{ steps.qt.outputs.qt }}
@@ -199,6 +201,11 @@ jobs:
       - name: Build the RPMs
         if: steps.cache.outputs.cache-hit != 'true'
         run: atlas-framework/packaging/build-rpm.sh "$GITHUB_WORKSPACE/out"
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.cache.outputs.cache-hit != 'true'
+        with:
+          path: out
+          key: ${{ steps.cache.outputs.cache-primary-key }}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: atlas-framework-rpms
@@ -244,12 +251,39 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: f44-${{ steps.toolchain.outputs.hash }}
-          save-if: ${{ github.event_name == 'push' || github.event_name == 'schedule' }}
+          save-if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') }}
       # --locked: also fails when Cargo.lock and the atlas-framework tag disagree.
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Tests
         run: cargo test --workspace --locked
+      # The parsers of what other programs write (/proc, desktop and unit
+      # files, fwupd's and PipeWire's replies) and the shell quoting of a
+      # command line, with far more random and hostile input than a local run
+      # uses (docs/SECURITY.md, "Property tests"). A failure prints the input
+      # that broke the rule.
+      - name: Property tests, long run
+        timeout-minutes: 15
+        env:
+          PROPTEST_CASES: 20000
+        run: cargo test --workspace --locked -- props
+      # The hardening check that the RPM build runs on the finished program,
+      # against small programs with and without the hardening.
+      - name: Hardening check self-test
+        run: scripts/test-check-hardening.sh
+      # Energy Saver's focus object on a real session bus: a stranger's report
+      # is dropped, KWin's is taken. Skipped without a bus, so it runs under
+      # dbus-run-session, and a missing bus is a failure here.
+      - name: D-Bus tests
+        env:
+          TELAMON_REQUIRE_SESSION_BUS: '1'
+        run: |
+          rpm -q dbus-daemon >/dev/null || dnf -y install dbus-daemon
+          dbus-run-session -- cargo test -p atlas-sysinfo --locked ease::kwin
+      - name: Shell scripts
+        run: |
+          rpm -q ShellCheck >/dev/null || dnf -y install ShellCheck
+          shellcheck scripts/*.sh packaging/*.sh
 
   # The release build, as Telamon OS builds it. Its CMake build (Corrosion's cargo
   # target in it) is cached, so it compiles only what changed.
@@ -296,7 +330,7 @@ jobs:
       - name: Build the RPM
         run: ATLAS_LOCAL_RPMS=/tmp/atlas-framework-rpms packaging/build-rpm.sh "$GITHUB_WORKSPACE/out"
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: (github.event_name == 'push' || github.event_name == 'schedule') && steps.cache.outputs.cache-hit != 'true'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.cache.outputs.cache-hit != 'true'
         with:
           path: |
             /github/home/.cargo/registry

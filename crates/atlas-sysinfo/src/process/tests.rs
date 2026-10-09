@@ -407,3 +407,159 @@ fn held_files_stay_within_the_budget_and_go_with_their_process() {
     assert!(find(&s.procs, std::process::id()).is_some());
     assert!(s.procs.len() + 20 > listed);
 }
+
+/// A copy of the shell in `dir` under `name`, started with `argv0` and `args`
+/// (after `-c 'read x'`, so it waits on its stdin): a process that names
+/// itself. The pipe to its stdin is in `Child`, dropped when it is killed.
+fn named_waiter(dir: &std::path::Path, name: &str, argv0: &str, args: &[&str]) -> Child {
+    use std::os::unix::process::CommandExt;
+    let program = dir.join(name);
+    std::fs::copy("/usr/bin/sh", &program).unwrap();
+    // A program that was just written can be "busy" while another test's fork
+    // still holds its descriptor: try again.
+    let mut child = None;
+    for _ in 0..500 {
+        match Command::new(&program)
+            .arg0(argv0)
+            .args(["-c", "read x", "zero"])
+            .args(args)
+            .stdin(Stdio::piped())
+            .spawn()
+        {
+            Ok(c) => {
+                child = Some(c);
+                break;
+            }
+            Err(e) if e.raw_os_error() == Some(libc::ETXTBSY) => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Err(e) => panic!("{e}"),
+        }
+    }
+    let child = child.expect("the copy stayed busy");
+    // `spawn` returns once the child has been forked; until it has run the
+    // new program, its command line is the parent's, or empty.
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while std::time::Instant::now() < deadline {
+        let cmdline = std::fs::read(format!("/proc/{}/cmdline", child.id())).unwrap_or_default();
+        if cmdline.windows(5).any(|w| w == b"zero\0") {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    child
+}
+
+/// A process chooses its own name (its file's, `prctl`, `argv[0]`), and the
+/// table, the Details panel and the clipboard show it: a line break, an
+/// escape, a bidirectional override or markup in it must not reach them
+/// (docs/SECURITY.md, "Text from outside").
+#[test]
+fn a_hostile_process_name_is_shown_clean() {
+    let dir = tempfile::tempdir().unwrap();
+    let child = named_waiter(
+        dir.path(),
+        "ev\nil\u{1b}[2J\u{202E}x",
+        "ev\nil\u{1b}[2J\u{202E}x",
+        &["a\nb\u{202E}c"],
+    );
+    let pid = child.id();
+    let mut s = ProcessSampler::default();
+    // Twice: the second tick is the one that reuses the first's name.
+    let _ = s.sample();
+    let procs = s.sample().to_vec();
+    let p = find(&procs, pid).expect("the child is in the table");
+    assert_eq!(&*p.name, "ev il [2Jx", "{:?}", p.name);
+    let info = details(pid).expect("details");
+    assert_eq!(info.name, "ev il [2Jx");
+    assert!(
+        info.command_line
+            .iter()
+            .all(|a| !a.chars().any(|c| c.is_control() || c == '\u{202E}')),
+        "{:?}",
+        info.command_line
+    );
+    assert_eq!(info.command_line.last().unwrap(), "a\u{FFFD}b\u{FFFD}c");
+    kill(child);
+}
+
+/// A name of a hundred thousand characters is cut where it is read, and the
+/// scan's buffers do not keep what it cost.
+#[test]
+fn a_huge_process_name_is_capped() {
+    let dir = tempfile::tempdir().unwrap();
+    // `comm` is cut at 15 bytes; the name is completed from argv[0].
+    let long = format!("waitwaitwaitwait{}", "x".repeat(100_000));
+    let child = named_waiter(dir.path(), "waitwaitwaitwait", &long, &[]);
+    let pid = child.id();
+    let mut s = ProcessSampler::default();
+    let procs = s.sample().to_vec();
+    let p = find(&procs, pid).expect("the child is in the table");
+    assert_eq!(p.name.chars().count(), crate::text::NAME_MAX);
+    assert!(p.name.starts_with("waitwaitwaitwaitxxx"));
+    let info = details(pid).expect("details");
+    assert!(info.name.chars().count() <= crate::text::NAME_MAX);
+    assert!(info.command_line[0].chars().count() <= crate::text::COMMAND_MAX + 1);
+    kill(child);
+}
+
+/// A command line of over a million characters is read in part: the whole of
+/// it is never held, and it comes back marked as cut.
+#[test]
+fn a_huge_command_line_is_read_in_part() {
+    let dir = tempfile::tempdir().unwrap();
+    let big = "y".repeat(100_000);
+    let args: Vec<&str> = (0..12).map(|_| big.as_str()).collect();
+    let child = named_waiter(dir.path(), "bigargs", "bigargs", &args);
+    let info = details(child.id()).expect("details");
+    let shown: usize = info.command_line.iter().map(|a| a.chars().count()).sum();
+    assert!(
+        shown <= crate::text::COMMAND_MAX + info.command_line.len() + 8,
+        "{shown}"
+    );
+    assert_eq!(info.command_line.last().map(String::as_str), Some("…"));
+    kill(child);
+}
+
+/// Signals reach one process by its pid and start time and nothing else:
+/// pid 0 (our process group), -1 (everything we may signal) and the other
+/// negative numbers (groups) are refused before any signal is sent, PID 1 is
+/// not ours to signal, and the process that was asked for is untouched.
+#[test]
+fn signals_never_reach_groups_or_pid_1() {
+    let (mut child, bystander) = (
+        Command::new("sleep").arg("30").spawn().unwrap(),
+        Command::new("sleep").arg("30").spawn().unwrap(),
+    );
+    for pid in [
+        0u32,
+        u32::MAX,
+        u32::MAX - 1,
+        i32::MAX as u32 + 1,
+        1u32 << 31,
+    ] {
+        for action in [Action::Kill, Action::End, Action::Stop] {
+            let r = act(pid, 0, action);
+            assert!(
+                matches!(r, Err(ActionError::Gone)),
+                "{pid} {action:?}: {r:?}"
+            );
+        }
+    }
+    for action in [Action::Kill, Action::End] {
+        let r = act(1, 0, action);
+        assert!(
+            matches!(r, Err(ActionError::NotAllowed)),
+            "{action:?}: {r:?}"
+        );
+    }
+    // Still running, both.
+    assert!(child.try_wait().unwrap().is_none());
+    kill(bystander);
+    kill_ref(&mut child);
+}
+
+fn kill_ref(child: &mut Child) {
+    let _ = child.kill();
+    let _ = child.wait();
+}

@@ -231,13 +231,20 @@ impl Default for ProcessDetailsRust {
     }
 }
 
-/// Joins a command line back into something that could be pasted into a
-/// shell: an argument with a space, a quote or a shell character in it is
-/// single-quoted. A lone argument is shown as it is: a program that writes
-/// its whole command line over its arguments (Electron, Chromium) leaves
-/// one, spaces and all, and quoting it would hide that it was several.
+/// Joins a command line back into something that can be pasted into a
+/// shell and means what was shown: an argument with anything but letters,
+/// digits and `_@%+=:,./-` in it is single-quoted, so `;`, `|`, `&`, `$`,
+/// `` ` ``, `(`, `<`, `*`, `~`, `#`, quotes, spaces and line breaks stay
+/// text. A lone argument made only of those characters and spaces is shown as
+/// it is: a program that writes its whole command line over its arguments
+/// (Electron, Chromium) leaves one, spaces and all, and quoting it would hide
+/// that it was several. A lone one with any shell character is quoted like the
+/// rest, so pasting never runs something the person did not read as a command.
 pub fn quote_args(args: &[String]) -> String {
-    if let [one] = args {
+    let safe = |c: char| c.is_ascii_alphanumeric() || "_@%+=:,./-".contains(c);
+    if let [one] = args
+        && one.chars().all(|c| safe(c) || c == ' ')
+    {
         return one.clone();
     }
     let mut out = String::new();
@@ -245,12 +252,12 @@ pub fn quote_args(args: &[String]) -> String {
         if i > 0 {
             out.push(' ');
         }
-        if a.is_empty() || a.contains([' ', '\t', '\n', '\'', '"', '\\', '$', '`']) {
+        if !a.is_empty() && a.chars().all(safe) {
+            out.push_str(a);
+        } else {
             out.push('\'');
             out.push_str(&a.replace('\'', r"'\''"));
             out.push('\'');
-        } else {
-            out.push_str(a);
         }
     }
     out
@@ -415,11 +422,13 @@ impl qobject::ProcessDetails {
                 .unwrap_or(-1),
         );
         self.as_mut().set_nice(info.nice);
+        // A path may hold a line break or a bidirectional override (it is
+        // whatever the program's file is called): marked, and capped.
         self.as_mut().set_executable(QString::from(
             &info
                 .executable
                 .as_ref()
-                .map(|p| p.to_string_lossy().into_owned())
+                .map(|p| atlas_sysinfo::text::literal(&p.to_string_lossy(), 4096))
                 .unwrap_or_default(),
         ));
         self.as_mut()
@@ -465,6 +474,127 @@ mod tests {
         assert_eq!(
             quote_args(&args(&["/opt/app --type=gpu"])),
             "/opt/app --type=gpu"
+        );
+    }
+}
+
+#[cfg(test)]
+mod props {
+    use super::quote_args;
+    use proptest::prelude::*;
+
+    /// Splits `line` the way a POSIX shell does for what `quote_args` writes:
+    /// words separated by spaces, with 'single quotes', `\'` and nothing else
+    /// special. Returns `None` when the line uses anything more (an unquoted
+    /// character a shell would act on, or a quote left open).
+    fn shell_words(line: &str) -> Option<Vec<String>> {
+        let mut words = Vec::new();
+        let mut cur = String::new();
+        let mut started = false;
+        let mut chars = line.chars();
+        while let Some(c) = chars.next() {
+            match c {
+                '\'' => {
+                    started = true;
+                    loop {
+                        match chars.next()? {
+                            '\'' => break,
+                            c => cur.push(c),
+                        }
+                    }
+                }
+                // `\'` between two quoted parts is a quote: how `'` is written.
+                '\\' => {
+                    started = true;
+                    cur.push(chars.next().filter(|c| *c == '\'')?);
+                }
+                ' ' => {
+                    if started {
+                        words.push(std::mem::take(&mut cur));
+                        started = false;
+                    }
+                }
+                c if c.is_ascii_alphanumeric() || "_@%+=:,./-".contains(c) => {
+                    started = true;
+                    cur.push(c);
+                }
+                _ => return None,
+            }
+        }
+        if started {
+            words.push(cur);
+        }
+        Some(words)
+    }
+
+    fn arg() -> impl Strategy<Value = String> {
+        prop_oneof![
+            "[ -~]{0,20}",
+            proptest::collection::vec(
+                proptest::sample::select(vec![
+                    ' ', '\'', '"', '\\', '$', '`', ';', '|', '&', '(', ')', '<', '>', '*', '?',
+                    '~', '#', '!', '\n', '\t', '\u{1b}', '\u{202E}', 'a', 'é', '-', '=',
+                ]),
+                0..12
+            )
+            .prop_map(|c| c.into_iter().collect()),
+        ]
+    }
+
+    proptest! {
+        /// Pasting a command line into a shell gives back the arguments that
+        /// were shown: nothing in an argument (`;`, `$(...)`, a quote, a
+        /// line break) is left for the shell to act on.
+        #[test]
+        fn a_pasted_command_line_is_the_arguments(args in proptest::collection::vec(arg(), 2..8)) {
+            let line = quote_args(&args);
+            prop_assert_eq!(shell_words(&line), Some(args));
+        }
+
+        /// A lone argument is shown as it is only if no shell would do more
+        /// than split it at the spaces; otherwise it is quoted like the rest.
+        #[test]
+        fn a_lone_argument_is_not_a_command(one in arg()) {
+            let line = quote_args(std::slice::from_ref(&one));
+            if line == one {
+                prop_assert!(one.chars().all(|c| c == ' ' || c.is_ascii_alphanumeric() || "_@%+=:,./-".contains(c)));
+            } else {
+                prop_assert_eq!(shell_words(&line), Some(vec![one]));
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod hostile {
+    use super::quote_args;
+
+    /// What a person copies out of the Details dialog and pastes into a shell
+    /// is the command line that was shown, however the process wrote it.
+    #[test]
+    fn a_pasted_command_line_cannot_run_what_it_only_showed() {
+        let args = |a: &[&str]| a.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
+        assert_eq!(
+            quote_args(&args(&["sh", "-c", "echo hi; rm -rf ~"])),
+            "sh -c 'echo hi; rm -rf ~'"
+        );
+        assert_eq!(
+            quote_args(&args(&[
+                "x", "$(id)", "`id`", "a|b", "a&b", "a>b", "*", "~", "#c", "!h"
+            ])),
+            "x '$(id)' '`id`' 'a|b' 'a&b' 'a>b' '*' '~' '#c' '!h'"
+        );
+        // A lone argument with a shell character is quoted too, one with only
+        // spaces is shown as the process wrote it.
+        assert_eq!(quote_args(&args(&["a;rm -rf ~"])), "'a;rm -rf ~'");
+        assert_eq!(
+            quote_args(&args(&["/opt/app --type=gpu"])),
+            "/opt/app --type=gpu"
+        );
+        // Line breaks and quotes stay inside their quotes.
+        assert_eq!(
+            quote_args(&args(&["a", "b\nc", "it's"])),
+            "a 'b\nc' 'it'\\''s'"
         );
     }
 }

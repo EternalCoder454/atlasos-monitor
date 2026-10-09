@@ -147,7 +147,7 @@ pub fn installations() -> Vec<PathBuf> {
             .collect();
         confs.sort();
         for conf in confs {
-            if let Ok(text) = fs::read_to_string(conf) {
+            if let Some(text) = crate::files::read_text_capped(&conf, INFO_MAX) {
                 out.extend(extra_installations(&text));
             }
         }
@@ -349,5 +349,45 @@ mod tests {
             return;
         }
         assert_eq!(Instance::of(std::process::id()), None);
+    }
+}
+
+#[cfg(test)]
+mod props {
+    use super::*;
+    use crate::hostile;
+    use proptest::prelude::*;
+
+    proptest! {
+        /// A `.flatpak-info` can say what it likes: a path it names is
+        /// absolute, and a sandbox path maps into the app's or the runtime's
+        /// files only.
+        #[test]
+        fn instances_have_absolute_paths(text in hostile::string(), app in hostile::string_to(40), inside in hostile::string_to(40)) {
+            let text = format!("{text}\n[Application]\nname=x\n[Instance]\napp-path=/a/files\nruntime-path={app}\n");
+            if let Some(i) = Instance::parse(&text) {
+                prop_assert!(i.app_path.is_absolute());
+                prop_assert!(i.runtime_path.as_ref().is_none_or(|p| p.is_absolute()));
+                if let Some(host) = i.host_path(Path::new(&format!("/app/{inside}"))) {
+                    prop_assert!(host.starts_with(&i.app_path));
+                }
+            }
+        }
+
+        /// The folder of an app comes from an ID that came from a unit name:
+        /// no ID reaches outside `app/`.
+        #[test]
+        fn install_folders_stay_under_app(id in hostile::string_to(40)) {
+            let dir = tempfile::tempdir().unwrap();
+            let found = install_folder(&id, &[dir.path().to_path_buf()]);
+            if id.contains('/') || id.starts_with('.') || id.is_empty() {
+                prop_assert_eq!(found, None);
+            }
+        }
+
+        #[test]
+        fn installation_files_name_absolute_paths(text in hostile::string()) {
+            prop_assert!(extra_installations(&text).iter().all(|p| p.is_absolute()));
+        }
     }
 }

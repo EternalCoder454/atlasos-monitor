@@ -39,7 +39,7 @@ telamon_framework_ui::app! {
     repo: "atlasos-monitor",
     // TelamonCard, TelamonStat, TelamonDetailGrid, TelamonSparkline, TelamonDialog and
     // TelamonSidebar; the spec's Requires says the same.
-    ui: "2.0.0",
+    ui: "2.0.9",
 }
 
 /// The QObjects QML sees, handed to the engine as `Main.qml`'s initial

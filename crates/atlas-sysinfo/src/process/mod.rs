@@ -650,14 +650,20 @@ fn disk_rates(
 }
 
 /// `prev` if it already says `raw`, else a new copy of `raw`. Names that
-/// aren't UTF-8 are kept with replacement characters.
+/// aren't UTF-8 are kept with replacement characters. A name, unit or
+/// container is text any program can choose (`prctl(PR_SET_NAME)`, a cgroup
+/// folder's name): it is cleaned and capped here, where it is read
+/// ([`crate::text::plain`]), so no table, dialog or clipboard sees the raw one.
 fn reuse(prev: Option<&Arc<str>>, raw: &[u8]) -> Arc<str> {
-    let text = String::from_utf8_lossy(raw);
+    let lossy = String::from_utf8_lossy(raw);
+    let text = crate::text::plain(&lossy, crate::text::NAME_MAX);
     match prev {
         Some(p) if **p == *text => Arc::clone(p),
-        _ => Arc::from(&*text),
+        _ => Arc::from(text),
     }
 }
 
+#[cfg(test)]
+mod props;
 #[cfg(test)]
 mod tests;

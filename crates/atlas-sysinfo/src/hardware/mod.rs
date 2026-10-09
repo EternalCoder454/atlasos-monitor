@@ -87,6 +87,7 @@ pub fn read() -> Hardware {
 /// characters taken out, any run of spaces or line breaks one space,
 /// trimmed, and cut to 128 characters.
 pub(crate) fn clean(s: &str) -> String {
+    let s = &*crate::text::fold_joiners(s, None);
     let mut out = String::new();
     let mut count = 0;
     for word in s
@@ -358,3 +359,50 @@ pub fn usb_speed(mbps: &str) -> String {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod props {
+    use super::*;
+    use crate::hostile;
+    use proptest::prelude::*;
+
+    proptest! {
+        /// A device names itself: one clean line of at most 128 characters,
+        /// the same after cleaning again.
+        #[test]
+        fn device_names_are_clean_lines(s in hostile::string()) {
+            let c = clean(&s);
+            prop_assert!(hostile::is_clean_line(&c));
+            prop_assert!(c.chars().count() <= MAX_TEXT);
+            prop_assert_eq!(clean(&c), c.clone());
+        }
+
+        /// /proc/bus/input/devices and the udev database, whatever they say:
+        /// no panic, and the names are clean.
+        #[test]
+        fn input_and_udev_text_never_panics(text in hostile::string()) {
+            let lines = format!("I: Bus=0003 Vendor=1 Product=2 Version=3\nN: Name=\"{text}\"\nP: Phys={text}\nU: Uniq={text}\nH: Handlers=kbd event3\nB: EV=120013\n\n{text}");
+            for d in input::parse_input_devices(&lines) {
+                prop_assert!(hostile::is_clean_line(&d.name), "{:?}", d.name);
+            }
+            let _ = input::parse_blocks(&text);
+            let _ = input::parse_udev(&text);
+        }
+
+        /// pci.ids and usb.ids with hostile lines: names come out clean.
+        #[test]
+        fn id_files_give_clean_names(text in hostile::string()) {
+            let file = format!("0abc  {text}\n\t1234  {text}\n\nC 03  {text}\n\t00  {text}\n{text}\n");
+            let want = ids::Wanted {
+                vendors: [0x0abc].into(),
+                devices: [(0x0abc, 0x1234)].into(),
+                classes: [3].into(),
+                subclasses: [(3, 0)].into(),
+            };
+            let names = ids::resolve(file.as_bytes(), &want);
+            for n in names.vendors.values().chain(names.devices.values()).chain(names.classes.values()).chain(names.subclasses.values()) {
+                prop_assert!(hostile::is_clean_line(n), "{n:?}");
+            }
+        }
+    }
+}

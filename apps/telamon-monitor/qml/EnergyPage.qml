@@ -77,6 +77,7 @@ TelamonPage {
     title: qsTr("Energy Saver")
 
     QQC2.Label {
+        textFormat: Text.PlainText
         Layout.fillWidth: true
         wrapMode: Text.Wrap
         opacity: 0.7
@@ -127,12 +128,14 @@ TelamonPage {
     }
 
     QQC2.Label {
+        textFormat: Text.PlainText
         visible: !page.energy.loaded
         opacity: 0.7
         text: qsTr("Measuring what apps are using…")
     }
 
     QQC2.Label {
+        textFormat: Text.PlainText
         visible: page.energy.loaded && page.usable && page.energy.count === 0
         Layout.fillWidth: true
         wrapMode: Text.Wrap

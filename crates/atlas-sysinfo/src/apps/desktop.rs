@@ -37,7 +37,14 @@ pub fn app_id(unit: &str) -> Option<Cow<'_, str>> {
     }
     // What is left in front of the ID is the launcher, if there is one.
     let id = unescape(id);
-    (!id.is_empty()).then_some(id)
+    // The unit name came from a cgroup folder, which whoever made it named:
+    // `\x0a` and `\x2f` unescape to a line break and a slash. An ID is a
+    // desktop file's name; it is shown, kept in the settings and joined to
+    // paths, so it holds none of those.
+    let plain = id.len() <= 255
+        && !id.starts_with('.')
+        && !id.chars().any(|c| c == '/' || crate::unprintable(c));
+    (!id.is_empty() && plain).then_some(id)
 }
 
 /// Reverses systemd's `\xNN` escaping of unit names.
@@ -139,8 +146,11 @@ pub fn parse_entry(text: &str, id: &str, locales: &[String]) -> Option<Entry> {
             return None;
         }
     }
+    // Text from a file any program may have written (docs/SECURITY.md).
+    e.name = crate::text::plain(&e.name, crate::text::NAME_MAX);
+    e.icon = crate::text::icon(&e.icon);
     if e.name.is_empty() {
-        e.name = fallback_name(id).to_owned();
+        e.name = crate::text::plain(fallback_name(id), crate::text::NAME_MAX);
     }
     Some(e)
 }
@@ -199,6 +209,11 @@ pub fn data_dirs() -> Vec<PathBuf> {
     out
 }
 
+/// The most of a desktop file that is read (the biggest in a distribution,
+/// with its translations, is under 100 KiB). A bigger file, a FIFO or a device
+/// put in the applications folder is no application.
+const DESKTOP_MAX: u64 = 256 * 1024;
+
 /// How stale the listing may get before a miss makes it look again:
 /// something installed since Atlas started turns up without a restart, but
 /// a process with no desktop file doesn't cost a directory walk every tick.
@@ -247,7 +262,7 @@ impl Index {
             let path = self.paths.as_ref()?.get(id)?;
             // An unreadable file (a broken link) isn't remembered either:
             // it may be mended.
-            let text = std::fs::read_to_string(path).ok()?;
+            let text = crate::files::read_text_capped(path, DESKTOP_MAX)?;
             let entry = parse_entry(&text, id, &self.locales);
             self.entries.insert(id.to_owned(), entry);
         }
@@ -529,6 +544,68 @@ Categories=Other;
         );
         for (i, d) in dirs.iter().enumerate() {
             assert!(!dirs[..i].contains(d), "{d:?} listed twice");
+        }
+    }
+}
+
+#[cfg(test)]
+mod props {
+    use super::*;
+    use crate::hostile;
+    use proptest::prelude::*;
+
+    /// A desktop file's lines: group headers, the keys read, hostile ones.
+    fn file() -> impl Strategy<Value = String> {
+        let line = prop_oneof![
+            Just("[Desktop Entry]".to_owned()),
+            Just("[Desktop Action x]".to_owned()),
+            hostile::string_to(60).prop_map(|s| format!("Name={s}")),
+            hostile::string_to(60).prop_map(|s| format!("Name[pt_BR]={s}")),
+            hostile::string_to(80).prop_map(|s| format!("Icon={s}")),
+            Just("Icon=https://example.org/x.png".to_owned()),
+            Just("Hidden=true".to_owned()),
+            Just("Categories=System;TerminalEmulator;".to_owned()),
+            hostile::string_to(80),
+        ];
+        proptest::collection::vec(line, 0..24).prop_map(|l| l.join("\n"))
+    }
+
+    proptest! {
+        /// Any text: no panic, and what comes out is a clean name within the
+        /// cap and an icon that is a theme name or a path of an image.
+        #[test]
+        fn entries_are_clean_whatever_the_file(text in file(), id in "[A-Za-z0-9._-]{1,40}") {
+            let locales = vec!["pt_BR".to_owned(), "pt".to_owned()];
+            if let Some(e) = parse_entry(&text, &id, &locales) {
+                prop_assert!(hostile::is_clean_line(&e.name), "{:?}", e.name);
+                prop_assert!(!e.name.is_empty() && e.name.chars().count() <= crate::text::NAME_MAX);
+                prop_assert_eq!(crate::text::icon(&e.icon), e.icon.clone());
+                prop_assert!(!e.icon.contains("://"));
+            }
+        }
+
+        /// A unit name gives an application ID with no control character,
+        /// invisible one, slash or leading dot, in 255 bytes, or none.
+        #[test]
+        fn app_ids_are_names_not_paths(unit in hostile::string_to(120), escaped in "(\\\\x[0-9a-f]{2}|[a-z.-]){0,30}") {
+            for u in [unit.clone(), format!("app-{escaped}.scope"), format!("app-{escaped}-1.scope"), format!("app-{escaped}@x.service")] {
+                if let Some(id) = app_id(&u) {
+                    prop_assert!(!id.is_empty() && id.len() <= 255);
+                    prop_assert!(!id.starts_with('.'));
+                    prop_assert!(!id.contains('/') && hostile::is_clean_line(&id), "{id:?}");
+                }
+            }
+        }
+
+        /// Unescaping never panics, and leaves alone a name with no escape.
+        #[test]
+        fn unescaping_leaves_plain_names_be(s in hostile::string()) {
+            if !s.contains("\\x") {
+                prop_assert_eq!(unescape(&s), s.as_str());
+            }
+            let _ = unescape(&s);
+            let _ = fallback_name(&s);
+            let _ = locale_keys_of(&s);
         }
     }
 }

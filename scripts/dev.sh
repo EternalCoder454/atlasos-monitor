@@ -42,7 +42,10 @@ tty=()
 # SELinux labelling is off for the container (label=disable) rather than
 # relabelling the checkout with :z or :Z, which would lock other containers
 # and confined tools out of it, and two containers out of each other.
+# --ulimit core=0: a crash in the container leaves no core dump (and no crash
+# notification on the host); no-new-privileges: nothing in it gains privilege.
 exec podman run --rm "${tty[@]}" --security-opt label=disable \
+    --security-opt no-new-privileges --ulimit core=0 \
     -v "$repo":/src -w /src \
     -v atlas-cargo:/root/.cargo/registry \
     -v atlas-cargo-git:/root/.cargo/git \

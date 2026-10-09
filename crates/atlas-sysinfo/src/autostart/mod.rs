@@ -70,6 +70,7 @@ use zbus::proxy::CacheProperties;
 
 use crate::apps::desktop::locale_keys;
 use crate::services::{ActiveState, FileState, Status, parse_description};
+use crate::text;
 
 /// Telamon Updater's tray entry, which can't be switched off.
 pub const UPDATER_TRAY: &str = "net.eterneon.atlas.updater-tray.desktop";
@@ -612,7 +613,9 @@ fn valid_desktop_id(id: &str) -> bool {
         && id.ends_with(".desktop")
         && !id.starts_with('.')
         && !id.contains('/')
-        && !id.contains('\0')
+        // Control characters and the invisible ones: no desktop file is named
+        // with a line break, and the name is shown.
+        && !id.chars().any(crate::unprintable)
 }
 
 /// The autostart entries, user files over system ones.
@@ -664,14 +667,21 @@ fn list_desktop(paths: &Paths) -> Vec<Item> {
                 None
             };
             Item {
+                // Text from a file another program may have written: cleaned
+                // where it is read (docs/SECURITY.md). `Exec` is only shown
+                // (never run, never through a shell) and keeps its spaces.
                 name: describe
                     .name
-                    .clone()
+                    .as_deref()
+                    .map(|n| text::plain(n, text::NAME_MAX))
                     .filter(|n| !n.is_empty())
                     .unwrap_or_else(|| id.trim_end_matches(".desktop").to_owned()),
-                comment: describe.comment.clone().unwrap_or_default(),
-                icon: describe.icon.clone(),
-                command: describe.exec.clone(),
+                comment: text::plain(
+                    describe.comment.as_deref().unwrap_or_default(),
+                    text::LINE_MAX,
+                ),
+                icon: vetted_icon(&describe.icon),
+                command: text::literal(&describe.exec, text::LINE_MAX),
                 file,
                 system: sys.is_some(),
                 plumbing,
@@ -691,6 +701,19 @@ fn list_desktop(paths: &Paths) -> Vec<Item> {
             }
         })
         .collect()
+}
+
+/// An entry's `Icon=` as the page may pass it to `Kirigami.Icon`: a theme
+/// name, or the path of an image file that exists, is a regular file (a FIFO or
+/// a device is not opened or stat'ed for its size) and is at most 4 MiB, the
+/// same rule as the Apps table's icons ([`crate::apps::icons::icon_file`]).
+/// Anything else is "" (no icon).
+fn vetted_icon(icon: &str) -> String {
+    let icon = text::icon(icon);
+    if icon.starts_with('/') && !crate::apps::icons::icon_file(Path::new(&icon)) {
+        return String::new();
+    }
+    icon
 }
 
 /// The units the generator made for this session, by desktop file name: its
@@ -1365,11 +1388,16 @@ fn unit_error(e: zbus::Error) -> Error {
             "org.freedesktop.DBus.Error.NoReply" | "org.freedesktop.DBus.Error.Timeout" => {
                 Error::NoAnswer
             }
-            other => Error::Refused(message.unwrap_or_else(|| other.to_owned())),
+            other => Error::Refused(text::plain(
+                message.as_deref().unwrap_or(other),
+                text::LINE_MAX,
+            )),
         },
         _ => Error::NoAnswer,
     }
 }
 
+#[cfg(test)]
+mod props;
 #[cfg(test)]
 mod tests;

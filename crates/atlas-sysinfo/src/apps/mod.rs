@@ -198,7 +198,11 @@ impl Resolver {
         let id = desktop::app_id(unit)?;
         let (name, declared, terminal) = match self.index.lookup(&id) {
             Some(e) => (e.name.clone(), e.icon.clone(), e.terminal),
-            None => (desktop::fallback_name(&id).to_owned(), String::new(), false),
+            None => (
+                crate::text::plain(desktop::fallback_name(&id), crate::text::NAME_MAX),
+                String::new(),
+                false,
+            ),
         };
         let icon = self.pick_icon(&declared, &id, &name);
         Some(App {
@@ -214,7 +218,7 @@ impl Resolver {
 
     fn pick_icon(&mut self, declared: &str, id: &str, name: &str) -> Option<Icon> {
         if declared.starts_with('/') {
-            if std::path::Path::new(declared).is_file() {
+            if icons::icon_file(std::path::Path::new(declared)) {
                 return Some(Icon::Path(declared.into()));
             }
             return self.pick_icon("", id, name);

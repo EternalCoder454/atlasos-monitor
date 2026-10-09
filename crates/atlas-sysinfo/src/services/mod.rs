@@ -47,9 +47,7 @@
 //! replies recorded with `busctl --json`.
 
 use std::collections::{HashMap, HashSet};
-use std::fs::File;
 use std::future::{Future, poll_fn};
-use std::io::Read;
 use std::pin::{Pin, pin};
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant, SystemTime};
@@ -1059,10 +1057,12 @@ impl From<RawUnit> for Unit {
     fn from(u: RawUnit) -> Self {
         Self {
             name: u.0,
-            description: u.1,
+            // systemd's own text, but from unit files: cleaned and capped
+            // where it is read (docs/SECURITY.md, "Text from outside").
+            description: crate::text::plain(&u.1, crate::text::LINE_MAX),
             load: u.2,
             active: u.3,
-            sub: u.4,
+            sub: crate::text::plain(&u.4, 64),
             job_type: u.8,
         }
     }
@@ -1248,13 +1248,10 @@ fn parse_details(
 /// systemd takes it). Drop-ins aren't read: this is only for units systemd
 /// hasn't loaded, which it would otherwise describe.
 fn read_description(path: &str) -> Option<String> {
-    let mut text = String::new();
-    File::open(path)
-        .ok()?
-        .take(UNIT_FILE_MAX)
-        .read_to_string(&mut text)
-        .ok()?;
-    parse_description(&text)
+    // Not blocking, a regular file, its first 64 KiB: the path is one systemd
+    // listed in a unit folder, but a unit folder can hold a link or a FIFO.
+    let (bytes, _) = crate::files::read_prefix(std::path::Path::new(path), UNIT_FILE_MAX).ok()?;
+    parse_description(&String::from_utf8_lossy(&bytes))
 }
 
 pub(crate) fn parse_description(text: &str) -> Option<String> {
@@ -1268,7 +1265,7 @@ pub(crate) fn parse_description(text: &str) -> Option<String> {
             && let Some((key, value)) = line.split_once('=')
             && key.trim() == "Description"
         {
-            found = Some(value.trim().to_owned());
+            found = Some(crate::text::plain(value, crate::text::LINE_MAX));
         }
     }
     found.filter(|d| !d.is_empty())
@@ -1546,7 +1543,11 @@ fn error_from_reply(name: &str, message: Option<&str>) -> ActionError {
         "org.freedesktop.DBus.Error.NoReply" | "org.freedesktop.DBus.Error.Timeout" => {
             ActionError::NoAnswer
         }
-        _ => ActionError::Refused(message.unwrap_or(name).to_owned()),
+        // systemd's text, shown to the person: one clean line.
+        _ => ActionError::Refused(crate::text::plain(
+            message.unwrap_or(name),
+            crate::text::LINE_MAX,
+        )),
     }
 }
 
@@ -1558,9 +1559,10 @@ fn inner<'a>(v: &'a Value<'a>) -> &'a Value<'a> {
     }
 }
 
+/// A string property, cleaned and capped ([`crate::text::plain`]).
 fn text(v: Option<&OwnedValue>) -> Option<String> {
     match inner(v?) {
-        Value::Str(s) => Some(s.as_str().to_owned()),
+        Value::Str(s) => Some(crate::text::plain(s.as_str(), crate::text::LINE_MAX)),
         _ => None,
     }
 }
@@ -1593,13 +1595,16 @@ fn strings(v: Option<&OwnedValue>) -> Vec<String> {
         Some(Value::Array(a)) => a
             .iter()
             .filter_map(|v| match inner(v) {
-                Value::Str(s) => Some(s.as_str().to_owned()),
+                Value::Str(s) => Some(crate::text::plain(s.as_str(), crate::text::LINE_MAX)),
                 _ => None,
             })
+            .take(64)
             .collect(),
         _ => Vec::new(),
     }
 }
 
+#[cfg(test)]
+mod props;
 #[cfg(test)]
 mod tests;

@@ -26,6 +26,23 @@ use std::time::{Duration, Instant};
 
 const EXTENSIONS: [&str; 4] = ["svg", "png", "svgz", "xpm"];
 
+/// The biggest icon file that is drawn. Qt decodes it on the GUI thread; a
+/// real icon is a few kilobytes, a big SVG a few hundred.
+const ICON_MAX: u64 = 4 * 1024 * 1024;
+
+/// The biggest `index.theme` read (Breeze's is about 60 KiB).
+const INDEX_MAX: u64 = 1024 * 1024;
+
+/// Whether `path` is an icon worth drawing: a regular file (a link is
+/// followed) of a known image type and a sane size.
+pub(crate) fn icon_file(path: &Path) -> bool {
+    let known = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()));
+    known && std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.len() <= ICON_MAX)
+}
+
 /// How stale the listing may get before a miss lists the themes again.
 const RELIST_AFTER: Duration = Duration::from_secs(30);
 
@@ -131,7 +148,7 @@ impl IconLookup {
             return None;
         }
         if name.starts_with('/') {
-            return Path::new(name).is_file().then(|| Icon::Path(name.into()));
+            return icon_file(Path::new(name)).then(|| Icon::Path(name.into()));
         }
         if self.listing.is_none() {
             self.list();
@@ -190,7 +207,7 @@ impl IconLookup {
             for e in rd.flatten() {
                 let file = e.file_name();
                 if let Some(stem) = file.to_str().and_then(icon_stem)
-                    && e.path().is_file()
+                    && icon_file(&e.path())
                 {
                     l.pixmaps.entry(stem.to_owned()).or_insert_with(|| e.path());
                 }
@@ -256,7 +273,7 @@ struct Index {
 fn read_index(theme: &str, bases: &[PathBuf]) -> Option<Index> {
     bases
         .iter()
-        .find_map(|b| std::fs::read_to_string(b.join(theme).join("index.theme")).ok())
+        .find_map(|b| crate::files::read_text_capped(&b.join(theme).join("index.theme"), INDEX_MAX))
         .map(|text| parse_index(&text))
 }
 
@@ -466,5 +483,48 @@ mod tests {
             ["a", "b", "hicolor"]
         );
         assert_eq!(theme_chain("..", &[icons]), ["hicolor"]);
+    }
+}
+
+#[cfg(test)]
+mod props {
+    use super::*;
+    use crate::hostile;
+    use proptest::prelude::*;
+
+    proptest! {
+        /// An `index.theme` can list folders and parents as it likes: none of
+        /// the folders climbs out of the theme or is absolute, and nothing
+        /// panics.
+        #[test]
+        fn index_themes_cannot_leave_their_folder(text in hostile::string_to(400), dirs in proptest::collection::vec(hostile::string_to(30), 0..8)) {
+            let text = format!("[Icon Theme]\nInherits={}\nDirectories={}\n{text}", dirs.join(","), dirs.join(","));
+            let index = parse_index(&text);
+            for d in index.dirs.iter().chain(&index.inherits) {
+                if index.dirs.contains(d) {
+                    prop_assert!(!d.starts_with('/') && !d.split('/').any(|c| c == ".."), "{d:?}");
+                }
+            }
+            let _ = parse_index(&format!("{text}\n{text}"));
+        }
+
+        /// A stem is a file name without its image extension.
+        #[test]
+        fn stems_are_image_files(file in hostile::string_to(60)) {
+            if let Some(stem) = icon_stem(&file) {
+                prop_assert!(!stem.is_empty());
+                prop_assert!(file.starts_with(stem));
+                let ext = file.rsplit_once('.').map(|(_, e)| e).unwrap_or_default();
+                prop_assert!(EXTENSIONS.contains(&ext));
+            }
+        }
+
+        /// A theme name from a file cannot name a folder elsewhere.
+        #[test]
+        fn theme_chains_name_folders_of_the_bases(theme in hostile::string_to(40)) {
+            let chain = theme_chain(&theme, &[]);
+            prop_assert_eq!(chain.last().map(String::as_str), Some("hicolor"));
+            prop_assert!(chain.iter().all(|t| !t.contains('/') && t != ".." && t != "."));
+        }
     }
 }

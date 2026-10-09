@@ -167,6 +167,7 @@ Item {
                 elide: Text.ElideRight
             }
             QQC2.Label {
+                textFormat: Text.PlainText
                 text: qsTr("All Unit Types")
             }
             TelamonSwitch {
@@ -177,6 +178,7 @@ Item {
                 Accessible.description: qsTr("Show sockets, timers, mounts and targets as well as services")
             }
             QQC2.Label {
+                textFormat: Text.PlainText
                 text: page.services.failedCount > 0 ? qsTr("Failed Only (%1)").arg(page.services.failedCount) : qsTr("Failed Only")
                 opacity: failedOnly.enabled ? 1 : 0.5
             }
@@ -330,6 +332,7 @@ Item {
                 }
             }
             QQC2.Label {
+                textFormat: Text.PlainText
                 Layout.fillWidth: true
                 text: page.status(parent.value, parent.row ? parent.row.job : "")
                 elide: Text.ElideRight

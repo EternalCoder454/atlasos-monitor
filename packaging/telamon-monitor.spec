@@ -37,6 +37,10 @@ BuildRequires:  corrosion
 BuildRequires:  git-core
 BuildRequires:  desktop-file-utils
 BuildRequires:  libappstream-glib
+# %check reads the hardening back from the built program (readelf, from
+# binutils, which gcc-c++ brings in) and has annocheck confirm it.
+BuildRequires:  binutils
+BuildRequires:  annobin-annocheck
 BuildRequires:  cmake(Qt6Core)
 BuildRequires:  cmake(Qt6Gui)
 BuildRequires:  cmake(Qt6Qml)
@@ -52,11 +56,11 @@ BuildRequires:  cmake(KF6WindowSystem)
 # from atlas-framework, which is in no repository: install its RPMs first
 # (build-rpm.sh does, given ATLAS_LOCAL_RPMS).
 BuildRequires:  kf6-kirigami-devel
-BuildRequires:  telamon-ui >= 2.0.0
+BuildRequires:  telamon-ui >= 2.0.9
 
 Requires:       kf6-kirigami
-# Telamon.Ui, the shared look (atlas-framework); 1.4.0 for TelamonCard, TelamonStat, TelamonDetailGrid, TelamonSparkline, TelamonDialog and TelamonSidebar
-Requires:       telamon-ui >= 2.0.0
+# Telamon.Ui, the shared look (atlas-framework); 1.4.0 for TelamonCard, TelamonStat, TelamonDetailGrid, TelamonSparkline, TelamonDialog and TelamonSidebar; 2.0.9 for its tables, rows and labels drawing every text as plain text, and for the crash reports being scrubbed and capped
+Requires:       telamon-ui >= 2.0.9
 Requires:       kf6-qqc2-desktop-style
 Requires:       qt6-qtdeclarative
 # the app icon and Breeze's icons are SVG
@@ -128,6 +132,18 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/net.eterneon.atlas.mo
 test "$(readlink %{buildroot}%{_bindir}/atlas-monitor)" = telamon-monitor
 appstream-util validate-relax --nonet \
     %{buildroot}%{_datadir}/metainfo/net.eterneon.telamon.monitor.metainfo.xml
+# The program carries the hardening the build flags give it (position
+# independent, full RELRO and BIND_NOW, no executable stack, no RPATH or text
+# relocations, stack protectors in the C++): readelf says, not the flags we
+# meant. docs/SECURITY.md, "Build hardening".
+scripts/check-hardening.sh --cxx %{buildroot}%{_bindir}/telamon-monitor
+# annocheck agrees (PIE, BIND_NOW, RELRO, non-executable stack, CET, no
+# writable GOT, ...). The tests that need annobin notes, debuginfo or the
+# optimisation level are skipped: this build has no notes, and
+# check-hardening.sh covers stack protectors.
+annocheck --ignore-unknown --skip-notes --skip-optimization --skip-pic --skip-stack-clash \
+    --skip-stack-prot --skip-fortify --skip-gaps \
+    %{buildroot}%{_bindir}/telamon-monitor
 
 %files
 %license LICENSE
@@ -148,6 +164,19 @@ appstream-util validate-relax --nonet \
   command and desktop file ID stay for this release
 - Settings (atlas-monitorrc) and crash-report state move to the new names
   once, on first start (telamon-framework 2.0.0)
+- Security: process, unit, application, container and device text is cleaned
+  and capped where it is read (no control or bidirectional characters, no
+  markup drawn: every label is plain text), a copied command line pastes into a
+  shell as the arguments that were shown, desktop files, icon themes and
+  container lists are read without blocking and with a size cap (a FIFO in
+  ~/.local/share/applications no longer hangs the sampler), an autostart
+  entry's Icon= can no longer make Monitor fetch an address, signals never
+  reach pid 0, a negative pid or PID 1, Telamon Updater and pw-dump are not
+  looked up in the PATH, only KWin may report the focused window to Energy
+  Saver. The package build checks the program's hardening (PIE, full RELRO,
+  non-executable stack, stack protectors; readelf and annocheck). See
+  docs/SECURITY.md
+- Built on telamon-ui and atlas-framework 2.0.9
 
 * Fri Oct 02 2026 Atlas <atlas@eterneon.net> - 0.1.0-1
 - First package

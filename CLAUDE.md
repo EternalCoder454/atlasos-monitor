@@ -4,6 +4,10 @@ Rust + Qt 6.11 + Kirigami (CXX-Qt) system monitor for Telamon OS, a Fedora Kinoi
 44 bootc image (repo `~/Documents/AtlasOS`). Read `docs/DESIGN.md` first: it
 fixes the layout, the QObject/model API, the threading rule and what may need
 privilege. Change it only together with the code that implements the change.
+Read `docs/SECURITY.md` before touching anything that reads a file, a process or
+a reply, or acts on one: it holds the threat model and the rules each reader
+follows (text cleaned where it is read, files read without blocking and with a
+cap, no icon string to the QML unvetted, no program through the `PATH`).
 The roadmap is the Atlas Notes note "AtlasOS/Atlas Monitor/Roadmap".
 
 The stack, build and look are Telamon Updater's (`~/Documents/Telamon Updater`,

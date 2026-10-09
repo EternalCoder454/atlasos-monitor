@@ -626,3 +626,160 @@ fn groups_sort_like_processes() {
     sort(&mut order, groups, Column::Cpu, true);
     assert_eq!(order, [1, 0], "Firefox's two processes outweigh one");
 }
+
+// ---- files and text that other programs wrote (docs/SECURITY.md) ----------
+
+/// Makes a FIFO at `path`: opening it for reading blocks until a writer comes.
+fn fifo(path: &Path) {
+    use std::os::unix::ffi::OsStrExt;
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let c = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
+    // SAFETY: a valid NUL-terminated path.
+    assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0);
+}
+
+/// Runs `f` on a thread and fails if it is still running after 10 s: a read
+/// that waits for a FIFO never ends.
+fn within_seconds<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(f());
+    });
+    rx.recv_timeout(Duration::from_secs(10))
+        .expect("the reader is stuck (a FIFO was opened for reading)")
+}
+
+use std::time::Duration;
+
+#[test]
+fn a_desktop_file_that_is_a_fifo_is_no_application() {
+    let dir = tempfile::tempdir().unwrap();
+    fifo(&dir.path().join("applications/org.example.Fifo.desktop"));
+    let path = dir.path().to_path_buf();
+    let app = within_seconds(move || {
+        let mut r = resolver(&path);
+        r.of(Some(&unit("app-org.example.Fifo-1.scope"))).cloned()
+    })
+    .expect("still an application, by its ID");
+    // Named from its ID, as when there is no desktop file.
+    assert_eq!(app.name.as_ref(), "Fifo");
+}
+
+#[test]
+fn a_huge_desktop_file_is_not_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let body = format!(
+        "[Desktop Entry]\nName=Big\n{}",
+        "X-Padding=0123456789abcdef\n".repeat(20_000)
+    );
+    assert!(body.len() > 256 * 1024);
+    write(
+        &dir.path().join("applications/org.example.Big.desktop"),
+        &body,
+    );
+    let mut r = resolver(dir.path());
+    let app = r.of(Some(&unit("app-org.example.Big-1.scope"))).unwrap();
+    assert_eq!(app.name.as_ref(), "Big", "the ID's name, not the file's");
+}
+
+#[test]
+fn an_icon_theme_index_that_is_a_fifo_does_not_hang_the_lookup() {
+    let dir = tempfile::tempdir().unwrap();
+    fifo(&dir.path().join("icons/evil/index.theme"));
+    let data = vec![dir.path().to_path_buf()];
+    let found = within_seconds(move || IconLookup::new("evil", &data).find("anything"));
+    assert_eq!(found, None);
+}
+
+#[test]
+fn a_desktop_file_cannot_make_a_name_or_an_icon_of_its_own_choosing() {
+    let dir = tempfile::tempdir().unwrap();
+    let big = dir.path().join("big.svg");
+    std::fs::write(&big, vec![b' '; 5 * 1024 * 1024]).unwrap();
+    let text = dir.path().join("note.txt");
+    std::fs::write(&text, "x").unwrap();
+    for (id, name, icon) in [
+        (
+            "org.example.Remote",
+            "Evil\u{1b}[2J\u{202E}name\r<b>x</b>",
+            "https://example.org/x.png",
+        ),
+        ("org.example.Local", "Local", "file:///etc/passwd"),
+        ("org.example.Big", "Big", big.to_str().unwrap()),
+        ("org.example.Text", "Text", text.to_str().unwrap()),
+        ("org.example.Up", "Up", "/usr/share/../../etc/x.png"),
+    ] {
+        write(
+            &dir.path().join(format!("applications/{id}.desktop")),
+            &format!("[Desktop Entry]\nName={name}\nIcon={icon}\n"),
+        );
+    }
+    let data = vec![dir.path().to_path_buf()];
+    let mut r = Resolver::new(
+        desktop::Index::new(data.clone()),
+        Some(IconLookup::new("breeze", &data)),
+    );
+    let app = r
+        .of(Some(&unit("app-org.example.Remote-1.scope")))
+        .unwrap()
+        .clone();
+    assert_eq!(&*app.name, "Evil [2Jname <b>x</b>");
+    assert_eq!(app.icon, None, "an address is not an icon");
+    for u in ["Local", "Big", "Text", "Up"] {
+        let app = r
+            .of(Some(&unit(&format!("app-org.example.{u}-1.scope"))))
+            .unwrap();
+        assert_eq!(app.icon, None, "{u}");
+    }
+    // The same without the lookup, which takes names on trust.
+    let mut r = Resolver::new(desktop::Index::new(data), None);
+    let app = r.of(Some(&unit("app-org.example.Remote-1.scope"))).unwrap();
+    assert_eq!(app.icon, Some(Icon::Name("org.example.Remote".into())));
+}
+
+#[test]
+fn a_unit_name_cannot_carry_an_id_with_control_characters_or_a_slash() {
+    for unit in [
+        r"app-a\x0ab.scope-1.scope",
+        r"app-a\x2fb-1.scope",
+        r"app-\x1b[2J-1.scope",
+        r"app-a\xe2\x80\xaeb-1.scope",
+        r"app-\x2e\x2e\x2fetc-1.scope",
+        r"app-.hidden-1.scope",
+    ] {
+        assert_eq!(desktop::app_id(unit), None, "{unit}");
+    }
+    assert_eq!(
+        desktop::app_id(&format!("app-{}-1.scope", "a".repeat(300))),
+        None
+    );
+    assert_eq!(
+        desktop::app_id("app-org.example.App-1.scope").as_deref(),
+        Some("org.example.App")
+    );
+}
+
+#[test]
+fn a_container_list_that_is_a_fifo_does_not_hang_the_scan() {
+    let dir = tempfile::tempdir().unwrap();
+    fifo(&dir.path().join("overlay-containers/containers.json"));
+    let root = dir.path().to_path_buf();
+    let names = within_seconds(move || {
+        let mut s = container::Store::new(vec![root]);
+        s.name(TOOLBOX_ID).map(str::to_owned)
+    });
+    assert_eq!(names, None);
+}
+
+const TOOLBOX_ID: &str = "2414f7b322e3a727aae64037b633eefd3f14b985dff8ddcd38915e66ffd4e539";
+
+#[test]
+fn container_names_are_cleaned() {
+    let list = format!(
+        r#"[{{"id":"{TOOLBOX_ID}","names":["evil\u001b[2J\u202ename\nx"]}},{{"id":"b","names":["{}"]}}]"#,
+        "n".repeat(100_000)
+    );
+    let got = container::parse(&list);
+    assert_eq!(got[0].1, "evil [2Jname x");
+    assert_eq!(got[1].1.chars().count(), 64);
+}

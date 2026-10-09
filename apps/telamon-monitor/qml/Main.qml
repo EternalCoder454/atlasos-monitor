@@ -300,6 +300,7 @@ QQC2.ApplicationWindow {
 
     // A group's name above its entries; hidden when the sidebar is icons only.
     component NavHeading: QQC2.Label {
+        textFormat: Text.PlainText
         Layout.fillWidth: true
         Layout.topMargin: Kirigami.Units.largeSpacing
         Layout.bottomMargin: Kirigami.Units.smallSpacing

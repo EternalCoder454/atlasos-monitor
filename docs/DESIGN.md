@@ -30,6 +30,8 @@ apps/telamon-monitor/           the app
   data/                       .desktop, metainfo, icon
 packaging/telamon-monitor.spec  the RPM; build-rpm.sh builds it in fedora:44
 scripts/dev.sh                run a command in the fedora:44 build container
+scripts/check-hardening.sh    reads the built program's hardening back (the spec's %check)
+docs/SECURITY.md              the threat model and the tests that hold it
 ```
 
 `atlas-sysinfo` holds everything that reads the system, so it can be tested
@@ -579,6 +581,12 @@ The readers the loop drives (`atlas-sysinfo`):
 
 ## Privilege
 
+What comes in from outside (process names and command lines, desktop files,
+icons, unit files, fwupd's and PipeWire's replies) and the rules for it are in
+[SECURITY.md](SECURITY.md): the readers clean and cap text where they read it,
+files others can write are read without blocking and with a size cap, and no
+icon string is passed to the QML unless it is a theme name or an image file.
+
 Telamon Monitor runs as the user and adds **no new privilege**: no setuid, no
 system service of its own, no polkit actions of its own. The
 atlas-system-helper keeps exactly its five methods; Telamon Monitor never calls
@@ -587,7 +595,7 @@ it.
 | Feature | How | Who decides |
 |---|---|---|
 | Read /proc, /sys, hwmon | Plain files | File permissions. Another user's `/proc/<pid>/io`, `fd/` and `environ` are unreadable; shown as unknown, never as zero. |
-| End Task, Kill, Stop, Continue | `kill(2)` / `pidfd_send_signal` on the user's own processes | The kernel. Other users' processes get "Not allowed", with no escalation. |
+| End Task, Kill, Stop, Continue | `pidfd_send_signal` on a pidfd opened for the (pid, start time) the row showed, never pid 0, a negative one or PID 1 | The kernel. Other users' processes get "Not allowed", with no escalation. |
 | Services: start, stop, restart, enable, disable | systemd's `org.freedesktop.systemd1` over the system bus (zbus), the call flagged to allow interactive authorization | systemd's own polkit actions (`manage-units`, `manage-unit-files`); polkit's agent asks for the password. Listing and details need nothing. |
 | Drive health (SMART) | udisks2 over the system bus (`NVMe.Controller` and `Drive.Ata` properties and `SmartGetAttributes`, its cached values) | udisks2, which asks polkit for none of these. No section when udisks2 is missing. |
 | Energy Saver | `CPUWeight` on the app's unit through the **user's** systemd manager | None needed: the user's own units. Reversible; restored on exit and after a crash. |
@@ -641,7 +649,7 @@ RPM `Provides: atlas-monitor` and obsoletes older ones. The global shortcut
 file (`/usr/share/kglobalaccel/`) has the new ID only: a second copy would
 bind Ctrl+Shift+Esc twice, and Plasma keeps a shortcut the user changed under
 the old ID in `kglobalshortcutsrc`, where Monitor can't move it.
-Telamon Updater is started as `telamon-updater`, else `atlas-updater`.
+Telamon Updater is started as `/usr/bin/telamon-updater`, else `/usr/bin/atlas-updater` (absolute: not through the `PATH`).
 
 ## System app (Telamon OS side)
 
