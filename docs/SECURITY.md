@@ -298,7 +298,9 @@ Startup page passed the `Icon=` of every autostart entry straight to
 `SectionRow.iconName`: an entry dropped into `~/.config/autostart` with
 `Icon=https://tracker.example/pixel.png` made Monitor fetch it each time the
 page was opened (an address leak, and a request from the user's machine to any
-host or port on the local network).
+host or port on the local network). Checked on the packaged app, headless, with a
+logging HTTP server: the build before this phase requested the address when the
+Startup page opened; this one does not.
 
 - `text::icon` accepts a **theme name** (`[A-Za-z0-9._+-]`, 128 bytes, not
   starting with a dot) or an **absolute path** with an image extension
